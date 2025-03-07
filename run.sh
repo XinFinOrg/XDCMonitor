@@ -58,8 +58,7 @@ case "$1" in
     # Ensure directories exist with proper permissions
     ./run.sh fix-permissions
 
-    # Force rebuild of xdc-monitor service to include latest code
-    docker-compose build xdc-monitor
+    yarn build
 
     # Start all services
     docker-compose up -d
