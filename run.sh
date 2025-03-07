@@ -16,6 +16,7 @@ function show_usage {
   echo "  clean           Stop and remove all containers, volumes and networks"
   echo "  fix-permissions Fix permissions for data directories"
   echo "  dev             Quick rebuild of just the app service with latest code"
+  echo "  fast-dev        Start in development mode with hot reloading (FASTEST OPTION)"
   echo "  help            Show this help message"
   echo ""
 }
@@ -28,6 +29,28 @@ fi
 
 # Process command line arguments
 case "$1" in
+  fast-dev)
+    echo "Starting in FAST development mode with hot reloading..."
+    # Ensure directories exist with proper permissions
+    ./run.sh fix-permissions
+
+    # Stop any existing containers
+    docker-compose down 2>/dev/null || true
+    docker-compose -f docker-compose.dev.yml down 2>/dev/null || true
+
+    # Build and start the development services
+    docker-compose -f docker-compose.dev.yml up -d
+
+    echo "Development services running at:"
+    echo "- XDC Monitor:  http://localhost:3000 (with hot reloading)"
+    echo "- Metrics:      http://localhost:9090/metrics"
+    echo "- Prometheus:   http://localhost:9091"
+    echo "- Grafana:      http://localhost:3001 (admin/admin)"
+    echo ""
+    echo "To view logs: docker-compose -f docker-compose.dev.yml logs -f xdc-monitor-dev"
+    echo "Code changes will automatically trigger rebuilds!"
+    ;;
+
   up)
     echo "Starting complete stack with latest code..."
     # Ensure directories exist with proper permissions
@@ -49,6 +72,7 @@ case "$1" in
   down)
     echo "Stopping all services..."
     docker-compose down
+    docker-compose -f docker-compose.dev.yml down 2>/dev/null || true
     ;;
 
   logs)
@@ -58,7 +82,12 @@ case "$1" in
 
   app-logs)
     echo "Showing logs from the app service. Press Ctrl+C to exit."
-    docker-compose logs -f xdc-monitor
+    # Check which compose file is active
+    if [ -z "$(docker ps --filter name=xdc-monitor-dev -q)" ]; then
+      docker-compose logs -f xdc-monitor
+    else
+      docker-compose -f docker-compose.dev.yml logs -f xdc-monitor-dev
+    fi
     ;;
 
   rebuild)
@@ -87,6 +116,7 @@ case "$1" in
     echo "Stopping and removing all containers, volumes and networks..."
     # Stop and remove all containers
     docker-compose down --volumes --remove-orphans
+    docker-compose -f docker-compose.dev.yml down --volumes --remove-orphans 2>/dev/null || true
 
     # Prune containers, volumes and networks
     echo "Removing orphaned containers..."
@@ -99,6 +129,7 @@ case "$1" in
     echo "Clearing Prometheus metrics data..."
     # Stop relevant containers first
     docker-compose stop prometheus 2>/dev/null || true
+    docker-compose -f docker-compose.dev.yml stop prometheus-dev 2>/dev/null || true
 
     read -p "Clear metrics data? (y/n) " -n 1 -r
     echo
@@ -111,7 +142,13 @@ case "$1" in
     echo "Restarting prometheus..."
     # Fix permissions before starting
     ./run.sh fix-permissions
-    docker-compose up -d prometheus
+
+    # Check which compose file is active
+    if [ -z "$(docker ps --filter name=xdc-monitor-dev -q)" ]; then
+      docker-compose up -d prometheus
+    else
+      docker-compose -f docker-compose.dev.yml up -d prometheus-dev
+    fi
     ;;
 
   fix-permissions)
@@ -120,6 +157,8 @@ case "$1" in
     # Create directories if they don't exist
     mkdir -p prometheus_data
     mkdir -p grafana_data
+    mkdir -p dist
+    mkdir -p logs
 
     # Fix permissions for Prometheus data directory
     # Prometheus typically runs as nobody:nobody (uid 65534)
@@ -128,6 +167,10 @@ case "$1" in
     # Fix permissions for Grafana data directory
     # Grafana runs as user 472
     chmod -R 777 grafana_data
+
+    # Fix permissions for mounted code directories
+    chmod -R 777 dist
+    chmod -R 777 logs
 
     echo "Permissions fixed."
     ;;

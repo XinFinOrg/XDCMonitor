@@ -48,3 +48,9 @@ Thumbs.db
 *.swp
 *.swo
 
+
+# prometheus data
+prometheus_data/
+
+# grafana data
+grafana_data/
