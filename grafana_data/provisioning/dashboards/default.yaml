@@ -15,6 +15,6 @@ providers:
     allowUiUpdates: true
     options:
       # <string, required> path to dashboard files on disk
-      path: /var/lib/grafana/data/dashboards
+      path: /etc/grafana/provisioning/dashboards/provisioned
       # <bool> use folder names from filesystem
       foldersFromFilesStructure: true
