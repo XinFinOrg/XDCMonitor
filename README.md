@@ -196,8 +196,31 @@ The application exposes the following Prometheus metrics:
 - `xdc_rpc_latency{endpoint="url"}` - Response time of RPC endpoints in ms
 - `xdc_rpc_status{endpoint="url"}` - Status of RPC endpoints (1=up, 0=down)
 - `xdc_block_time` - Time between blocks in seconds
+- `xdc_alert_count{type="error|warning|info",component="blockchain|rpc|..."}` - Count of alerts by type and component
 
 Additionally, default Node.js metrics are collected (memory usage, garbage collection, etc.)
+
+### Alert Metrics
+
+The system maintains two types of alert metrics:
+
+1. **Built-in Prometheus Alert Metrics**:
+
+   - `ALERTS` - Information about currently firing alerts
+   - `ALERTS_FOR_STATE` - Information about all alerts regardless of state
+
+2. **Custom Alert Counter**:
+   - `xdc_alert_count` - Incremented whenever an alert is processed
+   - Labels: `type` (error/warning/info) and `component` (blockchain/rpc/etc.)
+   - Provides long-term historical data on alert frequency
+
+The dashboard uses both sources for its alert panels:
+
+- "Active Alerts" panel uses the `ALERTS` metric to show currently firing alerts
+- "Alert Frequency" chart uses `count_over_time(ALERTS{alertstate="firing"}[10m])` for recent history
+- "Recent Alert History" table uses `sort_desc(ALERTS)` for current alerts detail
+
+For longer-term alert history and statistics, custom PromQL queries can be built using the `xdc_alert_count` metric.
 
 ## Project Structure
 
