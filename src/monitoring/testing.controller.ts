@@ -3,7 +3,7 @@ import { MetricsService } from '@metrics/metrics.service';
 import { AlertsService } from './alerts.service';
 import { RpcMonitorService } from './rpc.monitor';
 
-@Controller('api/testing')
+@Controller('testing')
 export class TestingController {
   private readonly logger = new Logger(TestingController.name);
 
