@@ -1,0 +1,73 @@
+# Dependencies
+node_modules/
+
+# Build output
+/dist
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# Environment files (contain sensitive credentials)
+.env
+.env.*
+!.env.example
+
+# Data Directories
+# Prometheus data
+prometheus_data/
+prometheus_dev_data/
+# Exception for non-sensitive files
+!prometheus_data/provisioning/alerting/readme.md
+!prometheus_data/provisioning/notifiers/readme.md
+
+# Grafana data
+grafana_data/
+grafana_dev_data/
+# Exceptions for non-sensitive files
+!grafana_data/provisioning/dashboards/*.yaml
+!grafana_data/provisioning/datasources/*.yaml
+!grafana_data/provisioning/plugins/*.yaml
+# Alert configurations may contain sensitive data - keep examples and documentation
+grafana_data/provisioning/alerting/*.yaml
+!grafana_data/provisioning/alerting/*.example.yaml
+!grafana_data/provisioning/alerting/README.md
+!grafana_data/**/readme.md
+!grafana_data/data/.gitkeep
+!grafana_data/logs/.gitkeep
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Test coverage
+/coverage
+/.nyc_output
+
+# OS specific files
+.DS_Store
+Thumbs.db
+
+# IDEs and editors
+.idea
+.vscode
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+*.swp
+*.swo
+
