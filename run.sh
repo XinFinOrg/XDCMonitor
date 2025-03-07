@@ -17,7 +17,8 @@ function show_usage {
   echo "  fix-permissions Fix permissions for data directories"
   echo "  dev             Quick rebuild of just the app service with latest code"
   echo "  fast-dev        Start in development mode with hot reloading (FASTEST OPTION)"
-  echo "  local-dev       Build locally and run in container (NO CONTAINER REBUILD NEEDED)"
+  echo "  local-dev       First-time setup for local build + container runtime workflow"
+  echo "  update          Update running container with locally built code (no rebuild)"
   echo "  help            Show this help message"
   echo ""
 }
@@ -57,7 +58,8 @@ case "$1" in
     # Ensure directories exist with proper permissions
     ./run.sh fix-permissions
 
-    yarn build
+    # Force rebuild of xdc-monitor service to include latest code
+    docker-compose build xdc-monitor
 
     # Start all services
     docker-compose up -d
@@ -156,10 +158,7 @@ case "$1" in
 
     # Create directories if they don't exist
     mkdir -p prometheus_data
-    mkdir -p grafana_config/provisioning/dashboards
-    mkdir -p grafana_config/provisioning/datasources
-    mkdir -p grafana_config/provisioning/alerting
-    mkdir -p grafana_config/provisioning/plugins
+    mkdir -p grafana_data
     mkdir -p dist
     mkdir -p logs
 
@@ -167,8 +166,9 @@ case "$1" in
     # Prometheus typically runs as nobody:nobody (uid 65534)
     chmod -R 777 prometheus_data
 
-    # Fix permissions for Grafana config directory
-    chmod -R 777 grafana_config
+    # Fix permissions for Grafana data directory
+    # Grafana runs as user 472
+    chmod -R 777 grafana_data
 
     # Fix permissions for mounted code directories
     chmod -R 777 dist
@@ -178,31 +178,41 @@ case "$1" in
     ;;
 
   local-dev)
-    echo "Using local build workflow (build locally, run in container)..."
+    echo "Setting up local build + container runtime workflow..."
+    # Ensure directories exist with proper permissions
+    ./run.sh fix-permissions
 
-    # Build the application locally
-    echo "Building application locally..."
-    yarn build
-
-    # Check if container exists and is running
-    if [ -z "$(docker ps -q -f name=xdc-monitor)" ]; then
-      # Container doesn't exist or isn't running, start it
+    # Build the container once
+    if [ ! "$(docker ps -a | grep xdc-monitor)" ]; then
+      docker-compose build
       docker-compose up -d
-    else
-      # Container exists and is running, just restart it
-      docker-compose restart xdc-monitor
     fi
 
-    echo "Local build deployed to container. Services running at:"
+    echo "Environment is ready for local development workflow:"
+    echo "1. Edit your code"
+    echo "2. Build locally with 'yarn build' (or npm run build)"
+    echo "3. Apply changes with './run.sh update'"
+    echo ""
+    echo "Services running at:"
     echo "- XDC Monitor:  http://localhost:3000"
     echo "- Metrics:      http://localhost:9090/metrics"
     echo "- Prometheus:   http://localhost:9091"
     echo "- Grafana:      http://localhost:3001 (admin/admin)"
-    echo ""
-    echo "To apply code changes:"
-    echo "1. Edit your code"
-    echo "2. Run 'yarn build' locally"
-    echo "3. Run './run.sh local-dev' again or just 'docker-compose restart xdc-monitor'"
+    ;;
+
+  update)
+    echo "Updating running container with locally built code..."
+    echo "Checking for local build..."
+
+    if [ ! -d "dist" ] || [ -z "$(ls -A dist)" ]; then
+      echo "Error: 'dist' directory is empty or does not exist"
+      echo "Please build your code first with 'yarn build' or 'npm run build'"
+      exit 1
+    fi
+
+    echo "Updating container..."
+    docker-compose restart xdc-monitor
+    echo "Container updated! Your changes are now live at http://localhost:3000"
     ;;
 
   help|--help|-h)
