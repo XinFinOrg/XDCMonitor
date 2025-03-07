@@ -1,0 +1,61 @@
+apiVersion: 1
+
+groups:
+  - name: XDC
+    folder: Rules
+    interval: 60s
+    rules:
+      - uid: test-alert
+        title: 'Test Alert'
+        condition: A
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: 'vector(1)'
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+        noDataState: OK
+        execErrState: Error
+        for: 10s
+        annotations:
+          description: 'This is a test alert'
+        labels:
+          severity: info
+
+      # Manual test alert that can be toggled through annotations
+      - uid: manual-test-alert
+        title: 'Manual Test Alert'
+        condition: B
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: '__expr__' # Expression datasource
+            model:
+              refId: A
+              type: math
+              expression: '$B > 0' # Will be true when annotation value is > 0
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: '__expr__'
+            model:
+              refId: B
+              type: reduce
+              expression: ''
+              reducer: last
+              fields: '/^manual_test_alert$/'
+        noDataState: OK
+        execErrState: Error
+        for: 0s # Trigger immediately when condition is true
+        annotations:
+          description: 'This is a manual test alert triggered by annotation. Set the manual_test_alert annotation to > 0 to trigger it.'
+        labels:
+          severity: critical
