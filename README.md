@@ -39,7 +39,8 @@ A comprehensive Node.js-based monitoring system for the XDC Network. This applic
 - **Alert System**
 
   - Customizable dashboard alerts
-  - Chat channel notifications (via webhooks)
+  - Telegram notifications (via secure NestJS backend API)
+  - Webhook notifications (for other chat services)
   - Detailed error reporting
 
 - **Metrics Collection**
@@ -100,8 +101,12 @@ BLOCK_TIME_THRESHOLD=3.0
 
 # Alert configuration
 ENABLE_DASHBOARD_ALERTS=true
-ENABLE_CHAT_NOTIFICATIONS=false
+ENABLE_CHAT_NOTIFICATIONS=true
 NOTIFICATION_WEBHOOK_URL=
+
+# Telegram notification configuration
+TELEGRAM_BOT_TOKEN="your-telegram-bot-token-here"
+TELEGRAM_CHAT_ID="your-telegram-chat-id-here"
 
 # Metrics configuration
 METRICS_PORT=9090
@@ -166,12 +171,14 @@ docker-compose up -d grafana
 
 ## API Endpoints
 
-- **Block Status**: `/monitoring/block-status` - Current block monitoring information
-- **Block Comparison**: `/monitoring/block-comparison` - Comparison of block heights across RPCs
-- **RPC Status**: `/monitoring/rpc-status` - Status of all RPC endpoints
-- **WebSocket Status**: `/monitoring/websocket-status` - Status of WebSocket connections
-- **Overall Status**: `/monitoring/status` - Combined status of all monitoring systems
+- **Block Status**: `/api/monitoring/block-status` - Current block monitoring information
+- **Block Comparison**: `/api/monitoring/block-comparison` - Comparison of block heights across RPCs
+- **RPC Status**: `/api/monitoring/rpc-status` - Status of all RPC endpoints
+- **WebSocket Status**: `/api/monitoring/websocket-status` - Status of WebSocket connections
+- **Overall Status**: `/api/monitoring/status` - Combined status of all monitoring systems
 - **Metrics**: `/metrics` - Prometheus-compatible metrics endpoint
+- **Notifications Test**: `/api/notifications/test` - Test the notification system
+- **Telegram Webhook**: `/api/notifications/telegram` - Endpoint for Grafana to send alerts
 
 ## Metrics Collected
 
@@ -206,13 +213,49 @@ For Grafana integration, a data source should be configured pointing to the Prom
 5. Click "Save & Test"
 6. Import dashboards from the `grafana/` directory or create new ones
 
-### Recommended Dashboard Panels
+### Setting Up Alert Notifications
 
-- **Block Height**: Graph of `xdc_block_height`
-- **Block Time**: Graph of `xdc_block_time`
-- **RPC Availability**: Gauge of `xdc_rpc_status` by endpoint
-- **RPC Latency**: Graph of `xdc_rpc_latency` by endpoint
-- **Transaction Volume**: Graph of rate(xdc_transaction_count[5m])
+Grafana alerts are configured to use the NestJS backend API for sending notifications:
+
+1. The alerts are defined in `grafana_data/provisioning/alerting/rules.yaml`
+2. Notifications are sent via webhook to the NestJS backend API endpoint
+3. The NestJS backend handles sending notifications to Telegram
+4. This approach keeps Telegram credentials securely in the NestJS backend only
+
+## Testing the Notification System
+
+The project includes several ways to test the notification system:
+
+### Using the Test Script
+
+```bash
+# Test sending a notification via the API
+./test-telegram-notification.sh
+
+# Run comprehensive system tests
+./test-notification-system.sh
+```
+
+### Using the Test API Endpoint
+
+Send a GET request to test the notification system:
+
+```bash
+curl -X GET 'http://localhost:3000/api/notifications/test?title=Test&message=This%20is%20a%20test&severity=info'
+```
+
+Parameters:
+
+- `title`: The title of the test notification
+- `message`: The content of the notification
+- `severity`: One of `info`, `warning`, or `critical`/`error`
+
+### Testing from Grafana
+
+1. Set up an alert rule in Grafana (or use the provided `manual-test-alert`)
+2. Create a dashboard with a panel
+3. Add an annotation with name `manual_test_alert` and value `1`
+4. This will trigger the alert rule, which will send a notification
 
 ## Docker Deployment
 
@@ -308,17 +351,6 @@ Prometheus and Grafana data are stored in local directories for persistence and 
   - Prometheus Data: `./prometheus_dev_data/`
   - Grafana Data: `./grafana_dev_data/`
 
-You can back up these directories, inspect the data, or clear them if needed:
-
-```bash
-# Using the helper script
-./run.sh clear-metrics
-
-# Or manually
-rm -rf prometheus_data/*
-mkdir -p prometheus_data
-```
-
 ### Accessing Services
 
 - **XDC Monitor API**: http://localhost:3000
@@ -369,30 +401,27 @@ This project follows secure practices for managing sensitive credentials:
 
 1. **Environment Variables**: All sensitive credentials (like Telegram bot tokens) are stored in the `.env` file, which is excluded from Git.
 
-2. **Runtime Generation**: Sensitive configuration files are generated at container startup from environment variables, so credentials never exist in the codebase.
+2. **Centralized Credential Storage**: Telegram credentials are only stored in the NestJS backend's environment, not in Grafana configuration.
 
-3. **Volume Separation**:
-   - Shareable configurations (dashboards, data sources) are in separate volume mounts
-   - Sensitive configurations are generated at runtime and not persisted
+3. **Webhook-based Notification**: Grafana uses a webhook to send alerts to the NestJS API, which then securely uses the credentials to send notifications.
 
 ### Sharing Dashboards Without Exposing Credentials
 
 The project is set up so you can:
 
 - Share your Grafana dashboards via Git
-- Keep your sensitive credentials private
+- Keep your sensitive credentials private in your `.env` file
 
 #### What's Safe to Commit:
 
 - `grafana_data/provisioning/dashboards/*.yaml` - Dashboard configurations
 - `grafana_data/provisioning/datasources/*.yaml` - Data source configurations
 - `grafana_data/provisioning/plugins/*.yaml` - Plugin configurations
+- `grafana_data/provisioning/alerting/*.yaml` - Alert configuration (webhook URLs only, no credentials)
 
 #### What's Excluded from Git:
 
 - `.env` file with sensitive credentials
-- `grafana_data/provisioning/alerting/*.yaml` - Contains alert channel configs with credentials
-- `grafana_data/provisioning/notifiers/*.yaml` - Contains notification configs with credentials
 
 ## Setup Instructions
 
@@ -415,12 +444,10 @@ The project is set up so you can:
 If you need to update your Telegram bot token or chat ID:
 
 1. Update the values in your `.env` file
-2. Restart the Grafana container:
+2. Restart the XDC Monitor container:
    ```
-   docker-compose restart grafana
+   docker-compose restart xdc-monitor
    ```
-
-The entrypoint script will automatically regenerate the configuration files with your new credentials.
 
 ## Getting Started
 
@@ -445,59 +472,6 @@ docker-compose up -d
 ```
 
 3. Access the Grafana dashboard at http://localhost:3001 (default credentials: admin/admin)
-
-## Configuration
-
-### Grafana
-
-Grafana is configured to store dashboards and data sources in the `grafana_data` directory. When you make changes in the UI, they will be saved to this directory.
-
-#### Setting up Telegram Notifications in Grafana UI
-
-To configure Telegram notifications (instead of using environment variables):
-
-1. Create a Telegram bot using [@BotFather](https://t.me/botfather) and get your bot token
-2. Create a Telegram group or channel and get the chat ID
-3. In Grafana, go to **Alerting** → **Contact points** → **New contact point**
-4. Select "Telegram" as the integration
-5. Enter your bot token and chat ID
-6. Save the contact point
-
-![Telegram Configuration](docs/images/telegram-config.png)
-
-#### Creating and Saving Dashboards
-
-When you create dashboards in the Grafana UI, they will be saved to the `grafana_data/data/dashboards` directory. These can be shared and versioned in your Git repository.
-
-To export a dashboard for sharing:
-
-1. Open the dashboard in Grafana
-2. Click the gear icon (⚙️) to open dashboard settings
-3. Click "JSON Model"
-4. Copy the JSON and save it to a file in your project (e.g., `dashboards/my-dashboard.json`)
-
-### Environment Variables
-
-The project uses two environment files:
-
-- `.env` - Contains application-specific configuration
-- `.env.grafana` - Contains Grafana configuration (non-sensitive)
-
-For sensitive information:
-
-1. Duplicate the example environment files:
-   ```
-   cp .env.example .env
-   cp .env.grafana.example .env.grafana
-   ```
-2. Edit the files and configure your settings
-3. For sensitive information like API keys and tokens, configure them via the Grafana UI
-
-## Sharing and Security
-
-- The repository is designed so you can safely share your configuration without revealing sensitive information
-- Sensitive data is stored in the Grafana database and not committed to Git
-- When cloning to a new machine, you'll need to reconfigure sensitive values through the Grafana UI
 
 ## Contributing
 
