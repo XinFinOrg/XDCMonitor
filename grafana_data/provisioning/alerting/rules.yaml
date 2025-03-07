@@ -1,0 +1,125 @@
+apiVersion: 1
+
+groups:
+  - name: XDC
+    folder: Rules
+    interval: 60s
+    rules:
+      # 1. Slow Block Time Alert (from blocks.monitor.ts)
+      - uid: slow-block-time
+        title: 'Slow Block Time'
+        condition: A
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: 'xdc_block_time > 1.0' # Set to 1 second for easy testing, normal threshold is 3s
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+        noDataState: OK
+        execErrState: Error
+        for: 10s
+        annotations:
+          description: 'Block time is high at {{ $values.A.Value }} seconds. This indicates possible network congestion.'
+          summary: 'XDC Network slow block production'
+        labels:
+          severity: warning
+          component: blockchain
+
+      # 2. RPC Endpoint Down (from rpc.monitor.ts)
+      - uid: rpc-endpoint-down
+        title: 'RPC Endpoint Down'
+        condition: A
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: 'xdc_rpc_status == 0'
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+        noDataState: OK
+        execErrState: Error
+        for: 30s # Easy test: reduce to 5s for quick triggering
+        annotations:
+          description: 'RPC endpoint {{ $labels.endpoint }} is down'
+          summary: 'XDC RPC endpoint unavailable'
+        labels:
+          severity: critical
+          component: rpc
+
+      # 3. High RPC Latency (from metrics.service.ts and rpc.monitor.ts)
+      - uid: high-rpc-latency
+        title: 'High RPC Latency'
+        condition: A
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: 'xdc_rpc_latency_sum / xdc_rpc_latency_count > 300' # Adjusted to 300ms for testing
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+        noDataState: OK
+        execErrState: Error
+        for: 20s
+        annotations:
+          description: 'RPC endpoint {{ $labels.endpoint }} has high latency ({{ $values.A.Value | printf "%.0f" }}ms)'
+          summary: 'XDC RPC latency above threshold'
+        labels:
+          severity: warning
+          component: rpc
+
+      # 4. Block Height Discrepancy Alert
+      - uid: block-height-difference
+        title: 'Block Height Discrepancy'
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: 'max(xdc_block_height) by (network)'
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: 'min(xdc_block_height) by (network)'
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: B
+          - refId: C
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: '__expr__'
+            model:
+              refId: C
+              type: math
+              expression: '$A - $B > 1' # Difference of just 1 block for testing
+        noDataState: OK
+        execErrState: Error
+        for: 20s
+        annotations:
+          description: 'Block height discrepancy detected. Max height: {{ $values.A.Value }}, Min height: {{ $values.B.Value }}, Difference: {{ $values.A.Value - $values.B.Value }}'
+          summary: 'XDC Network nodes out of sync'
+        labels:
+          severity: warning
+          component: blockchain

@@ -65,6 +65,9 @@ grafana_data/
 !/grafana_data/config/
 !/grafana_data/provisioning/
 
+# Exclude dashboards
+!/grafana_data/data/dashboards/
+
 # Exclude potential secrets but keep examples
 /grafana_data/provisioning/alerting/*.yaml
 !/grafana_data/provisioning/alerting/*.example.yaml
