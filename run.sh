@@ -7,13 +7,15 @@ function show_usage {
   echo "Usage: ./run.sh [command]"
   echo ""
   echo "Commands:"
-  echo "  up              Start the complete stack (app + prometheus + grafana)"
+  echo "  up              Start the complete stack (app + prometheus + grafana) with latest code"
   echo "  down            Stop the complete stack"
   echo "  logs            View logs from all services"
   echo "  app-logs        View logs from the app service only"
   echo "  clear-metrics   Clear all prometheus metrics data"
   echo "  rebuild         Rebuild and restart the application container"
   echo "  clean           Stop and remove all containers, volumes and networks"
+  echo "  fix-permissions Fix permissions for data directories"
+  echo "  dev             Quick rebuild of just the app service with latest code"
   echo "  help            Show this help message"
   echo ""
 }
@@ -27,8 +29,16 @@ fi
 # Process command line arguments
 case "$1" in
   up)
-    echo "Starting complete stack..."
+    echo "Starting complete stack with latest code..."
+    # Ensure directories exist with proper permissions
+    ./run.sh fix-permissions
+
+    # Force rebuild of xdc-monitor service to include latest code
+    docker-compose build xdc-monitor
+
+    # Start all services
     docker-compose up -d
+
     echo "Services running at:"
     echo "- XDC Monitor:  http://localhost:3000"
     echo "- Metrics:      http://localhost:9090/metrics"
@@ -55,12 +65,22 @@ case "$1" in
     echo "Rebuilding and restarting the application..."
     docker-compose down
     docker-compose build --no-cache
+    # Ensure directories exist with proper permissions
+    ./run.sh fix-permissions
     docker-compose up -d
     echo "Rebuild complete. Services are running at:"
     echo "- XDC Monitor:  http://localhost:3000"
     echo "- Metrics:      http://localhost:9090/metrics"
     echo "- Prometheus:   http://localhost:9091"
     echo "- Grafana:      http://localhost:3001 (admin/admin)"
+    ;;
+
+  dev)
+    echo "Quick rebuild and restart of just the xdc-monitor service..."
+    docker-compose stop xdc-monitor
+    docker-compose build xdc-monitor
+    docker-compose up -d xdc-monitor
+    echo "xdc-monitor service updated with latest code and running at http://localhost:3000"
     ;;
 
   clean)
@@ -89,7 +109,27 @@ case "$1" in
     fi
 
     echo "Restarting prometheus..."
+    # Fix permissions before starting
+    ./run.sh fix-permissions
     docker-compose up -d prometheus
+    ;;
+
+  fix-permissions)
+    echo "Fixing permissions for data directories..."
+
+    # Create directories if they don't exist
+    mkdir -p prometheus_data
+    mkdir -p grafana_data
+
+    # Fix permissions for Prometheus data directory
+    # Prometheus typically runs as nobody:nobody (uid 65534)
+    chmod -R 777 prometheus_data
+
+    # Fix permissions for Grafana data directory
+    # Grafana runs as user 472
+    chmod -R 777 grafana_data
+
+    echo "Permissions fixed."
     ;;
 
   help|--help|-h)
