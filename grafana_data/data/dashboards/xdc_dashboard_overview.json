@@ -12,6 +12,22 @@
         "iconColor": "rgba(0, 211, 255, 1)",
         "name": "Annotations & Alerts",
         "type": "dashboard"
+      },
+      {
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "iconColor": "red",
+        "name": "manual_test_alert",
+        "target": {
+          "limit": 100,
+          "matchAny": false,
+          "tags": [],
+          "type": "dashboard"
+        },
+        "type": "dashboard"
       }
     ]
   },
@@ -23,14 +39,42 @@
   "liveNow": false,
   "panels": [
     {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 100,
+      "options": {
+        "alertName": "",
+        "dashboardAlerts": true,
+        "maxItems": 5,
+        "showInstances": true,
+        "sortOrder": 1,
+        "stateFilter": {
+          "firing": true,
+          "inactive": false,
+          "pending": true
+        },
+        "viewMode": "list"
+      },
+      "title": "Active Alerts",
+      "type": "alertlist"
+    },
+    {
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 0
+        "y": 6
       },
-      "id": 1,
+      "id": 101,
       "panels": [],
       "title": "Network Overview",
       "type": "row"
@@ -63,9 +107,9 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 1
+        "y": 7
       },
-      "id": 2,
+      "id": 102,
       "options": {
         "colorMode": "value",
         "graphMode": "area",
@@ -130,9 +174,9 @@
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 1
+        "y": 7
       },
-      "id": 3,
+      "id": 103,
       "options": {
         "colorMode": "value",
         "graphMode": "area",
@@ -208,9 +252,9 @@
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 1
+        "y": 7
       },
-      "id": 4,
+      "id": 104,
       "options": {
         "colorMode": "value",
         "graphMode": "none",
@@ -247,9 +291,189 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 9
+        "y": 15
       },
-      "id": 5,
+      "id": 105,
+      "panels": [],
+      "title": "RPC Performance",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
+      "id": 106,
+      "options": {
+        "legend": {
+          "calcs": ["mean", "max"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "10.1.0",
+      "title": "RPC Latency by Endpoint",
+      "type": "timeseries",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "xdc_rpc_latency_sum / xdc_rpc_latency_count",
+          "legendFormat": "{{endpoint}}",
+          "range": true,
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Status of RPC endpoints over time (1 = up, 0 = down)",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "fillOpacity": 70,
+            "lineWidth": 0,
+            "spanNulls": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 16
+      },
+      "id": 107,
+      "options": {
+        "alignValue": "center",
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "mergeValues": true,
+        "rowHeight": 0.9,
+        "showValue": "auto",
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "10.1.0",
+      "title": "RPC Endpoint Status History",
+      "type": "state-timeline",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "avg_over_time(xdc_rpc_status[5m])",
+          "legendFormat": "{{endpoint}}",
+          "range": true,
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 25
+      },
+      "id": 108,
       "panels": [],
       "title": "Transactions",
       "type": "row"
@@ -313,9 +537,9 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 10
+        "y": 26
       },
-      "id": 6,
+      "id": 109,
       "options": {
         "legend": {
           "calcs": [],
@@ -361,8 +585,8 @@
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 10,
+            "drawStyle": "bars",
+            "fillOpacity": 100,
             "gradientMode": "none",
             "hideFrom": {
               "legend": false,
@@ -380,7 +604,7 @@
             "spanNulls": false,
             "stacking": {
               "group": "A",
-              "mode": "none"
+              "mode": "normal"
             },
             "thresholdsStyle": {
               "mode": "off"
@@ -400,7 +624,7 @@
               }
             ]
           },
-          "unit": "ms"
+          "unit": "short"
         },
         "overrides": []
       },
@@ -408,13 +632,13 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 10
+        "y": 26
       },
-      "id": 7,
+      "id": 110,
       "options": {
         "legend": {
-          "calcs": ["mean", "max"],
-          "displayMode": "table",
+          "calcs": [],
+          "displayMode": "list",
           "placement": "bottom",
           "showLegend": true
         },
@@ -424,7 +648,7 @@
         }
       },
       "pluginVersion": "10.1.0",
-      "title": "RPC Latency",
+      "title": "Alert Frequency (Last 24h)",
       "type": "timeseries",
       "targets": [
         {
@@ -433,8 +657,8 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "xdc_rpc_latency_sum / xdc_rpc_latency_count",
-          "legendFormat": "{{endpoint}}",
+          "expr": "sum by(alertname) (count_over_time(ALERTS{alertstate=\"firing\"}[10m]))",
+          "legendFormat": "{{alertname}}",
           "range": true,
           "refId": "A"
         }
@@ -446,9 +670,9 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 18
+        "y": 34
       },
-      "id": 8,
+      "id": 111,
       "panels": [],
       "title": "Blockchain Health",
       "type": "row"
@@ -518,11 +742,11 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 24,
+        "w": 12,
         "x": 0,
-        "y": 19
+        "y": 35
       },
-      "id": 9,
+      "id": 112,
       "options": {
         "legend": {
           "calcs": ["mean", "max"],
@@ -551,12 +775,261 @@
           "refId": "A"
         }
       ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "area"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1000
+              },
+              {
+                "color": "red",
+                "value": 2000
+              }
+            ]
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 35
+      },
+      "id": 113,
+      "options": {
+        "legend": {
+          "calcs": ["mean", "max"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "10.1.0",
+      "title": "RPC Request Duration (95th Percentile)",
+      "type": "timeseries",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.95, sum(rate(xdc_rpc_latency_bucket[5m])) by (le, endpoint))",
+          "legendFormat": "{{endpoint}}",
+          "range": true,
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 43
+      },
+      "id": 114,
+      "panels": [],
+      "title": "Alert Details",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Recent alert notifications",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": true,
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Severity"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "critical": {
+                        "color": "red",
+                        "index": 2
+                      },
+                      "info": {
+                        "color": "blue",
+                        "index": 0
+                      },
+                      "warning": {
+                        "color": "orange",
+                        "index": 1
+                      }
+                    },
+                    "type": "value"
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 44
+      },
+      "id": 115,
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": ["sum"],
+          "show": false
+        },
+        "showHeader": true,
+        "sortBy": [
+          {
+            "desc": true,
+            "displayName": "Time"
+          }
+        ]
+      },
+      "pluginVersion": "10.1.0",
+      "title": "Recent Alert History",
+      "type": "table",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sort_desc(ALERTS)",
+          "format": "table",
+          "instant": true,
+          "legendFormat": "alert",
+          "range": false,
+          "refId": "A"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Value": true
+            },
+            "indexByName": {
+              "Time": 0,
+              "alertname": 1,
+              "alertstate": 2,
+              "instance": 3,
+              "job": 4,
+              "severity": 5
+            },
+            "renameByName": {
+              "Time": "Time",
+              "alertname": "Alert",
+              "alertstate": "State",
+              "instance": "Target",
+              "job": "Service",
+              "severity": "Severity"
+            }
+          }
+        }
+      ]
     }
   ],
   "refresh": "10s",
   "schemaVersion": 38,
   "style": "dark",
-  "tags": ["xdc", "blockchain", "monitoring"],
+  "tags": ["xdc", "blockchain", "monitoring", "alerts", "rpc"],
   "templating": {
     "list": []
   },
@@ -566,8 +1039,8 @@
   },
   "timepicker": {},
   "timezone": "",
-  "title": "XDC Network Overview",
-  "uid": "xdc-network-overview",
+  "title": "XDC Network Unified Dashboard",
+  "uid": "xdc-unified-dashboard",
   "version": 1,
   "weekStart": ""
 }

@@ -8,11 +8,12 @@ import { RpcMonitorService } from '@monitoring/rpc.monitor';
 import { AlertsService } from '@monitoring/alerts.service';
 import { MonitoringController } from '@monitoring/monitoring.controller';
 import { NotificationController } from '@monitoring/notification.controller';
+import { TestingController } from '@monitoring/testing.controller';
 
 @Module({
   imports: [ScheduleModule.forRoot(), BlockchainModule, ConfigModule, MetricsModule],
   providers: [BlocksMonitorService, RpcMonitorService, AlertsService],
-  controllers: [MonitoringController, NotificationController],
+  controllers: [MonitoringController, NotificationController, TestingController],
   exports: [BlocksMonitorService, RpcMonitorService, AlertsService],
 })
 export class MonitoringModule {}

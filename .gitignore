@@ -51,6 +51,3 @@ Thumbs.db
 
 # prometheus data
 prometheus_data/
-
-# grafana data
-grafana_data/

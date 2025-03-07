@@ -180,6 +180,13 @@ docker-compose up -d grafana
 - **Notifications Test**: `/api/notifications/test` - Test the notification system
 - **Telegram Webhook**: `/api/notifications/telegram` - Endpoint for Grafana to send alerts
 
+### New Testing Endpoints
+
+- **Trigger Manual Alert**: `/api/testing/trigger-manual-alert?type=error&title=Title&message=Message` - Directly trigger an alert
+- **Simulate Slow Block Time**: `/api/testing/simulate-slow-blocktime?seconds=4` - Simulate a slow block time
+- **Simulate RPC Down**: `/api/testing/simulate-rpc-down?endpoint=URL` - Simulate an RPC endpoint being down
+- **Simulate RPC Latency**: `/api/testing/simulate-rpc-latency?endpoint=URL&latency=500` - Simulate high RPC latency
+
 ## Metrics Collected
 
 The application exposes the following Prometheus metrics:
@@ -222,6 +229,33 @@ Grafana alerts are configured to use the NestJS backend API for sending notifica
 3. The NestJS backend handles sending notifications to Telegram
 4. This approach keeps Telegram credentials securely in the NestJS backend only
 
+### Configured Alert Rules
+
+The system comes with several pre-configured alert rules:
+
+1. **Slow Block Time Alert** - Triggers when block time exceeds the threshold (default: 1s for testing)
+
+   - Source: Block monitoring service
+   - Severity: Warning
+   - Component: blockchain
+
+2. **RPC Endpoint Down Alert** - Triggers when an RPC endpoint is detected as down
+
+   - Source: RPC monitoring service
+   - Severity: Critical
+   - Component: rpc
+
+3. **High RPC Latency Alert** - Triggers when RPC response time exceeds threshold (default: 300ms for testing)
+
+   - Source: RPC monitoring service
+   - Severity: Warning
+   - Component: rpc
+
+4. **Block Height Discrepancy Alert** - Triggers when different RPC endpoints report varying block heights
+   - Source: Block monitoring service
+   - Severity: Warning
+   - Component: blockchain
+
 ## Testing the Notification System
 
 The project includes several ways to test the notification system:
@@ -250,12 +284,43 @@ Parameters:
 - `message`: The content of the notification
 - `severity`: One of `info`, `warning`, or `critical`/`error`
 
+### Testing Specific Alert Conditions
+
+The system includes a Testing Controller with endpoints to simulate various alert conditions:
+
+1. **Test Slow Block Time Alert**:
+
+   ```bash
+   curl "http://localhost:3000/api/testing/simulate-slow-blocktime?seconds=4"
+   ```
+
+2. **Test RPC Endpoint Down Alert**:
+
+   ```bash
+   curl -X POST "http://localhost:3000/api/testing/simulate-rpc-down?endpoint=https://rpc.xinfin.network"
+   ```
+
+3. **Test High RPC Latency**:
+
+   ```bash
+   curl -X POST "http://localhost:3000/api/testing/simulate-rpc-latency?endpoint=https://erpc.xinfin.network&latency=600"
+   ```
+
+4. **Trigger a Manual Alert**:
+   ```bash
+   curl "http://localhost:3000/api/testing/trigger-manual-alert?type=error&title=Critical%20Test&message=Urgent%20test%20message"
+   ```
+
 ### Testing from Grafana
 
-1. Set up an alert rule in Grafana (or use the provided `manual-test-alert`)
-2. Create a dashboard with a panel
-3. Add an annotation with name `manual_test_alert` and value `1`
-4. This will trigger the alert rule, which will send a notification
+1. Use annotations to trigger the manual-test-alert rule:
+
+   - Open your Grafana dashboard
+   - Add an annotation with name `manual_test_alert` and value `1`
+   - This should trigger the alert rule, which will send a notification
+
+2. Check the Grafana Alerting UI:
+   - Navigate to Alerting > Alert rules to see the status of all alerts
 
 ## Docker Deployment
 
@@ -448,6 +513,30 @@ If you need to update your Telegram bot token or chat ID:
    ```
    docker-compose restart xdc-monitor
    ```
+
+## Verifying Alert Notifications
+
+To verify that alerts are properly firing and reaching your Telegram bot:
+
+1. **Use the Testing Controller**:
+
+   ```bash
+   curl "http://localhost:3000/api/testing/trigger-manual-alert?type=error&title=Test&message=Test"
+   ```
+
+2. **Check Grafana Alerting UI**:
+
+   - Navigate to Grafana > Alerting
+   - Look for your firing alerts in the list
+
+3. **Check NestJS Logs**:
+
+   ```bash
+   docker-compose logs -f xdc-monitor | grep "notification"
+   ```
+
+4. **Check Your Telegram**:
+   - You should receive messages from your Telegram bot
 
 ## Getting Started
 

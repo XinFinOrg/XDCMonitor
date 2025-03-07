@@ -12,6 +12,7 @@ export class MetricsService implements OnModuleInit {
   private rpcLatency: promClient.Histogram<string>;
   private rpcStatus: promClient.Gauge<string>;
   private blockTime: promClient.Gauge<string>;
+  private alertCount: promClient.Counter<string>;
 
   constructor(private readonly configService: ConfigService) {
     this.register = new promClient.Registry();
@@ -52,6 +53,12 @@ export class MetricsService implements OnModuleInit {
       help: 'Time between blocks in seconds',
       registers: [this.register],
     });
+
+    this.alertCount = new promClient.Counter({
+      name: 'xdc_alert_count',
+      help: 'Count of alerts by type and component',
+      labelNames: ['type', 'component'],
+    });
   }
 
   onModuleInit() {
@@ -81,5 +88,9 @@ export class MetricsService implements OnModuleInit {
 
   setBlockTime(seconds: number): void {
     this.blockTime.set(seconds);
+  }
+
+  incrementAlertCount(type: string, component: string): void {
+    this.alertCount.labels(type, component).inc();
   }
 }

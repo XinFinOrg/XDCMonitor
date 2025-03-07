@@ -18,8 +18,20 @@ alertmanagerConfigs:
             disableResolveMessage: false
     route:
       receiver: 'nestjs-backend'
-      group_by: ['alertname']
-      group_wait: 30s
-      group_interval: 5m
-      repeat_interval: 1h
-      routes: []
+      group_by: ['alertname', 'component']
+      group_wait: 10s
+      group_interval: 30s
+      repeat_interval: 5m
+      routes:
+        - receiver: 'nestjs-backend'
+          matchers:
+            - name: 'severity'
+              value: 'critical'
+          group_wait: 0s
+          repeat_interval: 1m
+        - receiver: 'nestjs-backend'
+          matchers:
+            - name: 'component'
+              value: 'rpc'
+          group_wait: 5s
+          repeat_interval: 3m

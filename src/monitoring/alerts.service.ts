@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@config/config.service';
 import axios from 'axios';
+import { MetricsService } from '@metrics/metrics.service';
 
 export interface Alert {
   type: 'error' | 'warning' | 'info';
@@ -15,7 +16,10 @@ export class AlertsService {
   private readonly logger = new Logger(AlertsService.name);
   private alerts: Alert[] = [];
 
-  constructor(private readonly configService: ConfigService) {}
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly metricsService: MetricsService,
+  ) {}
 
   /**
    * Add a new alert and potentially send notifications
@@ -43,6 +47,8 @@ export class AlertsService {
     if (this.configService.enableChatNotifications) {
       await this.sendChatNotification(fullAlert);
     }
+
+    this.metricsService.incrementAlertCount(alert.type, alert.component);
   }
 
   /**
