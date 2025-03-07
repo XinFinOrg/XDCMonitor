@@ -14,6 +14,7 @@ services:
       - .env
     volumes:
       - ./logs:/app/logs
+      - ./dist:/app/dist
     networks:
       - xdc-monitor-network
     depends_on:
@@ -51,13 +52,15 @@ services:
     env_file:
       - .env
     volumes:
-      - ./grafana_data/data:/var/lib/grafana/data
-      - ./grafana_data/plugins:/var/lib/grafana/plugins
-      - ./grafana_data/logs:/var/lib/grafana/logs
-      - ./grafana_data/provisioning/dashboards:/etc/grafana/provisioning/dashboards
-      - ./grafana_data/provisioning/datasources:/etc/grafana/provisioning/datasources
-      - ./grafana_data/provisioning/plugins:/etc/grafana/provisioning/plugins
-      - ./grafana_data/provisioning/alerting:/etc/grafana/provisioning/alerting
+      # Runtime data - not version controlled
+      - grafana_data_volume:/var/lib/grafana/data
+      - grafana_logs_volume:/var/lib/grafana/logs
+      - grafana_plugins_volume:/var/lib/grafana/plugins
+      # Configuration - version controlled
+      - ./grafana_config/provisioning/dashboards:/etc/grafana/provisioning/dashboards
+      - ./grafana_config/provisioning/datasources:/etc/grafana/provisioning/datasources
+      - ./grafana_config/provisioning/plugins:/etc/grafana/provisioning/plugins
+      - ./grafana_config/provisioning/alerting:/etc/grafana/provisioning/alerting
     environment:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin
@@ -74,3 +77,8 @@ services:
 networks:
   xdc-monitor-network:
     driver: bridge
+
+volumes:
+  grafana_data_volume:
+  grafana_logs_volume:
+  grafana_plugins_volume:

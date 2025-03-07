@@ -473,6 +473,31 @@ For the best development experience, you can:
    - Open http://localhost:3001
    - Create or import dashboards using Prometheus as data source
 
+### Efficient Development with Local Build Workflow
+
+For a more efficient development cycle that doesn't require container rebuilds:
+
+1. Make changes to your code
+2. Build locally:
+   ```bash
+   yarn build
+   ```
+3. Deploy to container without rebuilding:
+   ```bash
+   ./run.sh local-dev
+   ```
+   or simply
+   ```bash
+   docker-compose restart xdc-monitor
+   ```
+
+This workflow:
+
+- Builds TypeScript code locally (fast)
+- Uses volume mounting to inject your built code into the container
+- Avoids unnecessary container rebuilds
+- Drastically reduces development cycle time
+
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.

@@ -51,3 +51,14 @@ Thumbs.db
 
 # prometheus data
 prometheus_data/
+
+# Grafana runtime data
+/grafana_data/data/
+/grafana_data/logs/
+/grafana_data/plugins/
+
+# But keep all provisioning configurations
+!/grafana_config/
+!/grafana_config/provisioning/
+!/grafana_config/provisioning/**/
+!/grafana_config/provisioning/**/*
