@@ -91,9 +91,20 @@ export class BlocksMonitorService implements OnModuleInit {
       const latestBlock = await this.blockchainService.getLatestBlock();
       const rpcResponseTime = Date.now() - startTime;
 
-      this.lastRpcResponseTime = rpcResponseTime;
-      this.lastBlockNumber = latestBlock.number;
+      // Only process new blocks we haven't seen before
+      if (latestBlock.number > this.lastBlockNumber) {
+        this.logger.log(`New block detected: #${latestBlock.number} (previous: #${this.lastBlockNumber})`);
 
+        // Process the latest block to count transactions
+        await this.processBlock(latestBlock);
+
+        // Update last seen block number
+        this.lastBlockNumber = latestBlock.number;
+      } else {
+        this.logger.debug(`No new blocks since last check. Current block: #${latestBlock.number}`);
+      }
+
+      this.lastRpcResponseTime = rpcResponseTime;
       this.metricsService.setBlockHeight(latestBlock.number);
 
       if (rpcResponseTime > 1000) {
@@ -197,24 +208,84 @@ export class BlocksMonitorService implements OnModuleInit {
   }
 
   private async processBlock(block: BlockInfo): Promise<void> {
-    this.logger.debug(`[DISABLED] Process block #${block.number}: ${block.transactions.length} transactions`);
+    this.logger.log(`Processing block #${block.number}: ${block.transactions.length} transactions`);
 
     // Update metrics for this block
     this.metricsService.setBlockHeight(block.number);
 
-    // Even though we don't process transactions in detail, we can still count them
     if (block.transactions && block.transactions.length > 0) {
-      // We don't know the status, but we can increment the confirmed count since they're in a block
-      for (let i = 0; i < block.transactions.length; i++) {
-        this.metricsService.incrementTransactionCount('confirmed');
+      // Fetch detailed transaction information to count successful and failed transactions
+      try {
+        let confirmedCount = 0;
+        let failedCount = 0;
+
+        // For larger blocks, we might want to limit this processing
+        // If there are too many transactions, we'll process a subset
+        const maxTxToProcess = Math.min(block.transactions.length, 50);
+        const txsToProcess = block.transactions.slice(0, maxTxToProcess);
+
+        this.logger.debug(
+          `Processing ${txsToProcess.length} out of ${block.transactions.length} transactions for block #${block.number}`,
+        );
+
+        const txPromises = txsToProcess.map(txHash =>
+          this.blockchainService
+            .getTransaction(txHash)
+            .then(tx => this.processTransaction(tx))
+            .catch(err => {
+              this.logger.error(`Error processing transaction ${txHash}: ${err.message}`);
+              return null;
+            }),
+        );
+
+        const txResults = await Promise.all(txPromises);
+
+        // Count confirmed and failed transactions
+        txResults.forEach(result => {
+          if (result) {
+            if (result.status === TransactionStatus.CONFIRMED) {
+              confirmedCount++;
+            } else if (result.status === TransactionStatus.FAILED) {
+              failedCount++;
+            }
+          }
+        });
+
+        // If we didn't process all transactions but we know they're confirmed (since they're in a block),
+        // we can estimate the total confirmed count
+        if (maxTxToProcess < block.transactions.length) {
+          const remainingTx = block.transactions.length - maxTxToProcess;
+          const confirmedRatio = confirmedCount / (confirmedCount + failedCount || 1);
+          const estimatedAdditionalConfirmed = Math.round(remainingTx * confirmedRatio);
+          const estimatedAdditionalFailed = remainingTx - estimatedAdditionalConfirmed;
+
+          confirmedCount += estimatedAdditionalConfirmed;
+          failedCount += estimatedAdditionalFailed;
+
+          this.logger.debug(
+            `Estimated additional transactions: ${estimatedAdditionalConfirmed} confirmed, ${estimatedAdditionalFailed} failed`,
+          );
+        }
+
+        // Always set metrics, even if counts are zero
+        this.metricsService.setTransactionsPerBlock(block.number, confirmedCount, failedCount);
+
+        this.logger.log(`Block #${block.number} transactions: ${confirmedCount} confirmed, ${failedCount} failed`);
+      } catch (error) {
+        this.logger.error(`Error processing transactions for block #${block.number}: ${error.message}`);
+        // Even on error, try to set transaction metrics
+        this.metricsService.setTransactionsPerBlock(block.number, block.transactions.length, 0);
       }
+    } else {
+      this.logger.debug(`Block #${block.number} has no transactions`);
+      this.metricsService.setTransactionsPerBlock(block.number, 0, 0);
     }
   }
 
-  private async processTransaction(tx: TransactionInfo): Promise<void> {
-    this.logger.debug(`[DISABLED] Process transaction ${tx.hash}`);
+  private async processTransaction(tx: TransactionInfo): Promise<TransactionInfo> {
+    this.logger.debug(`Processing transaction ${tx.hash}`);
 
-    // Even though detailed transaction processing is disabled, we'll still track metrics
+    // Track transaction in metrics
     switch (tx.status) {
       case TransactionStatus.CONFIRMED:
         this.metricsService.incrementTransactionCount('confirmed');
@@ -226,6 +297,8 @@ export class BlocksMonitorService implements OnModuleInit {
         this.metricsService.incrementTransactionCount('failed');
         break;
     }
+
+    return tx;
   }
 
   isBlockMonitoringEnabled(): boolean {

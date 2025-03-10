@@ -19,6 +19,7 @@ function show_usage {
   echo "  fast-dev        Start in development mode with hot reloading (FASTEST OPTION)"
   echo "  local-dev       First-time setup for local build + container runtime workflow"
   echo "  update          Update running container with locally built code (no rebuild)"
+  echo "  restart [name]  Restart a specific container (e.g., grafana, prometheus, xdc-monitor)"
   echo "  help            Show this help message"
   echo ""
 }
@@ -212,6 +213,30 @@ case "$1" in
     echo "Updating container..."
     docker-compose restart xdc-monitor
     echo "Container updated! Your changes are now live at http://localhost:3000"
+    ;;
+
+  restart)
+    if [ -z "$2" ]; then
+      echo "Error: Missing container name"
+      echo "Usage: ./run.sh restart [container-name]"
+      echo "Available containers: xdc-monitor, prometheus, grafana"
+      echo "In dev mode: xdc-monitor-dev, prometheus-dev, grafana-dev"
+      exit 1
+    fi
+
+    container_name="$2"
+    echo "Restarting $container_name container..."
+
+    # Check if we're in dev mode
+    if [ ! -z "$(docker ps --filter name=xdc-monitor-dev -q)" ]; then
+      # We're in dev mode
+      docker-compose -f docker-compose.dev.yml restart "$container_name"
+    else
+      # We're in regular mode
+      docker-compose restart "$container_name"
+    fi
+
+    echo "$container_name container restarted successfully."
     ;;
 
   help|--help|-h)

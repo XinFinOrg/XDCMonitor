@@ -13,6 +13,7 @@ export class MetricsService implements OnModuleInit {
   private rpcStatus: promClient.Gauge<string>;
   private blockTime: promClient.Gauge<string>;
   private alertCount: promClient.Counter<string>;
+  private transactionsPerBlock: promClient.Gauge<string>;
 
   constructor(private readonly configService: ConfigService) {
     this.register = new promClient.Registry();
@@ -30,6 +31,13 @@ export class MetricsService implements OnModuleInit {
       name: 'xdc_transaction_count',
       help: 'Number of XDC transactions processed',
       labelNames: ['status'],
+      registers: [this.register],
+    });
+
+    this.transactionsPerBlock = new promClient.Gauge({
+      name: 'xdc_transactions_per_block',
+      help: 'Number of transactions in each block',
+      labelNames: ['block_number', 'status'],
       registers: [this.register],
     });
 
@@ -76,6 +84,30 @@ export class MetricsService implements OnModuleInit {
 
   incrementTransactionCount(status: 'confirmed' | 'pending' | 'failed'): void {
     this.transactionCount.labels(status).inc();
+  }
+
+  setTransactionsPerBlock(blockNumber: number, confirmed: number, failed: number): void {
+    const blockNumberStr = blockNumber.toString();
+
+    // Reset any existing values for this block to ensure we don't have stale data
+    // This is important when refreshing metrics for the same block
+    try {
+      this.transactionsPerBlock.remove({ block_number: blockNumberStr, status: 'confirmed' });
+      this.transactionsPerBlock.remove({ block_number: blockNumberStr, status: 'failed' });
+    } catch (error) {
+      // Ignore errors if label combination doesn't exist yet
+    }
+
+    // Set new values
+    if (confirmed >= 0) {
+      this.transactionsPerBlock.labels(blockNumberStr, 'confirmed').set(confirmed);
+      this.logger.debug(`Set confirmed transactions for block #${blockNumber}: ${confirmed}`);
+    }
+
+    if (failed >= 0) {
+      this.transactionsPerBlock.labels(blockNumberStr, 'failed').set(failed);
+      this.logger.debug(`Set failed transactions for block #${blockNumber}: ${failed}`);
+    }
   }
 
   recordRpcLatency(endpoint: string, latencyMs: number): void {
