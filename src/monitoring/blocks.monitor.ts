@@ -102,21 +102,36 @@ export class BlocksMonitorService implements OnModuleInit {
 
       this.metricsService.recordRpcLatency('primary', rpcResponseTime);
 
-      const currentTime = Math.floor(Date.now() / 1000);
-      if (this.lastBlockTime > 0) {
-        const blockTime = currentTime - this.lastBlockTime;
-        this.metricsService.setBlockTime(blockTime);
-        if (blockTime > this.configService.blockTimeThreshold) {
-          this.logger.warn(
-            `Slow block detected on primary endpoint! Block time: ${blockTime}s - Threshold: ${this.configService.blockTimeThreshold}s`,
-          );
-        } else {
-          this.logger.debug(
-            `Block time on primary endpoint: ${blockTime}s (within threshold of ${this.configService.blockTimeThreshold}s)`,
-          );
+      // Get the previous block to calculate actual block time
+      try {
+        const previousBlockNumber = latestBlock.number - 1;
+        if (previousBlockNumber > 0) {
+          const previousBlock = await this.blockchainService.getBlockByNumber(previousBlockNumber);
+
+          // Calculate block time by comparing block timestamps
+          const latestBlockTimestamp =
+            typeof latestBlock.timestamp === 'string' ? parseInt(latestBlock.timestamp, 16) : latestBlock.timestamp;
+          const previousBlockTimestamp =
+            typeof previousBlock.timestamp === 'string'
+              ? parseInt(previousBlock.timestamp, 16)
+              : previousBlock.timestamp;
+          const blockTime = latestBlockTimestamp - previousBlockTimestamp;
+
+          this.metricsService.setBlockTime(blockTime);
+
+          if (blockTime > this.configService.blockTimeThreshold) {
+            this.logger.warn(
+              `Slow block detected! Block #${latestBlock.number} time: ${blockTime}s - Threshold: ${this.configService.blockTimeThreshold}s`,
+            );
+          } else {
+            this.logger.debug(
+              `Block #${latestBlock.number} time: ${blockTime}s (within threshold of ${this.configService.blockTimeThreshold}s)`,
+            );
+          }
         }
+      } catch (error) {
+        this.logger.error(`Error calculating block time: ${error.message}`);
       }
-      this.lastBlockTime = currentTime;
 
       const endpointPromises = activeEndpoints.map(async endpoint => {
         try {
