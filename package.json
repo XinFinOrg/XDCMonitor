@@ -13,7 +13,6 @@
     "start:prod": "node dist/main",
     "start:fast": "NODE_ENV=development npx ts-node-dev -r tsconfig-paths/register --respawn --transpile-only src/main.ts",
     "start:turbo": "NODE_ENV=development nodemon --watch 'src/**/*.ts' --ignore 'src/**/*.spec.ts' --exec 'ts-node -r tsconfig-paths/register' src/main.ts",
-    "start:super": "NODE_ENV=development node start-dev.js",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
     "test": "jest",
     "test:watch": "jest --watch",

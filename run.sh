@@ -7,20 +7,20 @@ function show_usage {
   echo "Usage: ./run.sh [command]"
   echo ""
   echo "Commands:"
-  echo "  up              Start the complete stack (app + prometheus + grafana) with latest code"
-  echo "  down            Stop the complete stack"
-  echo "  logs            View logs from all services"
-  echo "  app-logs        View logs from the app service only"
-  echo "  clear-metrics   Clear all prometheus metrics data"
-  echo "  rebuild         Rebuild and restart the application container"
-  echo "  clean           Stop and remove all containers, volumes and networks"
-  echo "  fix-permissions Fix permissions for data directories"
-  echo "  dev             Quick rebuild of just the app service with latest code"
-  echo "  fast-dev        Start in development mode with hot reloading (FASTEST OPTION)"
-  echo "  local-dev       First-time setup for local build + container runtime workflow"
-  echo "  update          Update running container with locally built code (no rebuild)"
-  echo "  restart [name]  Restart a specific container (e.g., grafana, prometheus, xdc-monitor)"
-  echo "  help            Show this help message"
+  echo "  up                Start the complete stack (app + prometheus + grafana) with latest code"
+  echo "  down              Stop the complete stack"
+  echo "  logs              View logs from all services"
+  echo "  rebuild           Rebuild and restart the application container"
+  echo "  clean             Stop and remove all containers, volumes and networks"
+  echo "  restart [name]    Restart a specific container (e.g., grafana, prometheus, xdc-monitor)"
+  echo "  xdc-monitor-logs  View logs from the app service only"
+  echo "  grafana-logs      View logs from the grafana service only"
+  echo "  prometheus-logs   View logs from the prometheus service only"
+  echo "  clear-prometheus  Clear all prometheus metrics data"
+  echo "  fix-permissions   Fix permissions for data directories"
+  echo "  grafana-export    Export Grafana configs to version-controlled directory"
+  echo "  grafana-import    Import Grafana configs from version-controlled directory"
+  echo "  help              Show this help message"
   echo ""
 }
 
@@ -32,28 +32,6 @@ fi
 
 # Process command line arguments
 case "$1" in
-  fast-dev)
-    echo "Starting in FAST development mode with hot reloading..."
-    # Ensure directories exist with proper permissions
-    ./run.sh fix-permissions
-
-    # Stop any existing containers
-    docker-compose down 2>/dev/null || true
-    docker-compose -f docker-compose.dev.yml down 2>/dev/null || true
-
-    # Build and start the development services
-    docker-compose -f docker-compose.dev.yml up -d
-
-    echo "Development services running at:"
-    echo "- XDC Monitor:  http://localhost:3000 (with hot reloading)"
-    echo "- Metrics:      http://localhost:9090/metrics"
-    echo "- Prometheus:   http://localhost:9091"
-    echo "- Grafana:      http://localhost:3001 (admin/admin)"
-    echo ""
-    echo "To view logs: docker-compose -f docker-compose.dev.yml logs -f xdc-monitor-dev"
-    echo "Code changes will automatically trigger rebuilds!"
-    ;;
-
   up)
     echo "Starting complete stack with latest code..."
     # Ensure directories exist with proper permissions
@@ -74,7 +52,6 @@ case "$1" in
   down)
     echo "Stopping all services..."
     docker-compose down
-    docker-compose -f docker-compose.dev.yml down 2>/dev/null || true
     ;;
 
   logs)
@@ -82,14 +59,19 @@ case "$1" in
     docker-compose logs -f
     ;;
 
-  app-logs)
-    echo "Showing logs from the app service. Press Ctrl+C to exit."
-    # Check which compose file is active
-    if [ -z "$(docker ps --filter name=xdc-monitor-dev -q)" ]; then
-      docker-compose logs -f xdc-monitor
-    else
-      docker-compose -f docker-compose.dev.yml logs -f xdc-monitor-dev
-    fi
+  xdc-monitor-logs)
+    echo "Showing logs from the app xdc-monitor. Press Ctrl+C to exit."
+    docker-compose logs -f xdc-monitor
+    ;;
+
+  grafana-logs)
+    echo "Showing logs from the grafana service. Press Ctrl+C to exit."
+    docker-compose logs -f grafana
+    ;;
+
+  prometheus-logs)
+    echo "Showing logs from the prometheus service. Press Ctrl+C to exit."
+    docker-compose logs -f prometheus
     ;;
 
   rebuild)
@@ -106,19 +88,10 @@ case "$1" in
     echo "- Grafana:      http://localhost:3001 (admin/admin)"
     ;;
 
-  dev)
-    echo "Quick rebuild and restart of just the xdc-monitor service..."
-    docker-compose stop xdc-monitor
-    docker-compose build xdc-monitor
-    docker-compose up -d xdc-monitor
-    echo "xdc-monitor service updated with latest code and running at http://localhost:3000"
-    ;;
-
   clean)
     echo "Stopping and removing all containers, volumes and networks..."
     # Stop and remove all containers
     docker-compose down --volumes --remove-orphans
-    docker-compose -f docker-compose.dev.yml down --volumes --remove-orphans 2>/dev/null || true
 
     # Prune containers, volumes and networks
     echo "Removing orphaned containers..."
@@ -127,11 +100,10 @@ case "$1" in
     echo "System cleaned successfully."
     ;;
 
-  clear-metrics)
+  clear-prometheus)
     echo "Clearing Prometheus metrics data..."
     # Stop relevant containers first
     docker-compose stop prometheus 2>/dev/null || true
-    docker-compose -f docker-compose.dev.yml stop prometheus-dev 2>/dev/null || true
 
     read -p "Clear metrics data? (y/n) " -n 1 -r
     echo
@@ -145,12 +117,7 @@ case "$1" in
     # Fix permissions before starting
     ./run.sh fix-permissions
 
-    # Check which compose file is active
-    if [ -z "$(docker ps --filter name=xdc-monitor-dev -q)" ]; then
-      docker-compose up -d prometheus
-    else
-      docker-compose -f docker-compose.dev.yml up -d prometheus-dev
-    fi
+    docker-compose up -d prometheus
     ;;
 
   fix-permissions)
@@ -177,66 +144,129 @@ case "$1" in
     echo "Permissions fixed."
     ;;
 
-  local-dev)
-    echo "Setting up local build + container runtime workflow..."
-    # Ensure directories exist with proper permissions
-    ./run.sh fix-permissions
-
-    # Build the container once
-    if [ ! "$(docker ps -a | grep xdc-monitor)" ]; then
-      docker-compose build
-      docker-compose up -d
-    fi
-
-    echo "Environment is ready for local development workflow:"
-    echo "1. Edit your code"
-    echo "2. Build locally with 'yarn build' (or npm run build)"
-    echo "3. Apply changes with './run.sh update'"
-    echo ""
-    echo "Services running at:"
-    echo "- XDC Monitor:  http://localhost:3000"
-    echo "- Metrics:      http://localhost:9090/metrics"
-    echo "- Prometheus:   http://localhost:9091"
-    echo "- Grafana:      http://localhost:3001 (admin/admin)"
-    ;;
-
-  update)
-    echo "Updating running container with locally built code..."
-    echo "Checking for local build..."
-
-    if [ ! -d "dist" ] || [ -z "$(ls -A dist)" ]; then
-      echo "Error: 'dist' directory is empty or does not exist"
-      echo "Please build your code first with 'yarn build' or 'npm run build'"
-      exit 1
-    fi
-
-    echo "Updating container..."
-    docker-compose restart xdc-monitor
-    echo "Container updated! Your changes are now live at http://localhost:3000"
-    ;;
-
   restart)
     if [ -z "$2" ]; then
       echo "Error: Missing container name"
       echo "Usage: ./run.sh restart [container-name]"
       echo "Available containers: xdc-monitor, prometheus, grafana"
-      echo "In dev mode: xdc-monitor-dev, prometheus-dev, grafana-dev"
       exit 1
     fi
 
     container_name="$2"
     echo "Restarting $container_name container..."
+    docker-compose restart "$container_name"
+    echo "$container_name container restarted successfully."
+    ;;
 
-    # Check if we're in dev mode
-    if [ ! -z "$(docker ps --filter name=xdc-monitor-dev -q)" ]; then
-      # We're in dev mode
-      docker-compose -f docker-compose.dev.yml restart "$container_name"
+  grafana-export)
+    echo "Exporting Grafana configs to version-controlled directory..."
+
+    # Ensure directories exist
+    mkdir -p grafana_config/config
+    mkdir -p grafana_config/provisioning/dashboards
+    mkdir -p grafana_config/provisioning/datasources
+    mkdir -p grafana_config/provisioning/plugins
+    mkdir -p grafana_config/provisioning/alerting
+
+    # Copy config files
+    if [ -d "grafana_data/config" ]; then
+      cp -rf grafana_data/config/* grafana_config/config/ 2>/dev/null || true
+      echo "✓ Exported config files"
     else
-      # We're in regular mode
-      docker-compose restart "$container_name"
+      echo "× No config files found to export"
     fi
 
-    echo "$container_name container restarted successfully."
+    # Copy provisioning files
+    if [ -d "grafana_data/provisioning" ]; then
+      # Dashboards
+      if [ -d "grafana_data/provisioning/dashboards" ]; then
+        cp -rf grafana_data/provisioning/dashboards/* grafana_config/provisioning/dashboards/ 2>/dev/null || true
+        echo "✓ Exported dashboard provisioning files"
+      fi
+
+      # Datasources
+      if [ -d "grafana_data/provisioning/datasources" ]; then
+        cp -rf grafana_data/provisioning/datasources/* grafana_config/provisioning/datasources/ 2>/dev/null || true
+        echo "✓ Exported datasource provisioning files"
+      fi
+
+      # Plugins
+      if [ -d "grafana_data/provisioning/plugins" ]; then
+        cp -rf grafana_data/provisioning/plugins/* grafana_config/provisioning/plugins/ 2>/dev/null || true
+        echo "✓ Exported plugin provisioning files"
+      fi
+
+      # Alerting
+      if [ -d "grafana_data/provisioning/alerting" ]; then
+        cp -rf grafana_data/provisioning/alerting/* grafana_config/provisioning/alerting/ 2>/dev/null || true
+        echo "✓ Exported alerting provisioning files"
+      fi
+    else
+      echo "× No provisioning files found to export"
+    fi
+
+    echo "Grafana configuration exported to grafana_config/"
+    echo "To commit these changes, run: git add grafana_config/ && git commit -m 'Update Grafana configuration'"
+    ;;
+
+  grafana-import)
+    echo "Importing Grafana configs from version-controlled directory..."
+
+    # Check if Grafana is running
+    if docker ps | grep -q grafana; then
+      echo "⚠️ Warning: Grafana is currently running. Changes may not take effect until restart."
+      echo "Consider running './run.sh restart grafana' after import."
+    fi
+
+    # Ensure directories exist
+    mkdir -p grafana_data/config
+    mkdir -p grafana_data/provisioning/dashboards
+    mkdir -p grafana_data/provisioning/datasources
+    mkdir -p grafana_data/provisioning/plugins
+    mkdir -p grafana_data/provisioning/alerting
+
+    # Copy config files
+    if [ -d "grafana_config/config" ] && [ "$(ls -A grafana_config/config 2>/dev/null)" ]; then
+      cp -rf grafana_config/config/* grafana_data/config/ 2>/dev/null || true
+      echo "✓ Imported config files"
+    else
+      echo "× No config files found to import"
+    fi
+
+    # Copy provisioning files
+    if [ -d "grafana_config/provisioning" ]; then
+      # Dashboards
+      if [ -d "grafana_config/provisioning/dashboards" ] && [ "$(ls -A grafana_config/provisioning/dashboards 2>/dev/null)" ]; then
+        cp -rf grafana_config/provisioning/dashboards/* grafana_data/provisioning/dashboards/ 2>/dev/null || true
+        echo "✓ Imported dashboard provisioning files"
+      fi
+
+      # Datasources
+      if [ -d "grafana_config/provisioning/datasources" ] && [ "$(ls -A grafana_config/provisioning/datasources 2>/dev/null)" ]; then
+        cp -rf grafana_config/provisioning/datasources/* grafana_data/provisioning/datasources/ 2>/dev/null || true
+        echo "✓ Imported datasource provisioning files"
+      fi
+
+      # Plugins
+      if [ -d "grafana_config/provisioning/plugins" ] && [ "$(ls -A grafana_config/provisioning/plugins 2>/dev/null)" ]; then
+        cp -rf grafana_config/provisioning/plugins/* grafana_data/provisioning/plugins/ 2>/dev/null || true
+        echo "✓ Imported plugin provisioning files"
+      fi
+
+      # Alerting
+      if [ -d "grafana_config/provisioning/alerting" ] && [ "$(ls -A grafana_config/provisioning/alerting 2>/dev/null)" ]; then
+        cp -rf grafana_config/provisioning/alerting/* grafana_data/provisioning/alerting/ 2>/dev/null || true
+        echo "✓ Imported alerting provisioning files"
+      fi
+    else
+      echo "× No provisioning files found to import"
+    fi
+
+    # Fix permissions
+    chmod -R 777 grafana_data
+
+    echo "Grafana configuration imported to grafana_data/"
+    echo "If Grafana is running, restart it with: ./run.sh restart grafana"
     ;;
 
   help|--help|-h)

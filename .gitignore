@@ -48,30 +48,8 @@ Thumbs.db
 *.swp
 *.swo
 
-
-# prometheus data
+# Prometheus data
 prometheus_data/
 
-# grafana data
+# Exclude ALL Grafana data
 grafana_data/
-
-# Grafana - Include config, exclude runtime data
-/grafana_data/data/
-/grafana_data/logs/
-/grafana_data/plugins/
-/grafana_data/sessions/
-
-# Keep these in git
-!/grafana_data/config/
-!/grafana_data/provisioning/
-
-# Exclude potential secrets but keep examples
-/grafana_data/provisioning/alerting/*.yaml
-!/grafana_data/provisioning/alerting/*.example.yaml
-!/grafana_data/provisioning/alerting/README.md
-
-# Keep other provisioning configs
-!/grafana_data/provisioning/dashboards/
-!/grafana_data/provisioning/dashboards/provisioned/
-!/grafana_data/provisioning/datasources/
-!/grafana_data/provisioning/plugins/

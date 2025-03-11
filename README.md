@@ -121,12 +121,6 @@ ENABLE_MULTI_RPC=true
 
 ## Usage
 
-### Running in Development Mode
-
-```bash
-npm run start:dev
-```
-
 ### Running in Production Mode
 
 ```bash
@@ -146,18 +140,6 @@ This will start all services:
 - XDC Monitor (API and monitoring)
 - Prometheus (metrics storage)
 - Grafana (visualization)
-
-#### Running Monitoring Infrastructure Only
-
-If you want to run your application in development mode while still using Prometheus and Grafana:
-
-```bash
-# Run only Prometheus and Grafana
-docker-compose up -d prometheus grafana
-
-# Then run your application locally
-npm run start:dev
-```
 
 #### Running Individual Services
 
@@ -233,6 +215,40 @@ For longer-term alert history and statistics, custom PromQL queries can be built
 ## Grafana Integration
 
 For Grafana integration, a data source should be configured pointing to the Prometheus server.
+
+### Managing Grafana Configurations
+
+This project uses a special approach to manage Grafana configurations:
+
+1. The actual Grafana data is stored in `grafana_data/` (ignored by Git)
+2. Version-controlled configurations are stored in `grafana_config/`
+3. Two helper commands synchronize between these directories:
+
+```bash
+# Export your current Grafana configurations to the version-controlled directory
+./run.sh grafana-export
+
+# Import the version-controlled configurations to your local Grafana
+./run.sh grafana-import
+```
+
+This approach allows:
+
+- Servers to maintain their own customized dashboards without Git conflicts
+- Selectively updating dashboards only when desired
+- Committing only intentional configuration changes to Git
+
+#### Workflow for Dashboard Development
+
+1. Make changes to your dashboards in Grafana UI
+2. Export the changes: `./run.sh grafana-export`
+3. Commit the changes: `git add grafana_config/ && git commit -m "Update dashboards"`
+
+#### Workflow for Deploying to Servers
+
+1. Pull the latest code: `git pull`
+2. Import the changes (optional): `./run.sh grafana-import`
+3. Restart Grafana (if running): `./run.sh restart grafana`
 
 ### Setting Up Grafana Dashboard
 
@@ -361,14 +377,11 @@ chmod +x run.sh
 # Start the complete stack (app + Prometheus + Grafana)
 ./run.sh up
 
-# Start only the monitoring infrastructure for local development
-./run.sh dev-infra
-
 # View logs
 ./run.sh logs
 
-# Clear metrics data
-./run.sh clear-metrics
+# Clear prometheus data
+./run.sh clear-prometheus
 
 # Rebuild containers (after code changes)
 ./run.sh rebuild
@@ -405,39 +418,12 @@ You can also use Docker Compose commands directly:
    docker-compose up -d
    ```
 
-### Development Setup
-
-For the best development experience, you can run the monitoring infrastructure in Docker while running the XDC Monitor locally:
-
-1. Start Prometheus and Grafana:
-
-   ```bash
-   # Using the helper script
-   ./run.sh dev-infra
-
-   # Or using Docker Compose directly
-   docker-compose -f docker-compose.dev.yml up -d
-   ```
-
-2. Run the XDC Monitor application locally:
-   ```bash
-   npm run start:dev
-   ```
-
-This configuration uses a special Prometheus setup that connects to your locally running application.
-
 ### Data Persistence
 
 Prometheus and Grafana data are stored in local directories for persistence and easy access:
 
-- **Production Environment**:
-
-  - Prometheus Data: `./prometheus_data/`
-  - Grafana Data: `./grafana_data/`
-
-- **Development Environment**:
-  - Prometheus Data: `./prometheus_dev_data/`
-  - Grafana Data: `./grafana_dev_data/`
+- Prometheus Data: `./prometheus_data/`
+- Grafana Data: `./grafana_data/`
 
 ### Accessing Services
 
@@ -445,33 +431,6 @@ Prometheus and Grafana data are stored in local directories for persistence and 
 - **Metrics Endpoint**: http://localhost:9090/metrics
 - **Prometheus**: http://localhost:9091
 - **Grafana**: http://localhost:3001 (default login: admin/admin)
-
-## Development Workflow
-
-### Local Development with Docker Monitoring
-
-For the best development experience, you can:
-
-1. Run Prometheus and Grafana in Docker:
-
-   ```bash
-   docker-compose up -d prometheus grafana
-   ```
-
-2. Run the XDC Monitor locally:
-
-   ```bash
-   npm run start:dev
-   ```
-
-3. Access your metrics in Prometheus:
-
-   - Open http://localhost:9091
-   - Query for metrics like `xdc_block_height` or `xdc_rpc_status`
-
-4. Build dashboards in Grafana using these metrics:
-   - Open http://localhost:3001
-   - Create or import dashboards using Prometheus as data source
 
 ## Contributing
 
@@ -519,13 +478,13 @@ The project is set up so you can:
    cp .env.example .env
    ```
 
-2. Start the monitoring stack:
+2. Start the services:
 
-   ```
-   docker-compose up -d
-   ```
+```bash
+docker-compose up -d
+```
 
-3. Access Grafana at http://localhost:3001 (default credentials: admin/admin)
+3. Access the Grafana dashboard at http://localhost:3001 (default credentials: admin/admin)
 
 ## Updating Telegram Credentials
 
@@ -584,7 +543,3 @@ docker-compose up -d
 ```
 
 3. Access the Grafana dashboard at http://localhost:3001 (default credentials: admin/admin)
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
