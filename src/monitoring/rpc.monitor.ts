@@ -16,8 +16,11 @@ export class RpcMonitorService implements OnModuleInit {
   private readonly logger = new Logger(RpcMonitorService.name);
   private rpcStatuses: Map<string, { status: 'up' | 'down'; latency: number }> = new Map();
   private wsStatuses: Map<string, { status: 'up' | 'down' }> = new Map();
+  private explorerStatuses: Map<string, { status: 'up' | 'down' }> = new Map();
+  private faucetStatuses: Map<string, { status: 'up' | 'down' }> = new Map();
   private rpcInterval: NodeJS.Timeout;
   private portInterval: NodeJS.Timeout;
+  private servicesInterval: NodeJS.Timeout;
 
   constructor(
     private readonly blockchainService: BlockchainService,
@@ -43,7 +46,12 @@ export class RpcMonitorService implements OnModuleInit {
       this.monitorAllRpcPorts();
     }, 120 * 1000);
 
+    this.servicesInterval = setInterval(() => {
+      this.monitorAllServices();
+    }, 60 * 1000); // Check services every minute
+
     this.monitorAllRpcEndpoints();
+    this.monitorAllServices();
   }
 
   private initializeStatusMaps() {
@@ -53,6 +61,20 @@ export class RpcMonitorService implements OnModuleInit {
 
     for (const endpoint of this.configService.wsEndpoints) {
       this.wsStatuses.set(endpoint.url, { status: 'down' });
+    }
+
+    // Initialize explorer statuses
+    if (this.configService.explorerEndpoints) {
+      for (const endpoint of this.configService.explorerEndpoints) {
+        this.explorerStatuses.set(endpoint.url, { status: 'down' });
+      }
+    }
+
+    // Initialize faucet statuses
+    if (this.configService.faucetEndpoints) {
+      for (const endpoint of this.configService.faucetEndpoints) {
+        this.faucetStatuses.set(endpoint.url, { status: 'down' });
+      }
     }
   }
 
@@ -98,37 +120,56 @@ export class RpcMonitorService implements OnModuleInit {
       this.logger.debug(`Checking RPC endpoint: ${endpoint.name} (${endpoint.url})`);
 
       const startTime = Date.now();
-      const isConnected = await this.blockchainService.checkRpcConnection(endpoint.url);
-      const connectionCheckTime = Date.now() - startTime;
+      const response = await axios.post(
+        endpoint.url,
+        {
+          jsonrpc: '2.0',
+          method: 'eth_blockNumber',
+          params: [],
+          id: 1,
+        },
+        {
+          timeout: 10000,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      );
 
-      if (!isConnected) {
-        this.logger.warn(`RPC endpoint ${endpoint.name} (${endpoint.url}) is DOWN`);
-        this.rpcStatuses.set(endpoint.url, { status: 'down', latency: 0 });
+      const elapsedTime = Date.now() - startTime;
+      const isSuccessful = response.status === 200 && response.data && response.data.result;
 
-        // Update metrics
-        this.metricsService.setRpcStatus(endpoint.url, false);
+      if (isSuccessful) {
+        this.logger.debug(`RPC endpoint ${endpoint.name} is UP (${elapsedTime}ms)`);
+        this.rpcStatuses.set(endpoint.url, { status: 'up', latency: elapsedTime });
+
+        // Use isMainnet flag to determine network ID (50 for mainnet, 51 for testnet)
+        const networkId = endpoint.isMainnet ? '50' : '51';
+
+        // Update metrics with network information
+        this.metricsService.setRpcStatus(endpoint.url, true, endpoint.isMainnet);
+        this.metricsService.recordRpcLatency(endpoint.url, elapsedTime, endpoint.isMainnet);
+
+        return true;
+      } else {
+        this.logger.warn(`RPC endpoint ${endpoint.name} returned invalid response`);
+        this.rpcStatuses.set(endpoint.url, { status: 'down', latency: elapsedTime });
+
+        // Use isMainnet flag to determine network ID
+        const networkId = endpoint.isMainnet ? '50' : '51';
+
+        // Update metrics with network information
+        this.metricsService.setRpcStatus(endpoint.url, false, endpoint.isMainnet);
 
         return false;
       }
-
-      // Check latency
-      const latencyTime = await this.blockchainService.checkRpcLatency(endpoint.url);
-
-      this.logger.debug(
-        `RPC latency for ${endpoint.name}: ${latencyTime}ms (connection check: ${connectionCheckTime}ms)`,
-      );
-      this.rpcStatuses.set(endpoint.url, { status: 'up', latency: latencyTime });
-
-      this.metricsService.setRpcStatus(endpoint.url, true);
-      this.metricsService.recordRpcLatency(endpoint.url, latencyTime);
-
-      return true;
     } catch (error) {
-      this.logger.error(`Error checking RPC endpoint ${endpoint.name}: ${error.message}`);
+      this.logger.warn(`RPC endpoint ${endpoint.name} is DOWN: ${error.message}`);
       this.rpcStatuses.set(endpoint.url, { status: 'down', latency: 0 });
 
-      // Update metrics
-      this.metricsService.setRpcStatus(endpoint.url, false);
+      // Use isMainnet flag to determine network ID
+      const networkId = endpoint.isMainnet ? '50' : '51';
+
+      // Update metrics with network information
+      this.metricsService.setRpcStatus(endpoint.url, false, endpoint.isMainnet);
 
       return false;
     }
@@ -205,6 +246,8 @@ export class RpcMonitorService implements OnModuleInit {
       if (!wsUrl.startsWith('wss://') && !wsUrl.startsWith('ws://')) {
         this.logger.warn(`Invalid WebSocket URL for ${endpoint.name}: ${wsUrl} - Must start with ws:// or wss://`);
         this.wsStatuses.set(endpoint.url, { status: 'down' });
+        // Update metrics with network information
+        this.metricsService.setWebsocketStatus(endpoint.url, false, endpoint.isMainnet);
         return;
       }
 
@@ -221,6 +264,8 @@ export class RpcMonitorService implements OnModuleInit {
         if (!connectionSuccessful) {
           this.logger.warn(`WebSocket connection to ${endpoint.name} timed out`);
           this.wsStatuses.set(endpoint.url, { status: 'down' });
+          // Update metrics with network information
+          this.metricsService.setWebsocketStatus(endpoint.url, false, endpoint.isMainnet);
           socket.terminate();
         }
       }, 5000);
@@ -229,6 +274,8 @@ export class RpcMonitorService implements OnModuleInit {
         connectionSuccessful = true;
         this.logger.debug(`WebSocket connection to ${endpoint.name} successful`);
         this.wsStatuses.set(endpoint.url, { status: 'up' });
+        // Update metrics with network information
+        this.metricsService.setWebsocketStatus(endpoint.url, true, endpoint.isMainnet);
         clearTimeout(timeout);
         socket.close();
       });
@@ -236,6 +283,8 @@ export class RpcMonitorService implements OnModuleInit {
       socket.on('error', error => {
         this.logger.warn(`WebSocket connection error for ${endpoint.name}: ${error.message}`);
         this.wsStatuses.set(endpoint.url, { status: 'down' });
+        // Update metrics with network information
+        this.metricsService.setWebsocketStatus(endpoint.url, false, endpoint.isMainnet);
         clearTimeout(timeout);
 
         if (!socket.terminated) {
@@ -245,6 +294,90 @@ export class RpcMonitorService implements OnModuleInit {
     } catch (error) {
       this.logger.error(`Error setting up WebSocket connection for ${endpoint.name}: ${error.message}`);
       this.wsStatuses.set(endpoint.url, { status: 'down' });
+      // Update metrics with network information
+      this.metricsService.setWebsocketStatus(endpoint.url, false, endpoint.isMainnet);
+    }
+  }
+
+  async monitorAllServices() {
+    if (!this.configService.enableRpcMonitoring) {
+      return;
+    }
+
+    this.logger.debug('Checking all services status...');
+
+    // Monitor explorers
+    if (this.configService.explorerEndpoints) {
+      let explorerChecked = 0;
+      let explorerUp = 0;
+
+      for (const endpoint of this.configService.explorerEndpoints) {
+        const status = await this.monitorService(endpoint);
+        explorerChecked++;
+        if (status) explorerUp++;
+
+        // Record metrics
+        this.metricsService.setExplorerStatus(endpoint.url, status, endpoint.isMainnet);
+      }
+
+      this.logger.debug(`Explorer status check completed: ${explorerUp}/${explorerChecked} explorers available`);
+    }
+
+    // Monitor faucets
+    if (this.configService.faucetEndpoints) {
+      let faucetChecked = 0;
+      let faucetUp = 0;
+
+      for (const endpoint of this.configService.faucetEndpoints) {
+        const status = await this.monitorService(endpoint);
+        faucetChecked++;
+        if (status) faucetUp++;
+
+        // Record metrics
+        this.metricsService.setFaucetStatus(endpoint.url, status, endpoint.isMainnet);
+      }
+
+      this.logger.debug(`Faucet status check completed: ${faucetUp}/${faucetChecked} faucets available`);
+    }
+  }
+
+  async monitorService(endpoint: RpcEndpoint): Promise<boolean> {
+    try {
+      this.logger.debug(`Checking service: ${endpoint.name} (${endpoint.url})`);
+
+      const response = await axios.get(endpoint.url, {
+        timeout: 5000,
+        validateStatus: null,
+      });
+
+      const isUp = response.status >= 200 && response.status < 500;
+
+      if (endpoint.url.includes('explorer') || endpoint.url.includes('scan')) {
+        this.explorerStatuses.set(endpoint.url, { status: isUp ? 'up' : 'down' });
+        // Update metrics with network information
+        this.metricsService.setExplorerStatus(endpoint.url, isUp, endpoint.isMainnet);
+      } else if (endpoint.url.includes('faucet')) {
+        this.faucetStatuses.set(endpoint.url, { status: isUp ? 'up' : 'down' });
+        // Update metrics with network information
+        this.metricsService.setFaucetStatus(endpoint.url, isUp, endpoint.isMainnet);
+      }
+
+      this.logger.debug(`Service ${endpoint.name} is ${isUp ? 'UP' : 'DOWN'}`);
+      return isUp;
+    } catch (error) {
+      this.logger.debug(`Service ${endpoint.name} check failed: ${error.message}`);
+
+      if (endpoint.url.includes('explorer') || endpoint.url.includes('scan')) {
+        this.explorerStatuses.set(endpoint.url, { status: 'down' });
+        // Update metrics with network information
+        this.metricsService.setExplorerStatus(endpoint.url, false, endpoint.isMainnet);
+      } else if (endpoint.url.includes('faucet')) {
+        this.faucetStatuses.set(endpoint.url, { status: 'down' });
+        // Update metrics with network information
+        this.metricsService.setFaucetStatus(endpoint.url, false, endpoint.isMainnet);
+      }
+
+      return false;
     }
   }
 
@@ -285,6 +418,22 @@ export class RpcMonitorService implements OnModuleInit {
     }
 
     return statuses;
+  }
+
+  getAllExplorerStatuses() {
+    const result = {};
+    for (const [url, status] of this.explorerStatuses.entries()) {
+      result[url] = status.status;
+    }
+    return result;
+  }
+
+  getAllFaucetStatuses() {
+    const result = {};
+    for (const [url, status] of this.faucetStatuses.entries()) {
+      result[url] = status.status;
+    }
+    return result;
   }
 
   getRpcStatus() {

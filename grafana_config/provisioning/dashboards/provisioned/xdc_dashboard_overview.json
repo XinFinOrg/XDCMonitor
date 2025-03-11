@@ -34,45 +34,17 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": null,
+  "id": 5,
   "links": [],
   "liveNow": false,
   "panels": [
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "gridPos": {
-        "h": 6,
-        "w": 24,
-        "x": 0,
-        "y": 0
-      },
-      "id": 100,
-      "options": {
-        "alertName": "",
-        "dashboardAlerts": true,
-        "maxItems": 5,
-        "showInstances": true,
-        "sortOrder": 1,
-        "stateFilter": {
-          "firing": true,
-          "inactive": false,
-          "pending": true
-        },
-        "viewMode": "list"
-      },
-      "title": "Active Alerts",
-      "type": "alertlist"
-    },
     {
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 6
+        "y": 0
       },
       "id": 101,
       "panels": [],
@@ -104,10 +76,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 8,
-        "w": 8,
+        "h": 6,
+        "w": 9,
         "x": 0,
-        "y": 7
+        "y": 1
       },
       "id": 102,
       "options": {
@@ -122,9 +94,7 @@
         },
         "textMode": "auto"
       },
-      "pluginVersion": "10.1.0",
-      "title": "Current Block Height",
-      "type": "stat",
+      "pluginVersion": "10.2.0",
       "targets": [
         {
           "datasource": {
@@ -132,17 +102,20 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "xdc_block_height",
+          "expr": "xdc_block_height{network=\"50\", endpoint=\"https://rpc.xinfin.network\"}",
           "range": true,
           "refId": "A"
         }
-      ]
+      ],
+      "title": "Current Block Height",
+      "type": "stat"
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
       },
+      "description": "Current block height comparison across XDC Network RPC endpoints",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -155,43 +128,36 @@
               {
                 "color": "green",
                 "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 2
-              },
-              {
-                "color": "red",
-                "value": 3
               }
             ]
           },
-          "unit": "s"
+          "unit": "none"
         },
         "overrides": []
       },
       "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 8,
-        "y": 7
+        "h": 12,
+        "w": 9,
+        "x": 9,
+        "y": 1
       },
-      "id": 103,
+      "id": 122,
       "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
+        "displayMode": "gradient",
+        "minVizHeight": 10,
+        "minVizWidth": 0,
+        "namePlacement": "auto",
+        "orientation": "horizontal",
         "reduceOptions": {
           "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
-        "textMode": "auto"
+        "showUnfilled": true,
+        "text": {},
+        "valueMode": "color"
       },
-      "pluginVersion": "10.1.0",
-      "title": "Block Time",
-      "type": "stat",
+      "pluginVersion": "10.2.0",
       "targets": [
         {
           "datasource": {
@@ -199,11 +165,14 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "xdc_block_time",
+          "expr": "xdc_block_height{network=\"50\"}",
+          "legendFormat": "{{endpoint}}",
           "range": true,
           "refId": "A"
         }
-      ]
+      ],
+      "title": "Block Height Comparison",
+      "type": "bargauge"
     },
     {
       "datasource": {
@@ -249,10 +218,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 16,
-        "y": 7
+        "h": 12,
+        "w": 6,
+        "x": 18,
+        "y": 1
       },
       "id": 104,
       "options": {
@@ -267,9 +236,7 @@
         },
         "textMode": "auto"
       },
-      "pluginVersion": "10.1.0",
-      "title": "RPC Status",
-      "type": "stat",
+      "pluginVersion": "10.2.0",
       "targets": [
         {
           "datasource": {
@@ -277,13 +244,82 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "xdc_rpc_status",
+          "expr": "xdc_rpc_status{network=\"50\", endpoint!~\"https://rpc.apothem.network|https://apothem.xdcrpc.com|https://erpc.apothem.network|http://157.173.195.189:8555\"}",
           "instant": false,
           "legendFormat": "{{endpoint}}",
           "range": true,
           "refId": "A"
         }
-      ]
+      ],
+      "title": "RPC Status",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 2
+              },
+              {
+                "color": "red",
+                "value": 3
+              }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 9,
+        "x": 0,
+        "y": 7
+      },
+      "id": 103,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "10.2.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "xdc_block_time{network=\"50\"}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Block Time",
+      "type": "stat"
     },
     {
       "collapsed": false,
@@ -291,7 +327,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 15
+        "y": 13
       },
       "id": 105,
       "panels": [],
@@ -309,6 +345,7 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
@@ -357,7 +394,7 @@
         "h": 9,
         "w": 12,
         "x": 0,
-        "y": 16
+        "y": 14
       },
       "id": 106,
       "options": {
@@ -373,8 +410,6 @@
         }
       },
       "pluginVersion": "10.1.0",
-      "title": "RPC Latency by Endpoint",
-      "type": "timeseries",
       "targets": [
         {
           "datasource": {
@@ -382,12 +417,14 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "xdc_rpc_latency_sum / xdc_rpc_latency_count",
+          "expr": "xdc_rpc_latency_sum{network=\"50\", endpoint!~\"https://rpc.apothem.network|https://apothem.xdcrpc.com|https://erpc.apothem.network|http://157.173.195.189:8555\"} / xdc_rpc_latency_count{network=\"50\", endpoint!~\"https://rpc.apothem.network|https://apothem.xdcrpc.com|https://erpc.apothem.network|http://157.173.195.189:8555\"}",
           "legendFormat": "{{endpoint}}",
           "range": true,
           "refId": "A"
         }
-      ]
+      ],
+      "title": "RPC Latency by Endpoint",
+      "type": "timeseries"
     },
     {
       "datasource": {
@@ -402,8 +439,14 @@
           },
           "custom": {
             "fillOpacity": 70,
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
             "lineWidth": 0,
-            "spanNulls": false
+            "spanNulls": true
           },
           "mappings": [
             {
@@ -411,37 +454,15 @@
                 "0": {
                   "color": "red",
                   "index": 0,
-                  "text": "down"
+                  "text": "Down"
                 },
                 "1": {
                   "color": "green",
                   "index": 1,
-                  "text": "up"
+                  "text": "Up"
                 }
               },
               "type": "value"
-            },
-            {
-              "options": {
-                "pattern": "1+",
-                "result": {
-                  "color": "green",
-                  "index": 0,
-                  "text": "up"
-                }
-              },
-              "type": "regex"
-            },
-            {
-              "options": {
-                "pattern": "<1",
-                "result": {
-                  "color": "red",
-                  "index": 1,
-                  "text": "down"
-                }
-              },
-              "type": "regex"
             }
           ],
           "thresholds": {
@@ -458,33 +479,59 @@
             ]
           }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*"
+            },
+            "properties": [
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "red",
+                      "value": null
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
         "h": 9,
         "w": 12,
         "x": 12,
-        "y": 16
+        "y": 14
       },
       "id": 107,
       "options": {
         "alignValue": "center",
+        "connectNulls": "always",
         "legend": {
           "displayMode": "list",
-          "placement": "bottom",
+          "placement": "right",
           "showLegend": true
         },
-        "mergeValues": true,
+        "legendDisplayMode": "list",
+        "mergeValues": false,
         "rowHeight": 0.9,
         "showValue": "auto",
+        "thresholdsStyle": "area",
+        "thresholdsTextMap": {
+          "0": "Down",
+          "1": "Up"
+        },
         "tooltip": {
           "mode": "single",
           "sort": "none"
         }
       },
       "pluginVersion": "10.1.0",
-      "title": "RPC Endpoint Status History",
-      "type": "state-timeline",
       "targets": [
         {
           "datasource": {
@@ -492,12 +539,14 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "avg_over_time(xdc_rpc_status[5m])",
+          "expr": "xdc_rpc_status{network=\"50\"}",
           "legendFormat": "{{endpoint}}",
           "range": true,
           "refId": "A"
         }
-      ]
+      ],
+      "title": "RPC Endpoint Status History",
+      "type": "state-timeline"
     },
     {
       "collapsed": false,
@@ -505,7 +554,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 25
+        "y": 23
       },
       "id": 108,
       "panels": [],
@@ -619,35 +668,33 @@
         ]
       },
       "gridPos": {
-        "h": 12,
+        "h": 8,
         "w": 24,
         "x": 0,
-        "y": 26
+        "y": 24
       },
       "id": 109,
       "options": {
         "cellHeight": "sm",
+        "cellOptions": {
+          "type": "auto"
+        },
         "footer": {
           "countRows": false,
           "fields": "",
           "reducer": ["sum"],
           "show": false
         },
+        "frameIndex": 0,
         "showHeader": true,
         "sortBy": [
           {
             "desc": true,
             "displayName": "block"
           }
-        ],
-        "frameIndex": 0,
-        "cellOptions": {
-          "type": "auto"
-        }
+        ]
       },
-      "pluginVersion": "10.1.0",
-      "title": "Recent Transactions Per Block",
-      "type": "table",
+      "pluginVersion": "10.2.0",
       "targets": [
         {
           "datasource": {
@@ -655,7 +702,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "xdc_transactions_per_block{status=\"confirmed\"}",
+          "expr": "xdc_transactions_per_block{status=\"confirmed\", network=\"50\"}",
           "format": "table",
           "instant": true,
           "legendFormat": "",
@@ -668,7 +715,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "xdc_transactions_per_block{status=\"failed\"}",
+          "expr": "xdc_transactions_per_block{status=\"failed\", network=\"50\"}",
           "format": "table",
           "instant": true,
           "legendFormat": "",
@@ -676,6 +723,7 @@
           "refId": "B"
         }
       ],
+      "title": "Recent Transactions Per Block",
       "transformations": [
         {
           "id": "joinByField",
@@ -746,9 +794,9 @@
             "excludeByName": {},
             "indexByName": {
               "block": 0,
-              "total": 1,
+              "failed": 3,
               "success": 2,
-              "failed": 3
+              "total": 1
             },
             "renameByName": {}
           }
@@ -765,7 +813,8 @@
             ]
           }
         }
-      ]
+      ],
+      "type": "table"
     },
     {
       "datasource": {
@@ -778,6 +827,7 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisGridShow": true,
@@ -793,6 +843,9 @@
             "lineWidth": 1,
             "scaleDistribution": {
               "type": "linear"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
             }
           },
           "mappings": [],
@@ -851,12 +904,13 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 34
+        "y": 32
       },
       "id": 120,
       "options": {
         "barRadius": 0,
         "barWidth": 0.6,
+        "fullHighlight": false,
         "groupWidth": 0.8,
         "legend": {
           "calcs": ["sum"],
@@ -875,8 +929,6 @@
         "xTickLabelRotation": 0,
         "xTickLabelSpacing": 100
       },
-      "title": "Transaction Count by Block Number",
-      "type": "barchart",
       "targets": [
         {
           "datasource": {
@@ -884,7 +936,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "xdc_transactions_per_block{status=\"confirmed\"}",
+          "expr": "xdc_transactions_per_block{status=\"confirmed\", network=\"50\"}",
           "format": "table",
           "instant": true,
           "legendFormat": "Success - Block #{{block_number}}",
@@ -897,7 +949,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "xdc_transactions_per_block{status=\"failed\"}",
+          "expr": "xdc_transactions_per_block{status=\"failed\", network=\"50\"}",
           "format": "table",
           "instant": true,
           "legendFormat": "Failed - Block #{{block_number}}",
@@ -905,6 +957,7 @@
           "refId": "B"
         }
       ],
+      "title": "Transaction Count by Block Number",
       "transformations": [
         {
           "id": "joinByField",
@@ -956,7 +1009,8 @@
             ]
           }
         }
-      ]
+      ],
+      "type": "barchart"
     },
     {
       "collapsed": false,
@@ -964,7 +1018,445 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 43
+        "y": 40
+      },
+      "id": 111,
+      "panels": [],
+      "title": "Blockchain Health",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 41
+      },
+      "id": 115,
+      "options": {
+        "legend": {
+          "calcs": ["mean", "max"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "10.1.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "rate(xdc_block_height{network=\"50\"}[5m])",
+          "legendFormat": "Blocks/min",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Block Height Growth Rate",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 2
+              },
+              {
+                "color": "red",
+                "value": 3
+              }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 41
+      },
+      "id": 116,
+      "options": {
+        "legend": {
+          "calcs": ["mean", "max"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "10.1.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "rate(xdc_transaction_count{status=\"confirmed\", network=\"50\"}[5m])",
+          "legendFormat": "Successful TX/min",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "rate(xdc_transaction_count{status=\"failed\", network=\"50\"}[5m])",
+          "legendFormat": "Failed TX/min",
+          "range": true,
+          "refId": "B"
+        }
+      ],
+      "title": "Transaction Rate",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "area"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 2
+              },
+              {
+                "color": "red",
+                "value": 3
+              }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 49
+      },
+      "id": 112,
+      "options": {
+        "legend": {
+          "calcs": ["mean", "max"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "10.1.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "xdc_block_time{network=\"50\"}",
+          "legendFormat": "Block Time",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Block Time Trend",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "area"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1000
+              },
+              {
+                "color": "red",
+                "value": 2000
+              }
+            ]
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 49
+      },
+      "id": 113,
+      "options": {
+        "legend": {
+          "calcs": ["mean", "max"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "10.1.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.95, sum(rate(xdc_rpc_latency_bucket{network=\"50\", endpoint!~\"https://rpc.apothem.network|https://apothem.xdcrpc.com|https://erpc.apothem.network|http://157.173.195.189:8555\"}[5m])) by (le, endpoint))",
+          "legendFormat": "{{endpoint}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "RPC Request Duration (95th Percentile)",
+      "type": "timeseries"
+    },
+    {
+      "description": "# XDC Network Monitoring\n\n## Monitored Endpoints\n\n**RPC Endpoints:**\n- https://rpc.xinfin.network\n- https://erpc.xinfin.network\n- https://arpc.xinfin.network\n- https://earpc.xinfin.network\n- https://xdc.public-rpc.com\n- https://rpc.primenumbers.xyz\n- https://erpc.xdcrpc.com\n- http://173.212.233.170:8989 (Custom Mainnet RPC)\n\n**WebSocket Endpoints:**\n- wss://ws.xinfin.network\n- ws://173.212.233.170:8888 (Custom Mainnet WebSocket)\n\n**Explorers:**\n- https://explorer.xinfin.network\n- https://xdcscan.io\n- https://blocksscan.io",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 57
+      },
+      "id": 117,
+      "options": {
+        "code": {
+          "language": "plaintext",
+          "showLineNumbers": false,
+          "showMiniMap": false
+        },
+        "content": "# Title\n\nFor markdown syntax help: [commonmark.org/help](https://commonmark.org/help/)",
+        "mode": "markdown"
+      },
+      "pluginVersion": "10.2.0",
+      "title": "Network Monitoring",
+      "type": "text"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 58
       },
       "id": 114,
       "panels": [],
@@ -1044,9 +1536,9 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 44
+        "y": 59
       },
-      "id": 115,
+      "id": 123,
       "options": {
         "cellHeight": "sm",
         "footer": {
@@ -1063,9 +1555,7 @@
           }
         ]
       },
-      "pluginVersion": "10.1.0",
-      "title": "Recent Alert History",
-      "type": "table",
+      "pluginVersion": "10.2.0",
       "targets": [
         {
           "datasource": {
@@ -1081,6 +1571,7 @@
           "refId": "A"
         }
       ],
+      "title": "Recent Alert History",
       "transformations": [
         {
           "id": "organize",
@@ -1106,416 +1597,45 @@
             }
           }
         }
-      ]
+      ],
+      "type": "table"
     },
     {
-      "collapsed": false,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "gridPos": {
-        "h": 1,
+        "h": 6,
         "w": 24,
         "x": 0,
-        "y": 50
+        "y": 67
       },
-      "id": 111,
-      "panels": [],
-      "title": "Blockchain Health",
-      "type": "row"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "area"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 2
-              },
-              {
-                "color": "red",
-                "value": 3
-              }
-            ]
-          },
-          "unit": "s"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 51
-      },
-      "id": 112,
+      "id": 100,
       "options": {
-        "legend": {
-          "calcs": ["mean", "max"],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
+        "alertInstanceLabelFilter": "",
+        "alertName": "",
+        "dashboardAlerts": true,
+        "groupBy": [],
+        "groupMode": "default",
+        "maxItems": 5,
+        "showInstances": true,
+        "sortOrder": 1,
+        "stateFilter": {
+          "error": true,
+          "firing": true,
+          "noData": false,
+          "normal": false,
+          "pending": true
         },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "none"
-        }
+        "viewMode": "list"
       },
-      "pluginVersion": "10.1.0",
-      "title": "Block Time Trend",
-      "type": "timeseries",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "xdc_block_time",
-          "legendFormat": "Block Time",
-          "range": true,
-          "refId": "A"
-        }
-      ]
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "area"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 1000
-              },
-              {
-                "color": "red",
-                "value": 2000
-              }
-            ]
-          },
-          "unit": "ms"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 51
-      },
-      "id": 113,
-      "options": {
-        "legend": {
-          "calcs": ["mean", "max"],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "10.1.0",
-      "title": "RPC Request Duration (95th Percentile)",
-      "type": "timeseries",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum(rate(xdc_rpc_latency_bucket[5m])) by (le, endpoint))",
-          "legendFormat": "{{endpoint}}",
-          "range": true,
-          "refId": "A"
-        }
-      ]
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "none"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 59
-      },
-      "id": 115,
-      "options": {
-        "legend": {
-          "calcs": ["mean", "max"],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "10.1.0",
-      "title": "Block Height Growth Rate",
-      "type": "timeseries",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "rate(xdc_block_height[5m])",
-          "legendFormat": "Blocks/min",
-          "range": true,
-          "refId": "A"
-        }
-      ]
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "none"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 59
-      },
-      "id": 116,
-      "options": {
-        "legend": {
-          "calcs": ["mean", "max"],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "10.1.0",
-      "title": "Transaction Rate",
-      "type": "timeseries",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "sum(rate(xdc_transactions_per_block{status=\"confirmed\"}[5m]))",
-          "legendFormat": "Successful TX/min",
-          "range": true,
-          "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "sum(rate(xdc_transactions_per_block{status=\"failed\"}[5m]))",
-          "legendFormat": "Failed TX/min",
-          "range": true,
-          "refId": "B"
-        }
-      ]
+      "title": "Active Alerts",
+      "type": "alertlist"
     }
   ],
   "refresh": "10s",
   "schemaVersion": 38,
-  "style": "dark",
   "tags": ["xdc", "blockchain", "monitoring", "alerts", "rpc"],
   "templating": {
     "list": []
@@ -1528,6 +1648,6 @@
   "timezone": "",
   "title": "XDC Network Unified Dashboard",
   "uid": "xdc-unified-dashboard",
-  "version": 1,
+  "version": 48,
   "weekStart": ""
 }

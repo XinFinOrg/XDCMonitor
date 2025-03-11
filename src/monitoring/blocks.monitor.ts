@@ -1,6 +1,6 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { BlockchainService } from '@blockchain/blockchain.service';
-import { ConfigService } from '@config/config.service';
+import { ConfigService, RpcEndpoint } from '@config/config.service';
 import { BlockInfo } from '@models/block.interface';
 import { TransactionInfo, TransactionStatus } from '@models/transaction.interface';
 import { RpcMonitorService } from './rpc.monitor';
@@ -21,6 +21,7 @@ export class BlocksMonitorService implements OnModuleInit {
   private lastBlockNumber: number = 0;
   private lastRpcResponseTime: number = 0;
   private rpcBlockInfo: Map<string, RpcBlockInfo> = new Map();
+  private lastBlockTimestamp: number = 0;
 
   constructor(
     private readonly blockchainService: BlockchainService,
@@ -76,90 +77,49 @@ export class BlocksMonitorService implements OnModuleInit {
       this.logger.debug(`Found ${rpcStatuses.length} RPC endpoints in total`);
 
       const activeEndpoints = rpcStatuses.filter(endpoint => endpoint.status === 'up');
-      const rpcEndpoints = activeEndpoints.map(endpoint => endpoint.url);
 
-      this.logger.debug(`Found ${rpcEndpoints.length} active RPC endpoints`);
+      this.logger.debug(`Found ${activeEndpoints.length} active RPC endpoints`);
 
-      if (rpcEndpoints.length === 0) {
+      if (activeEndpoints.length === 0) {
         this.logger.warn('No active RPC endpoints available for block monitoring!');
         return;
       }
 
-      this.logger.debug(`Monitoring blocks on ${rpcEndpoints.length} active RPC endpoints`);
+      // Group endpoints by network to ensure we monitor both mainnet and testnet
+      const mainnetEndpoints = activeEndpoints.filter(endpoint => endpoint.isMainnet === true);
+      const testnetEndpoints = activeEndpoints.filter(endpoint => endpoint.isMainnet === false);
 
-      const startTime = Date.now();
-      const latestBlock = await this.blockchainService.getLatestBlock();
-      const rpcResponseTime = Date.now() - startTime;
+      this.logger.debug(
+        `Found ${mainnetEndpoints.length} mainnet endpoints and ${testnetEndpoints.length} testnet endpoints.`,
+      );
 
-      // Only process new blocks we haven't seen before
-      if (latestBlock.number > this.lastBlockNumber) {
-        this.logger.log(`New block detected: #${latestBlock.number} (previous: #${this.lastBlockNumber})`);
-
-        // Process the latest block to count transactions
-        await this.processBlock(latestBlock);
-
-        // Update last seen block number
-        this.lastBlockNumber = latestBlock.number;
-      } else {
-        this.logger.debug(`No new blocks since last check. Current block: #${latestBlock.number}`);
-      }
-
-      this.lastRpcResponseTime = rpcResponseTime;
-      this.metricsService.setBlockHeight(latestBlock.number);
-
-      if (rpcResponseTime > 1000) {
-        this.logger.warn(`Slow RPC response detected on primary endpoint! Response time: ${rpcResponseTime}ms`);
-      }
-
-      this.metricsService.recordRpcLatency('primary', rpcResponseTime);
-
-      // Get the previous block to calculate actual block time
-      try {
-        const previousBlockNumber = latestBlock.number - 1;
-        if (previousBlockNumber > 0) {
-          const previousBlock = await this.blockchainService.getBlockByNumber(previousBlockNumber);
-
-          // Calculate block time by comparing block timestamps
-          const latestBlockTimestamp =
-            typeof latestBlock.timestamp === 'string' ? parseInt(latestBlock.timestamp, 16) : latestBlock.timestamp;
-          const previousBlockTimestamp =
-            typeof previousBlock.timestamp === 'string'
-              ? parseInt(previousBlock.timestamp, 16)
-              : previousBlock.timestamp;
-          const blockTime = latestBlockTimestamp - previousBlockTimestamp;
-
-          this.metricsService.setBlockTime(blockTime);
-
-          if (blockTime > this.configService.blockTimeThreshold) {
-            this.logger.warn(
-              `Slow block detected! Block #${latestBlock.number} time: ${blockTime}s - Threshold: ${this.configService.blockTimeThreshold}s`,
-            );
-          } else {
-            this.logger.debug(
-              `Block #${latestBlock.number} time: ${blockTime}s (within threshold of ${this.configService.blockTimeThreshold}s)`,
-            );
-          }
-        }
-      } catch (error) {
-        this.logger.error(`Error calculating block time: ${error.message}`);
-      }
-
+      // Get block heights from ALL RPC endpoints independently
       const endpointPromises = activeEndpoints.map(async endpoint => {
         try {
           const startTime = Date.now();
-          const blockData = await this.blockchainService.getLatestBlockNumber(endpoint.url);
+          const blockNumber = await this.blockchainService.getLatestBlockNumber(endpoint.url);
           const responseTime = Date.now() - startTime;
 
           const info: RpcBlockInfo = {
             endpoint: endpoint.url,
-            blockNumber: blockData,
+            blockNumber,
             responseTime,
             timestamp: Date.now(),
           };
 
           this.rpcBlockInfo.set(endpoint.url, info);
 
-          this.metricsService.recordRpcLatency(endpoint.url, responseTime);
+          // Get network ID directly from the endpoint configuration
+          const endpointNetworkId = endpoint.isMainnet ? '50' : '51';
+
+          // Set block height metric with explicit network ID
+          this.metricsService.setBlockHeight(blockNumber, endpoint.url, endpointNetworkId);
+          this.logger.debug(
+            `Set block height for ${endpoint.name} (${endpoint.url}, network ${endpointNetworkId}): ${blockNumber}`,
+          );
+
+          // Record RPC latency metric
+          this.metricsService.recordRpcLatency(endpoint.url, responseTime, endpoint.isMainnet);
 
           if (responseTime > 1000) {
             this.logger.warn(
@@ -172,7 +132,7 @@ export class BlocksMonitorService implements OnModuleInit {
           return info;
         } catch (error) {
           this.logger.error(`Error monitoring blocks on ${endpoint.name} (${endpoint.url}): ${error.message}`);
-          this.metricsService.setRpcStatus(endpoint.url, false);
+          this.metricsService.setRpcStatus(endpoint.url, false, endpoint.isMainnet);
           return null;
         }
       });
@@ -182,119 +142,181 @@ export class BlocksMonitorService implements OnModuleInit {
 
       this.logger.debug(`Successfully monitored ${validResults.length} out of ${activeEndpoints.length} endpoints`);
 
-      if (validResults.length > 1) {
-        const blockNumbers = validResults.map(r => r.blockNumber);
-        const maxBlock = Math.max(...blockNumbers);
-        const minBlock = Math.min(...blockNumbers);
+      // Find highest block number for transaction processing (from the active provider's network)
+      const activeProvider = this.blockchainService.getActiveProvider();
+      const activeNetworkId = activeProvider.endpoint.isMainnet ? '50' : '51';
+      const activeNetworkResults = validResults.filter(r => {
+        const endpoint = activeEndpoints.find(e => e.url === r.endpoint);
+        return endpoint && endpoint.isMainnet === activeProvider.endpoint.isMainnet;
+      });
 
-        if (maxBlock - minBlock > 3) {
-          this.logger.warn(`Block height discrepancy detected! Difference: ${maxBlock - minBlock} blocks`);
+      if (activeNetworkResults.length > 0) {
+        // Get the highest block number among active network endpoints
+        const blockNumbers = activeNetworkResults.map(r => r.blockNumber);
+        const highestBlockNumber = Math.max(...blockNumbers);
 
-          validResults.forEach(info => {
-            const endpointName = activeEndpoints.find(e => e.url === info.endpoint)?.name || info.endpoint;
-            this.logger.debug(
-              `Endpoint ${endpointName}: Block #${info.blockNumber}, Response time: ${info.responseTime}ms`,
-            );
-          });
-        } else {
-          this.logger.debug(
-            `Block heights are in sync across endpoints. Max difference: ${maxBlock - minBlock} blocks`,
+        // Only process new blocks we haven't seen before
+        if (highestBlockNumber > this.lastBlockNumber) {
+          this.logger.log(
+            `New block detected on ${activeProvider.endpoint.isMainnet ? 'mainnet' : 'testnet'}: #${highestBlockNumber} (previous: #${this.lastBlockNumber})`,
           );
+
+          // Only fetch the full block if we need transaction details
+          // Note: We could make this configurable if transaction processing is not always needed
+          try {
+            const fullBlock = await this.blockchainService.getBlockByNumber(highestBlockNumber);
+            await this.processBlock(fullBlock, activeNetworkId);
+          } catch (error) {
+            this.logger.error(`Error fetching full block data for #${highestBlockNumber}: ${error.message}`);
+          }
+
+          // Update last seen block number
+          this.lastBlockNumber = highestBlockNumber;
+        } else {
+          this.logger.debug(`No new blocks since last check. Current highest block: #${highestBlockNumber}`);
         }
+
+        // Calculate block time based on timestamp differences
+        if (this.lastBlockTimestamp > 0) {
+          const blockTime = Math.floor((Date.now() - this.lastBlockTimestamp) / 1000);
+          this.metricsService.setBlockTime(blockTime, activeNetworkId);
+
+          if (blockTime > this.configService.blockTimeThreshold) {
+            this.logger.warn(
+              `Slow block time detected! Time since last block: ${blockTime}s - Threshold: ${this.configService.blockTimeThreshold}s`,
+            );
+          }
+        }
+        this.lastBlockTimestamp = Date.now();
+      }
+
+      // Group results by network ID for separate reporting/alerting
+      const mainnetResults = validResults.filter(r => {
+        const endpoint = activeEndpoints.find(e => e.url === r.endpoint);
+        return endpoint && endpoint.isMainnet === true;
+      });
+
+      const testnetResults = validResults.filter(r => {
+        const endpoint = activeEndpoints.find(e => e.url === r.endpoint);
+        return endpoint && endpoint.isMainnet === false;
+      });
+
+      this.logger.debug(`Valid results: ${mainnetResults.length} mainnet, ${testnetResults.length} testnet`);
+
+      // Check for block height discrepancies within each network
+      if (mainnetResults.length > 1) {
+        this.checkBlockDiscrepancies(mainnetResults, activeEndpoints, 'Mainnet');
+      }
+
+      if (testnetResults.length > 1) {
+        this.checkBlockDiscrepancies(testnetResults, activeEndpoints, 'Testnet');
       }
     } catch (error) {
       this.logger.error(`Block monitoring error: ${error.message}`);
     }
   }
 
-  private async processBlock(block: BlockInfo): Promise<void> {
+  // Helper method to check for block height discrepancies
+  private checkBlockDiscrepancies(results: RpcBlockInfo[], activeEndpoints: RpcEndpoint[], networkName: string) {
+    const blockNumbers = results.map(r => r.blockNumber);
+    const maxBlock = Math.max(...blockNumbers);
+    const minBlock = Math.min(...blockNumbers);
+
+    if (maxBlock - minBlock > 3) {
+      this.logger.warn(`${networkName} block height discrepancy detected! Difference: ${maxBlock - minBlock} blocks`);
+
+      results.forEach(info => {
+        const endpointName = activeEndpoints.find(e => e.url === info.endpoint)?.name || info.endpoint;
+        this.logger.debug(
+          `${networkName} endpoint ${endpointName}: Block #${info.blockNumber}, Response time: ${info.responseTime}ms`,
+        );
+      });
+    } else {
+      this.logger.debug(
+        `${networkName} block heights are in sync across endpoints. Max difference: ${maxBlock - minBlock} blocks`,
+      );
+    }
+  }
+
+  private async processBlock(block: BlockInfo, networkId: string): Promise<void> {
     this.logger.log(`Processing block #${block.number}: ${block.transactions.length} transactions`);
 
-    // Update metrics for this block
-    this.metricsService.setBlockHeight(block.number);
+    // Process transactions in the block
+    let confirmedTxCount = 0;
+    let failedTxCount = 0;
 
     if (block.transactions && block.transactions.length > 0) {
       // Fetch detailed transaction information to count successful and failed transactions
       try {
-        let confirmedCount = 0;
-        let failedCount = 0;
-
         // For larger blocks, we might want to limit this processing
         // If there are too many transactions, we'll process a subset
-        const maxTxToProcess = Math.min(block.transactions.length, 50);
-        const txsToProcess = block.transactions.slice(0, maxTxToProcess);
+        const maxTxToProcess = Math.min(block.transactions.length, 100);
 
-        this.logger.debug(
-          `Processing ${txsToProcess.length} out of ${block.transactions.length} transactions for block #${block.number}`,
-        );
+        // Process transactions
+        for (let i = 0; i < maxTxToProcess; i++) {
+          const txHash = block.transactions[i];
+          const tx = await this.blockchainService.getTransaction(txHash);
+          const result = tx ? await this.processTransaction(tx, networkId) : null;
 
-        const txPromises = txsToProcess.map(txHash =>
-          this.blockchainService
-            .getTransaction(txHash)
-            .then(tx => this.processTransaction(tx))
-            .catch(err => {
-              this.logger.error(`Error processing transaction ${txHash}: ${err.message}`);
-              return null;
-            }),
-        );
-
-        const txResults = await Promise.all(txPromises);
-
-        // Count confirmed and failed transactions
-        txResults.forEach(result => {
           if (result) {
             if (result.status === TransactionStatus.CONFIRMED) {
-              confirmedCount++;
+              confirmedTxCount++;
             } else if (result.status === TransactionStatus.FAILED) {
-              failedCount++;
+              failedTxCount++;
             }
           }
-        });
+        }
 
-        // If we didn't process all transactions but we know they're confirmed (since they're in a block),
-        // we can estimate the total confirmed count
+        // If we didn't process all transactions, estimate the rest based on the processed ones
         if (maxTxToProcess < block.transactions.length) {
           const remainingTx = block.transactions.length - maxTxToProcess;
-          const confirmedRatio = confirmedCount / (confirmedCount + failedCount || 1);
+          const confirmedRatio = confirmedTxCount / (confirmedTxCount + failedTxCount || 1);
           const estimatedAdditionalConfirmed = Math.round(remainingTx * confirmedRatio);
           const estimatedAdditionalFailed = remainingTx - estimatedAdditionalConfirmed;
 
-          confirmedCount += estimatedAdditionalConfirmed;
-          failedCount += estimatedAdditionalFailed;
+          confirmedTxCount += estimatedAdditionalConfirmed;
+          failedTxCount += estimatedAdditionalFailed;
 
           this.logger.debug(
-            `Estimated additional transactions: ${estimatedAdditionalConfirmed} confirmed, ${estimatedAdditionalFailed} failed`,
+            `Estimated additional transactions for large block: ${estimatedAdditionalConfirmed} confirmed, ${estimatedAdditionalFailed} failed`,
           );
         }
 
         // Always set metrics, even if counts are zero
-        this.metricsService.setTransactionsPerBlock(block.number, confirmedCount, failedCount);
+        this.metricsService.setTransactionsPerBlock(block.number, confirmedTxCount, failedTxCount, networkId);
 
-        this.logger.log(`Block #${block.number} transactions: ${confirmedCount} confirmed, ${failedCount} failed`);
+        this.logger.log(`Block #${block.number} transactions: ${confirmedTxCount} confirmed, ${failedTxCount} failed`);
       } catch (error) {
         this.logger.error(`Error processing transactions for block #${block.number}: ${error.message}`);
-        // Even on error, try to set transaction metrics
-        this.metricsService.setTransactionsPerBlock(block.number, block.transactions.length, 0);
       }
     } else {
-      this.logger.debug(`Block #${block.number} has no transactions`);
-      this.metricsService.setTransactionsPerBlock(block.number, 0, 0);
+      // Even for blocks with no transactions, set the metrics
+      this.metricsService.setTransactionsPerBlock(block.number, 0, 0, networkId);
+    }
+
+    // Increment transaction counter metrics
+    if (confirmedTxCount > 0) {
+      this.metricsService.incrementTransactionCount('confirmed', networkId);
+    }
+
+    if (failedTxCount > 0) {
+      this.metricsService.incrementTransactionCount('failed', networkId);
     }
   }
 
-  private async processTransaction(tx: TransactionInfo): Promise<TransactionInfo> {
+  private async processTransaction(tx: TransactionInfo, networkId: string): Promise<TransactionInfo> {
     this.logger.debug(`Processing transaction ${tx.hash}`);
 
     // Track transaction in metrics
     switch (tx.status) {
       case TransactionStatus.CONFIRMED:
-        this.metricsService.incrementTransactionCount('confirmed');
+        this.metricsService.incrementTransactionCount('confirmed', networkId);
         break;
       case TransactionStatus.PENDING:
-        this.metricsService.incrementTransactionCount('pending');
+        this.metricsService.incrementTransactionCount('pending', networkId);
         break;
       case TransactionStatus.FAILED:
-        this.metricsService.incrementTransactionCount('failed');
+        this.metricsService.incrementTransactionCount('failed', networkId);
         break;
     }
 
@@ -331,11 +353,16 @@ export class BlocksMonitorService implements OnModuleInit {
       maxBlockDifference = maxBlock - minBlock;
     }
 
+    // Get active provider information
+    const activeProvider = this.blockchainService.getActiveProvider();
+    const activeRpcInfo = this.rpcBlockInfo.get(activeProvider.endpoint.url);
+    const activeResponseTime = activeRpcInfo ? activeRpcInfo.responseTime : 0;
+
     return {
       enabled: this.configService.enableBlockMonitoring,
       primaryEndpoint: {
         lastBlockNumber: this.lastBlockNumber,
-        lastRpcResponseTime: `${this.lastRpcResponseTime}ms`,
+        lastRpcResponseTime: `${activeResponseTime}ms`,
       },
       blockTimeThreshold: `${this.configService.blockTimeThreshold}s`,
       scanInterval: `${this.configService.scanInterval}s`,

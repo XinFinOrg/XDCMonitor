@@ -93,6 +93,12 @@ export class MonitoringController {
         status: this.rpcMonitorService.getAnyWsStatus(),
         endpoints: this.rpcMonitorService.getAllWsStatuses(),
       },
+      explorer: {
+        endpoints: this.rpcMonitorService.getAllExplorerStatuses(),
+      },
+      faucet: {
+        endpoints: this.rpcMonitorService.getAllFaucetStatuses(),
+      },
     };
   }
 }

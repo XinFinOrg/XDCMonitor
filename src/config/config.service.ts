@@ -38,6 +38,29 @@ export class ConfigService {
 
     endpoints.push({ url: 'https://erpc.xdcrpc.com', name: 'XDCRPC eRPC', type: 'erpc', isMainnet: true });
 
+    // Add custom deployed Mainnet RPC
+    endpoints.push({
+      url: 'http://173.212.233.170:8989',
+      name: 'mst1-Custom Mainnet RPC',
+      type: 'rpc',
+      isMainnet: true,
+    });
+
+    // Add Apothem Testnet RPC endpoints
+    endpoints.push(
+      { url: 'https://rpc.apothem.network', name: 'Apothem Testnet RPC', type: 'rpc', isMainnet: false },
+      { url: 'https://apothem.xdcrpc.com', name: 'Apothem XDCRPC', type: 'rpc', isMainnet: false },
+      { url: 'https://erpc.apothem.network', name: 'Apothem Testnet eRPC', type: 'erpc', isMainnet: false },
+    );
+
+    // Add custom deployed Testnet RPC
+    endpoints.push({
+      url: 'http://157.173.195.189:8555',
+      name: 'mst2-Custom Testnet RPC',
+      type: 'rpc',
+      isMainnet: false,
+    });
+
     return endpoints;
   }
 
@@ -77,6 +100,15 @@ export class ConfigService {
 
     addEndpoint('wss://rpc.xinfin.network', 'XDC RPC as WebSocket', true);
     addEndpoint('wss://erpc.xinfin.network', 'XDC eRPC as WebSocket', true);
+
+    // Add custom deployed Mainnet WebSocket
+    addEndpoint('ws://173.212.233.170:8888', 'mst1-Custom Mainnet WebSocket', true);
+
+    // Add Apothem Testnet WebSocket endpoint
+    addEndpoint('wss://ws.apothem.network/ws', 'Apothem Testnet WebSocket', false);
+
+    // Add custom deployed Testnet WebSocket
+    addEndpoint('ws://157.173.195.189:8556', 'mst2-Custom Testnet WebSocket', false);
 
     if (this.get('ENABLE_ADDITIONAL_WS_ENDPOINTS') === 'true') {
       addEndpoint('wss://ews.xinfin.network', 'XDC Mainnet eWebSocket', true);
@@ -159,6 +191,38 @@ export class ConfigService {
 
   get logLevel(): string {
     return this.get('LOG_LEVEL') || 'info';
+  }
+
+  get explorerEndpoints(): RpcEndpoint[] {
+    const endpoints: RpcEndpoint[] = [];
+
+    // Mainnet explorers
+    endpoints.push(
+      { url: 'https://explorer.xinfin.network', name: 'XDC Explorer', type: 'rpc', isMainnet: true },
+      { url: 'https://xdcscan.io', name: 'XDCScan', type: 'rpc', isMainnet: true },
+      { url: 'https://blocksscan.io', name: 'BlocksScan', type: 'rpc', isMainnet: true },
+    );
+
+    // Apothem Testnet explorers
+    endpoints.push(
+      { url: 'https://explorer.apothem.network', name: 'Apothem Explorer', type: 'rpc', isMainnet: false },
+      { url: 'https://apothem.xdcscan.io', name: 'Apothem XDCScan', type: 'rpc', isMainnet: false },
+      { url: 'https://apothem.blocksscan.io', name: 'Apothem BlocksScan', type: 'rpc', isMainnet: false },
+    );
+
+    return endpoints;
+  }
+
+  get faucetEndpoints(): RpcEndpoint[] {
+    const endpoints: RpcEndpoint[] = [];
+
+    // Apothem Testnet faucets
+    endpoints.push(
+      { url: 'https://faucet.apothem.network', name: 'Apothem Faucet', type: 'rpc', isMainnet: false },
+      { url: 'https://faucet.blocksscan.io', name: 'BlocksScan Faucet', type: 'rpc', isMainnet: false },
+    );
+
+    return endpoints;
   }
 
   private get(key: string): string | undefined {
