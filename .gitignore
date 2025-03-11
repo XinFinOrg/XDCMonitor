@@ -53,3 +53,6 @@ prometheus_data/
 
 # Exclude ALL Grafana data
 grafana_data/
+
+# Include version-controlled Grafana configuration
+!grafana_config/

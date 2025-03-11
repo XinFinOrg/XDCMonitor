@@ -225,10 +225,16 @@ case "$1" in
     mkdir -p grafana_data/provisioning/plugins
     mkdir -p grafana_data/provisioning/alerting
 
-    # Copy config files
+    # Copy config files with verbose output
     if [ -d "grafana_config/config" ] && [ "$(ls -A grafana_config/config 2>/dev/null)" ]; then
-      cp -rf grafana_config/config/* grafana_data/config/ 2>/dev/null || true
-      echo "✓ Imported config files"
+      echo "Importing config files:"
+      for file in grafana_config/config/*; do
+        if [ -f "$file" ]; then
+          filename=$(basename "$file")
+          cp -f "$file" "grafana_data/config/" 2>/dev/null || true
+          echo "  ✓ $filename"
+        fi
+      done
     else
       echo "× No config files found to import"
     fi
