@@ -48,6 +48,8 @@ Thumbs.db
 *.swp
 *.swo
 
+yarn.lock
+
 # Prometheus data
 prometheus_data/
 
