@@ -1,0 +1,89 @@
+name: Docker Compose Deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment }}
+
+    steps:
+      - uses: actions/checkout@v3
+
+      # OPTION 1: Use GitHub Secrets (preferred, more secure)
+      - name: Create .env file from GitHub Secrets
+        if: false # Set to true when GitHub Secrets are available
+        run: |
+          echo "Creating .env file from secrets"
+          touch .env
+          echo "RPC_URL=${{ secrets.RPC_URL }}" >> .env
+          echo "WS_URL=${{ secrets.WS_URL }}" >> .env
+          echo "SCAN_API_KEY=${{ secrets.SCAN_API_KEY }}" >> .env
+          echo "EXPLORER_URL=${{ secrets.EXPLORER_URL }}" >> .env
+          echo "APP_PORT=${{ secrets.APP_PORT || '3000' }}" >> .env
+          echo "PROMETHEUS_PORT=${{ secrets.PROMETHEUS_PORT || '9090' }}" >> .env
+          echo "BLOCKS_TO_PROCESS=${{ secrets.BLOCKS_TO_PROCESS || '1000' }}" >> .env
+          echo "HISTORY_SYNC_BLOCKS=${{ secrets.HISTORY_SYNC_BLOCKS || '5000' }}" >> .env
+          echo "LOG_LEVEL=${{ secrets.LOG_LEVEL || 'info' }}" >> .env
+
+      # OPTION 2: Hardcode variables directly (less secure, use only for non-sensitive data)
+      - name: Create .env file with hardcoded values
+        if: true # Set to false when GitHub Secrets are available
+        run: |
+          echo "Creating .env file with hardcoded values (less secure)"
+          cat > .env << EOF
+          # IMPORTANT: Do not put real secrets here! This is for demonstration only.
+          RPC_URL=https://rpc.xinfin.network
+          WS_URL=wss://ws.xinfin.network
+          APP_PORT=3000
+          PROMETHEUS_PORT=9090
+          BLOCKS_TO_PROCESS=1000
+          HISTORY_SYNC_BLOCKS=5000
+          LOG_LEVEL=info
+          # Add other non-sensitive environment variables here
+          EOF
+
+          # NOTE: For real secrets, you should still use GitHub Secrets
+          # You'll need to add them when you find the Secrets section in Settings
+
+      - name: Set up SSH
+        if: github.event.inputs.environment == 'production' || github.event.inputs.environment == 'staging'
+        uses: webfactory/ssh-agent@v0.7.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Deploy to server
+        if: github.event.inputs.environment == 'production' || github.event.inputs.environment == 'staging'
+        env:
+          SERVER_IP: ${{ secrets.SERVER_IP }}
+          SERVER_USER: ${{ secrets.SERVER_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          # Ensure host key checking is disabled
+          mkdir -p ~/.ssh
+          echo "StrictHostKeyChecking no" >> ~/.ssh/config
+
+          # Create deploy directory if it doesn't exist
+          ssh ${SERVER_USER}@${SERVER_IP} "mkdir -p ${DEPLOY_PATH}"
+
+          # Copy necessary files to the server
+          scp docker-compose.yml ${SERVER_USER}@${SERVER_IP}:${DEPLOY_PATH}/
+          scp prometheus.yml ${SERVER_USER}@${SERVER_IP}:${DEPLOY_PATH}/
+          scp Dockerfile ${SERVER_USER}@${SERVER_IP}:${DEPLOY_PATH}/
+          scp .env ${SERVER_USER}@${SERVER_IP}:${DEPLOY_PATH}/
+          scp -r grafana_config ${SERVER_USER}@${SERVER_IP}:${DEPLOY_PATH}/
+
+          # SSH to server and start Docker Compose
+          ssh ${SERVER_USER}@${SERVER_IP} "cd ${DEPLOY_PATH} && docker-compose pull && docker-compose down && docker-compose up -d"
+
+          echo "Deployment completed successfully!"
