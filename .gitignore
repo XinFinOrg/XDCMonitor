@@ -48,11 +48,12 @@ Thumbs.db
 *.swp
 *.swo
 
-# Prometheus data
-prometheus_data/
 
 # Exclude ALL Grafana data
 grafana_data/
 
 # Include version-controlled Grafana configuration
 !grafana_config/
+
+# Exclude ALL InfluxDB data
+influxdb_data/

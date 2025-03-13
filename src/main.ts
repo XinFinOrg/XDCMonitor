@@ -14,21 +14,6 @@ async function bootstrap() {
   const configService = app.get(ConfigService);
   const metricsService = app.get(MetricsService);
 
-  if (configService.enablePrometheus) {
-    const server = app.getHttpAdapter().getInstance();
-    server.get('/metrics', async (req: Request, res: Response) => {
-      res.set('Content-Type', 'text/plain');
-      try {
-        const metrics = await metricsService.getMetrics();
-        res.send(metrics);
-      } catch (error) {
-        logger.error(`Error retrieving metrics: ${error.message}`);
-        res.status(500).send(`Error retrieving metrics: ${error.message}`);
-      }
-    });
-    logger.log(`Prometheus metrics available at /metrics`);
-  }
-
   const port = process.env.PORT || 3000;
   await app.listen(port, '0.0.0.0');
 

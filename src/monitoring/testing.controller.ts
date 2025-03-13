@@ -21,6 +21,14 @@ export class TestingController {
     return { success: true, message: `Simulated block time set to ${blockTime}s` };
   }
 
+  @Get('simulate-apothem-blocktime')
+  simulateApothemBlockTime(@Query('seconds') seconds: string = '4') {
+    const blockTime = parseFloat(seconds);
+    this.logger.log(`Simulating Apothem testnet block time: ${blockTime}s`);
+    this.metricsService.setBlockTime(blockTime, 51);
+    return { success: true, message: `Simulated Apothem testnet block time set to ${blockTime}s` };
+  }
+
   @Post('simulate-rpc-down')
   simulateRpcDown(@Query('endpoint') endpoint: string) {
     if (!endpoint) {

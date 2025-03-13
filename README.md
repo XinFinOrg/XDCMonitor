@@ -6,7 +6,7 @@ A comprehensive Node.js-based monitoring system for the XDC Network. This applic
 - Multi-RPC endpoint health checks
 - Port monitoring
 - Alert notifications
-- Prometheus metrics collection and visualization
+- InfluxDB metrics storage and Grafana visualization
 
 ## Features
 
@@ -44,10 +44,10 @@ A comprehensive Node.js-based monitoring system for the XDC Network. This applic
   - Detailed error reporting
 
 - **Metrics Collection**
-  - Prometheus metrics endpoint
+  - InfluxDB time-series database
   - Real-time metrics for RPC performance
   - Block and transaction statistics
-  - Ready for Grafana integration
+  - Grafana dashboards
   - Multi-RPC comparative metrics
 
 ## Prerequisites
@@ -110,13 +110,25 @@ TELEGRAM_CHAT_ID="your-telegram-chat-id-here"
 
 # Metrics configuration
 METRICS_PORT=9090
-ENABLE_PROMETHEUS=true
+
 
 # Logging configuration
 LOG_LEVEL=debug
 
 # Multi-RPC monitoring
 ENABLE_MULTI_RPC=true
+
+# InfluxDB Configuration
+INFLUXDB_URL=http://localhost:8086
+INFLUXDB_TOKEN=your-influxdb-token
+INFLUXDB_ORG=xdc
+INFLUXDB_BUCKET=xdc_metrics
+INFLUXDB_ADMIN_USER=admin
+INFLUXDB_ADMIN_PASSWORD=secure-password
+
+# Grafana Admin Credentials
+GRAFANA_ADMIN_USER=admin
+GRAFANA_ADMIN_PASSWORD=secure-password
 ```
 
 ## Usage
@@ -138,14 +150,14 @@ docker-compose up -d
 This will start all services:
 
 - XDC Monitor (API and monitoring)
-- Prometheus (metrics storage)
+- InfluxDB (metrics storage)
 - Grafana (visualization)
 
 #### Running Individual Services
 
 ```bash
-# Run only Prometheus
-docker-compose up -d prometheus
+# Run only InfluxDB
+docker-compose up -d influxdb
 
 # Run only Grafana
 docker-compose up -d grafana
@@ -171,38 +183,31 @@ docker-compose up -d grafana
 
 ## Metrics Collected
 
-The application exposes the following Prometheus metrics:
+The application stores the following metrics in InfluxDB:
 
-- `xdc_block_height{network="50"}` - Current block height
-- `xdc_transaction_count{status="confirmed|pending|failed"}` - Transaction counts by status
-- `xdc_rpc_latency{endpoint="url"}` - Response time of RPC endpoints in ms
-- `xdc_rpc_status{endpoint="url"}` - Status of RPC endpoints (1=up, 0=down)
-- `xdc_block_time` - Time between blocks in seconds
-- `xdc_alert_count{type="error|warning|info",component="blockchain|rpc|..."}` - Count of alerts by type and component
-
-Additionally, default Node.js metrics are collected (memory usage, garbage collection, etc.)
+- `block_height` - Current block height, tagged with `chainId` and `endpoint`
+- `transaction_count` - Transaction counts by status, tagged with `status` and `chainId`
+- `rpc_latency` - Response time of RPC endpoints in ms, tagged with `endpoint` and `chainId`
+- `rpc_status` - Status of RPC endpoints (1=up, 0=down), tagged with `endpoint` and `chainId`
+- `websocket_status` - Status of WebSocket endpoints (1=up, 0=down), tagged with `endpoint` and `chainId`
+- `explorer_status` - Status of explorer endpoints (1=up, 0=down), tagged with `endpoint` and `chainId`
+- `faucet_status` - Status of faucet endpoints (1=up, 0=down), tagged with `endpoint` and `chainId`
+- `block_time` - Time between blocks in seconds, tagged with `chainId`
+- `alert_count` - Count of alerts by type and component, tagged with `type`, `component`, and `chainId`
 
 ### Alert Metrics
 
-The system maintains two types of alert metrics:
+The system maintains custom alert tracking metrics:
 
-1. **Built-in Prometheus Alert Metrics**:
+- `alert_count` - Incremented whenever an alert is processed
+- Tags: `type` (error/warning/info) and `component` (blockchain/rpc/etc.)
+- Provides historical data on alert frequency
 
-   - `ALERTS` - Information about currently firing alerts
-   - `ALERTS_FOR_STATE` - Information about all alerts regardless of state
+The dashboards display alerts in various panels:
 
-2. **Custom Alert Counter**:
-   - `xdc_alert_count` - Incremented whenever an alert is processed
-   - Labels: `type` (error/warning/info) and `component` (blockchain/rpc/etc.)
-   - Provides long-term historical data on alert frequency
-
-The dashboard uses both sources for its alert panels:
-
-- "Active Alerts" panel uses the `ALERTS` metric to show currently firing alerts
-- "Alert Frequency" chart uses `count_over_time(ALERTS{alertstate="firing"}[10m])` for recent history
-- "Recent Alert History" table uses `sort_desc(ALERTS)` for current alerts detail
-
-For longer-term alert history and statistics, custom PromQL queries can be built using the `xdc_alert_count` metric.
+- "Active Alerts" panel shows currently firing alerts
+- Status panels show the current state of various services
+- Block time and latency panels include threshold indicators for alerting conditions
 
 ## Project Structure
 
@@ -252,12 +257,11 @@ This approach allows:
 
 ### Setting Up Grafana Dashboard
 
-1. Login to Grafana at http://localhost:3001 (default login: admin/admin)
-2. Go to Configuration > Data Sources > Add data source
-3. Select Prometheus
-4. Set URL to http://prometheus:9090 (in Docker) or http://localhost:9091 (local dev)
-5. Click "Save & Test"
-6. Import dashboards from the `grafana/` directory or create new ones
+The Grafana dashboards are automatically provisioned when you start the containers. The dashboards and datasources are configured in the `grafana_config/` directory.
+
+1. Login to Grafana at http://localhost:3100 (default credentials from your .env file)
+2. You should see the XDC Network dashboards already available
+3. Explore the "XDC Network Unified Dashboard" and "XDC Apothem Testnet Monitoring" dashboards
 
 ### Setting Up Alert Notifications
 
@@ -422,15 +426,13 @@ You can also use Docker Compose commands directly:
 
 Prometheus and Grafana data are stored in local directories for persistence and easy access:
 
-- Prometheus Data: `./prometheus_data/`
 - Grafana Data: `./grafana_data/`
 
 ### Accessing Services
 
 - **XDC Monitor API**: http://localhost:3000
-- **Metrics Endpoint**: http://localhost:9090/metrics
-- **Prometheus**: http://localhost:9091
-- **Grafana**: http://localhost:3001 (default login: admin/admin)
+- **InfluxDB Interface**: http://localhost:8086 (credentials from .env file)
+- **Grafana**: http://localhost:3100 (credentials from .env file)
 
 ## Contributing
 
@@ -484,7 +486,7 @@ The project is set up so you can:
 docker-compose up -d
 ```
 
-3. Access the Grafana dashboard at http://localhost:3001 (default credentials: admin/admin)
+3. Access the Grafana dashboard at http://localhost:3100 (default credentials: admin/Admin@123456@789)
 
 ## Updating Telegram Credentials
 
@@ -542,4 +544,4 @@ cd XDCMonitor
 docker-compose up -d
 ```
 
-3. Access the Grafana dashboard at http://localhost:3001 (default credentials: admin/admin)
+3. Access the Grafana dashboard at http://localhost:3100 (default credentials: admin/Admin@123456@789)

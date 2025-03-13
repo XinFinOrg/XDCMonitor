@@ -99,7 +99,7 @@ export class RpcMonitorService implements OnModuleInit {
         url: this.configService.rpcUrl,
         name: 'Primary RPC',
         type: 'rpc',
-        isMainnet: true,
+        chainId: 50,
       };
       const status = await this.monitorRpcEndpoint(primaryEndpoint);
       checkedEndpoints = 1;
@@ -141,23 +141,17 @@ export class RpcMonitorService implements OnModuleInit {
         this.logger.debug(`RPC endpoint ${endpoint.name} is UP (${elapsedTime}ms)`);
         this.rpcStatuses.set(endpoint.url, { status: 'up', latency: elapsedTime });
 
-        // Use isMainnet flag to determine network ID (50 for mainnet, 51 for testnet)
-        const networkId = endpoint.isMainnet ? '50' : '51';
-
-        // Update metrics with network information
-        this.metricsService.setRpcStatus(endpoint.url, true, endpoint.isMainnet);
-        this.metricsService.recordRpcLatency(endpoint.url, elapsedTime, endpoint.isMainnet);
+        // Update metrics with chainId
+        this.metricsService.setRpcStatus(endpoint.url, true, endpoint.chainId);
+        this.metricsService.recordRpcLatency(endpoint.url, elapsedTime, endpoint.chainId);
 
         return true;
       } else {
         this.logger.warn(`RPC endpoint ${endpoint.name} returned invalid response`);
         this.rpcStatuses.set(endpoint.url, { status: 'down', latency: elapsedTime });
 
-        // Use isMainnet flag to determine network ID
-        const networkId = endpoint.isMainnet ? '50' : '51';
-
-        // Update metrics with network information
-        this.metricsService.setRpcStatus(endpoint.url, false, endpoint.isMainnet);
+        // Update metrics with chainId
+        this.metricsService.setRpcStatus(endpoint.url, false, endpoint.chainId);
 
         return false;
       }
@@ -165,11 +159,8 @@ export class RpcMonitorService implements OnModuleInit {
       this.logger.warn(`RPC endpoint ${endpoint.name} is DOWN: ${error.message}`);
       this.rpcStatuses.set(endpoint.url, { status: 'down', latency: 0 });
 
-      // Use isMainnet flag to determine network ID
-      const networkId = endpoint.isMainnet ? '50' : '51';
-
-      // Update metrics with network information
-      this.metricsService.setRpcStatus(endpoint.url, false, endpoint.isMainnet);
+      // Update metrics with chainId
+      this.metricsService.setRpcStatus(endpoint.url, false, endpoint.chainId);
 
       return false;
     }
@@ -195,7 +186,7 @@ export class RpcMonitorService implements OnModuleInit {
         url: this.configService.rpcUrl,
         name: 'Primary RPC',
         type: 'rpc',
-        isMainnet: true,
+        chainId: 50,
       };
       await this.monitorRpcPort(primaryRpcEndpoint);
 
@@ -204,7 +195,7 @@ export class RpcMonitorService implements OnModuleInit {
           url: this.configService.wsUrl,
           name: 'Primary WebSocket',
           type: 'websocket',
-          isMainnet: true,
+          chainId: 50,
         };
         await this.monitorWsPort(primaryWsEndpoint);
       }
@@ -246,8 +237,8 @@ export class RpcMonitorService implements OnModuleInit {
       if (!wsUrl.startsWith('wss://') && !wsUrl.startsWith('ws://')) {
         this.logger.warn(`Invalid WebSocket URL for ${endpoint.name}: ${wsUrl} - Must start with ws:// or wss://`);
         this.wsStatuses.set(endpoint.url, { status: 'down' });
-        // Update metrics with network information
-        this.metricsService.setWebsocketStatus(endpoint.url, false, endpoint.isMainnet);
+        // Update metrics with chainId
+        this.metricsService.setWebsocketStatus(endpoint.url, false, endpoint.chainId);
         return;
       }
 
@@ -264,8 +255,8 @@ export class RpcMonitorService implements OnModuleInit {
         if (!connectionSuccessful) {
           this.logger.warn(`WebSocket connection to ${endpoint.name} timed out`);
           this.wsStatuses.set(endpoint.url, { status: 'down' });
-          // Update metrics with network information
-          this.metricsService.setWebsocketStatus(endpoint.url, false, endpoint.isMainnet);
+          // Update metrics with chainId
+          this.metricsService.setWebsocketStatus(endpoint.url, false, endpoint.chainId);
           socket.terminate();
         }
       }, 5000);
@@ -274,8 +265,8 @@ export class RpcMonitorService implements OnModuleInit {
         connectionSuccessful = true;
         this.logger.debug(`WebSocket connection to ${endpoint.name} successful`);
         this.wsStatuses.set(endpoint.url, { status: 'up' });
-        // Update metrics with network information
-        this.metricsService.setWebsocketStatus(endpoint.url, true, endpoint.isMainnet);
+        // Update metrics with chainId
+        this.metricsService.setWebsocketStatus(endpoint.url, true, endpoint.chainId);
         clearTimeout(timeout);
         socket.close();
       });
@@ -283,8 +274,8 @@ export class RpcMonitorService implements OnModuleInit {
       socket.on('error', error => {
         this.logger.warn(`WebSocket connection error for ${endpoint.name}: ${error.message}`);
         this.wsStatuses.set(endpoint.url, { status: 'down' });
-        // Update metrics with network information
-        this.metricsService.setWebsocketStatus(endpoint.url, false, endpoint.isMainnet);
+        // Update metrics with chainId
+        this.metricsService.setWebsocketStatus(endpoint.url, false, endpoint.chainId);
         clearTimeout(timeout);
 
         if (!socket.terminated) {
@@ -294,8 +285,8 @@ export class RpcMonitorService implements OnModuleInit {
     } catch (error) {
       this.logger.error(`Error setting up WebSocket connection for ${endpoint.name}: ${error.message}`);
       this.wsStatuses.set(endpoint.url, { status: 'down' });
-      // Update metrics with network information
-      this.metricsService.setWebsocketStatus(endpoint.url, false, endpoint.isMainnet);
+      // Update metrics with chainId
+      this.metricsService.setWebsocketStatus(endpoint.url, false, endpoint.chainId);
     }
   }
 
@@ -316,8 +307,8 @@ export class RpcMonitorService implements OnModuleInit {
         explorerChecked++;
         if (status) explorerUp++;
 
-        // Record metrics
-        this.metricsService.setExplorerStatus(endpoint.url, status, endpoint.isMainnet);
+        // Record metrics with chainId
+        this.metricsService.setExplorerStatus(endpoint.url, status, endpoint.chainId);
       }
 
       this.logger.debug(`Explorer status check completed: ${explorerUp}/${explorerChecked} explorers available`);
@@ -333,8 +324,8 @@ export class RpcMonitorService implements OnModuleInit {
         faucetChecked++;
         if (status) faucetUp++;
 
-        // Record metrics
-        this.metricsService.setFaucetStatus(endpoint.url, status, endpoint.isMainnet);
+        // Record metrics with chainId
+        this.metricsService.setFaucetStatus(endpoint.url, status, endpoint.chainId);
       }
 
       this.logger.debug(`Faucet status check completed: ${faucetUp}/${faucetChecked} faucets available`);
@@ -354,12 +345,12 @@ export class RpcMonitorService implements OnModuleInit {
 
       if (endpoint.url.includes('explorer') || endpoint.url.includes('scan')) {
         this.explorerStatuses.set(endpoint.url, { status: isUp ? 'up' : 'down' });
-        // Update metrics with network information
-        this.metricsService.setExplorerStatus(endpoint.url, isUp, endpoint.isMainnet);
+        // Update metrics with chainId
+        this.metricsService.setExplorerStatus(endpoint.url, isUp, endpoint.chainId);
       } else if (endpoint.url.includes('faucet')) {
         this.faucetStatuses.set(endpoint.url, { status: isUp ? 'up' : 'down' });
-        // Update metrics with network information
-        this.metricsService.setFaucetStatus(endpoint.url, isUp, endpoint.isMainnet);
+        // Update metrics with chainId
+        this.metricsService.setFaucetStatus(endpoint.url, isUp, endpoint.chainId);
       }
 
       this.logger.debug(`Service ${endpoint.name} is ${isUp ? 'UP' : 'DOWN'}`);
@@ -369,12 +360,12 @@ export class RpcMonitorService implements OnModuleInit {
 
       if (endpoint.url.includes('explorer') || endpoint.url.includes('scan')) {
         this.explorerStatuses.set(endpoint.url, { status: 'down' });
-        // Update metrics with network information
-        this.metricsService.setExplorerStatus(endpoint.url, false, endpoint.isMainnet);
+        // Update metrics with chainId
+        this.metricsService.setExplorerStatus(endpoint.url, false, endpoint.chainId);
       } else if (endpoint.url.includes('faucet')) {
         this.faucetStatuses.set(endpoint.url, { status: 'down' });
-        // Update metrics with network information
-        this.metricsService.setFaucetStatus(endpoint.url, false, endpoint.isMainnet);
+        // Update metrics with chainId
+        this.metricsService.setFaucetStatus(endpoint.url, false, endpoint.chainId);
       }
 
       return false;
@@ -396,7 +387,7 @@ export class RpcMonitorService implements OnModuleInit {
         type: endpoint.type,
         status: status.status,
         latency: status.latency,
-        isMainnet: endpoint.isMainnet,
+        chainId: endpoint.chainId,
       });
     }
 
@@ -413,7 +404,7 @@ export class RpcMonitorService implements OnModuleInit {
         url: endpoint.url,
         type: endpoint.type,
         status: status.status,
-        isMainnet: endpoint.isMainnet,
+        chainId: endpoint.chainId,
       });
     }
 

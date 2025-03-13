@@ -1,0 +1,23 @@
+apiVersion: 1
+
+# First delete any existing datasources
+deleteDatasources:
+  - name: InfluxDB
+    orgId: 1
+
+# Then add back the InfluxDB datasource with the correct configuration
+datasources:
+  - name: InfluxDB
+    uid: influxdb
+    type: influxdb
+    access: proxy
+    url: http://influxdb:8086
+    isDefault: true
+    version: 2
+    jsonData:
+      version: Flux
+      organization: xdc
+      defaultBucket: xdc_metrics
+      tlsSkipVerify: true
+    secureJsonData:
+      token: __INFLUXDB_TOKEN__

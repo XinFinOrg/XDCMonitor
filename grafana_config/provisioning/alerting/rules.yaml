@@ -14,11 +14,15 @@ groups:
             relativeTimeRange:
               from: 600
               to: 0
-            datasourceUid: prometheus
+            datasourceUid: InfluxDB
             model:
-              expr: 'xdc_block_time > 1.0' # Set to 1 second for easy testing, normal threshold is 3s
-              intervalMs: 1000
-              maxDataPoints: 43200
+              query: |
+                from(bucket: "xdc_metrics")
+                  |> range(start: -10m)
+                  |> filter(fn: (r) => r._measurement == "blockchain")
+                  |> filter(fn: (r) => r._field == "block_time")
+                  |> last()
+                  |> filter(fn: (r) => r._value > 1.0)
               refId: A
         noDataState: OK
         execErrState: Error
@@ -39,11 +43,15 @@ groups:
             relativeTimeRange:
               from: 600
               to: 0
-            datasourceUid: prometheus
+            datasourceUid: InfluxDB
             model:
-              expr: 'xdc_rpc_status == 0'
-              intervalMs: 1000
-              maxDataPoints: 43200
+              query: |
+                from(bucket: "xdc_metrics")
+                  |> range(start: -10m)
+                  |> filter(fn: (r) => r._measurement == "rpc")
+                  |> filter(fn: (r) => r._field == "status")
+                  |> last()
+                  |> filter(fn: (r) => r._value == 0)
               refId: A
         noDataState: OK
         execErrState: Error
@@ -64,11 +72,15 @@ groups:
             relativeTimeRange:
               from: 600
               to: 0
-            datasourceUid: prometheus
+            datasourceUid: InfluxDB
             model:
-              expr: 'xdc_rpc_latency_sum / xdc_rpc_latency_count > 300' # Adjusted to 300ms for testing
-              intervalMs: 1000
-              maxDataPoints: 43200
+              query: |
+                from(bucket: "xdc_metrics")
+                  |> range(start: -10m)
+                  |> filter(fn: (r) => r._measurement == "rpc")
+                  |> filter(fn: (r) => r._field == "latency")
+                  |> last()
+                  |> filter(fn: (r) => r._value > 300)
               refId: A
         noDataState: OK
         execErrState: Error
@@ -89,21 +101,31 @@ groups:
             relativeTimeRange:
               from: 600
               to: 0
-            datasourceUid: prometheus
+            datasourceUid: InfluxDB
             model:
-              expr: 'max(xdc_block_height) by (network)'
-              intervalMs: 1000
-              maxDataPoints: 43200
+              query: |
+                from(bucket: "xdc_metrics")
+                  |> range(start: -10m)
+                  |> filter(fn: (r) => r._measurement == "blockchain")
+                  |> filter(fn: (r) => r._field == "block_height")
+                  |> last()
+                  |> group()
+                  |> max(column: "_value")
               refId: A
           - refId: B
             relativeTimeRange:
               from: 600
               to: 0
-            datasourceUid: prometheus
+            datasourceUid: InfluxDB
             model:
-              expr: 'min(xdc_block_height) by (network)'
-              intervalMs: 1000
-              maxDataPoints: 43200
+              query: |
+                from(bucket: "xdc_metrics")
+                  |> range(start: -10m)
+                  |> filter(fn: (r) => r._measurement == "blockchain")
+                  |> filter(fn: (r) => r._field == "block_height")
+                  |> last()
+                  |> group()
+                  |> min(column: "_value")
               refId: B
           - refId: C
             relativeTimeRange:

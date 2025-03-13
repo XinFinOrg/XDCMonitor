@@ -53,8 +53,8 @@
     },
     {
       "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
+        "type": "influxdb",
+        "uid": "influxdb"
       },
       "gridPos": {
         "h": 8,
@@ -78,10 +78,10 @@
     },
     {
       "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
+        "type": "influxdb",
+        "uid": "influxdb"
       },
-      "description": "Current status of all monitored Apothem Testnet endpoints",
+      "description": "Current status of all monitored Apothem Testnet RPC endpoints",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -143,11 +143,12 @@
       "targets": [
         {
           "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
+            "type": "influxdb",
+            "uid": "influxdb"
           },
           "editorMode": "code",
-          "expr": "xdc_rpc_status{network=\"51\"}",
+          "expr": "xdc_rpc_status{chainId=\"51\"}",
+          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"rpc_status\" and r.chainId == \"51\")\n  |> last(column: \"_value\")\n  |> group(columns: [\"endpoint\"])",
           "legendFormat": "{{endpoint}}",
           "range": true,
           "refId": "A"
@@ -158,8 +159,89 @@
     },
     {
       "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
+        "type": "influxdb",
+        "uid": "influxdb"
+      },
+      "description": "Current status of all monitored Apothem Testnet WebSocket endpoints",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "color": "red",
+                  "index": 0,
+                  "text": "DOWN"
+                },
+                "1": {
+                  "color": "green",
+                  "index": 1,
+                  "text": "UP"
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 12,
+        "x": 12,
+        "y": 9
+      },
+      "id": 6,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "10.2.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb"
+          },
+          "editorMode": "code",
+          "expr": "xdc_websocket_status{chainId=\"51\"}",
+          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"websocket_status\" and r.chainId == \"51\")\n  |> last(column: \"_value\")\n  |> group(columns: [\"endpoint\"])",
+          "legendFormat": "{{endpoint}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "WebSocket Status",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb"
       },
       "description": "Current block height comparison across Apothem Testnet RPC endpoints",
       "fieldConfig": {
@@ -207,11 +289,12 @@
       "targets": [
         {
           "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
+            "type": "influxdb",
+            "uid": "influxdb"
           },
           "editorMode": "code",
-          "expr": "xdc_block_height{network=\"51\"}",
+          "expr": "xdc_block_height{chainId=\"51\"}",
+          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"block_height\" and r.chainId == \"51\")\n  |> last(column: \"_value\")\n  |> group(columns: [\"endpoint\"])",
           "legendFormat": "Apothem ({{endpoint}})",
           "range": true,
           "refId": "A"
@@ -222,8 +305,70 @@
     },
     {
       "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
+        "type": "influxdb",
+        "uid": "influxdb"
+      },
+      "description": "Current highest block number across all Apothem Testnet RPC endpoints",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 24,
+        "x": 0,
+        "y": 13
+      },
+      "id": 106,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "10.2.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb"
+          },
+          "editorMode": "code",
+          "expr": "max(xdc_block_height{chainId=\"51\"}) by (chainId)",
+          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"block_height\" and r.chainId == \"51\")\n  |> group(columns: [\"chainId\"])\n  |> max(column: \"_value\")\n  |> yield(name: \"max\")",
+          "legendFormat": "Current Block",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Current Block Height",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb"
       },
       "description": "Current block time on Apothem Testnet (in seconds)",
       "fieldConfig": {
@@ -257,7 +402,7 @@
         "h": 4,
         "w": 24,
         "x": 0,
-        "y": 13
+        "y": 17
       },
       "id": 11,
       "options": {
@@ -276,11 +421,13 @@
       "targets": [
         {
           "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
+            "type": "influxdb",
+            "uid": "influxdb"
           },
           "editorMode": "code",
-          "expr": "xdc_block_time{network=\"51\"}",
+          "expr": "xdc_block_time{chainId=\"51\"}",
+          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"block_time\" and r.chainId == \"51\")\n  |> last(column: \"_value\")",
+          "legendFormat": "Block Time (s)",
           "range": true,
           "refId": "A"
         }
@@ -294,7 +441,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 17
+        "y": 21
       },
       "id": 102,
       "panels": [],
@@ -303,8 +450,8 @@
     },
     {
       "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
+        "type": "influxdb",
+        "uid": "influxdb"
       },
       "description": "Response time for all monitored Apothem Testnet RPC endpoints",
       "fieldConfig": {
@@ -370,7 +517,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 18
+        "y": 22
       },
       "id": 3,
       "options": {
@@ -389,11 +536,12 @@
       "targets": [
         {
           "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
+            "type": "influxdb",
+            "uid": "influxdb"
           },
           "editorMode": "code",
-          "expr": "xdc_rpc_latency{network=\"51\"}",
+          "expr": "xdc_rpc_latency{chainId=\"51\"}",
+          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"rpc_latency\" and r.chainId == \"51\")\n  |> group(columns: [\"endpoint\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
           "legendFormat": "{{endpoint}}",
           "range": true,
           "refId": "A"
@@ -404,8 +552,8 @@
     },
     {
       "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
+        "type": "influxdb",
+        "uid": "influxdb"
       },
       "description": "Block time on Apothem Testnet",
       "fieldConfig": {
@@ -471,7 +619,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 18
+        "y": 22
       },
       "id": 9,
       "options": {
@@ -490,12 +638,13 @@
       "targets": [
         {
           "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
+            "type": "influxdb",
+            "uid": "influxdb"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum(rate(xdc_rpc_latency_bucket{network=\"51\"}[5m])) by (le, endpoint))",
-          "legendFormat": "{{endpoint}}",
+          "expr": "histogram_quantile(0.95, sum(rate(xdc_rpc_latency_bucket{chainId=\"51\"}[5m])) by (le))",
+          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"rpc_latency\" and r.chainId == \"51\")\n  |> group()\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
+          "legendFormat": "95th Percentile",
           "range": true,
           "refId": "A"
         }
@@ -505,8 +654,8 @@
     },
     {
       "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
+        "type": "influxdb",
+        "uid": "influxdb"
       },
       "description": "Status of RPC endpoints over time (1 = up, 0 = down)",
       "fieldConfig": {
@@ -583,7 +732,7 @@
         "h": 6,
         "w": 24,
         "x": 0,
-        "y": 26
+        "y": 30
       },
       "id": 10,
       "options": {
@@ -611,11 +760,12 @@
       "targets": [
         {
           "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
+            "type": "influxdb",
+            "uid": "influxdb"
           },
           "editorMode": "code",
-          "expr": "xdc_rpc_status{network=\"51\"}",
+          "expr": "xdc_rpc_status{chainId=\"51\"}",
+          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"rpc_status\" and r.chainId == \"51\")\n  |> group(columns: [\"endpoint\"])",
           "legendFormat": "{{endpoint}}",
           "range": true,
           "refId": "A"
@@ -630,7 +780,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 32
+        "y": 36
       },
       "id": 103,
       "panels": [],
@@ -639,10 +789,10 @@
     },
     {
       "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
+        "type": "influxdb",
+        "uid": "influxdb"
       },
-      "description": "Status check for Web Socket endpoint",
+      "description": "Availability check for Apothem faucet services",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -704,91 +854,12 @@
       "targets": [
         {
           "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
+            "type": "influxdb",
+            "uid": "influxdb"
           },
           "editorMode": "code",
-          "expr": "xdc_websocket_status{endpoint=\"wss://ws.apothem.network/ws\", network=\"51\"}",
-          "legendFormat": "{{endpoint}}",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "WebSocket Status",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "description": "Availability check for Apothem faucet services",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [
-            {
-              "options": {
-                "0": {
-                  "color": "red",
-                  "index": 0,
-                  "text": "DOWN"
-                },
-                "1": {
-                  "color": "green",
-                  "index": 1,
-                  "text": "UP"
-                }
-              },
-              "type": "value"
-            }
-          ],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "red",
-                "value": null
-              },
-              {
-                "color": "green",
-                "value": 1
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 4,
-        "w": 12,
-        "x": 12,
-        "y": 33
-      },
-      "id": 8,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": ["lastNotNull"],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "pluginVersion": "10.2.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "xdc_faucet_status{endpoint=~\"https://faucet.apothem.network|https://faucet.blocksscan.io\", network=\"51\"}",
+          "expr": "xdc_faucet_status{endpoint=~\"https://faucet.apothem.network|https://faucet.blocksscan.io\", chainId=\"51\"}",
+          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"faucet_status\" and r.chainId == \"51\" and (r.endpoint == \"https://faucet.apothem.network\" or r.endpoint == \"https://faucet.blocksscan.io\"))\n  |> last(column: \"_value\")\n  |> group(columns: [\"endpoint\"])",
           "legendFormat": "{{endpoint}}",
           "range": true,
           "refId": "A"
@@ -799,8 +870,8 @@
     },
     {
       "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
+        "type": "influxdb",
+        "uid": "influxdb"
       },
       "description": "Availability check for Apothem block explorers",
       "fieldConfig": {
@@ -864,11 +935,12 @@
       "targets": [
         {
           "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
+            "type": "influxdb",
+            "uid": "influxdb"
           },
           "editorMode": "code",
-          "expr": "xdc_explorer_status{endpoint=~\"https://apothem.xdcscan.io|https://apothem.blocksscan.io|https://explorer.apothem.network\", network=\"51\"}",
+          "expr": "xdc_explorer_status{endpoint=~\"https://apothem.xdcscan.io|https://apothem.blocksscan.io|https://explorer.apothem.network\", chainId=\"51\"}",
+          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"explorer_status\" and r.chainId == \"51\" and (r.endpoint == \"https://apothem.xdcscan.io\" or r.endpoint == \"https://apothem.blocksscan.io\" or r.endpoint == \"https://explorer.apothem.network\"))\n  |> last(column: \"_value\")\n  |> group(columns: [\"endpoint\"])",
           "legendFormat": "{{endpoint}}",
           "range": true,
           "refId": "A"
@@ -892,8 +964,8 @@
     },
     {
       "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
+        "type": "influxdb",
+        "uid": "influxdb"
       },
       "description": "Block time trend on Apothem Testnet over time",
       "fieldConfig": {
@@ -978,11 +1050,12 @@
       "targets": [
         {
           "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
+            "type": "influxdb",
+            "uid": "influxdb"
           },
           "editorMode": "code",
-          "expr": "xdc_block_time{network=\"51\"}",
+          "expr": "xdc_block_time{chainId=\"51\"}",
+          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"block_time\" and r.chainId == \"51\")\n  |> last(column: \"_value\")",
           "legendFormat": "Block Time",
           "range": true,
           "refId": "A"
@@ -1006,8 +1079,8 @@
     },
     {
       "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
+        "type": "influxdb",
+        "uid": "influxdb"
       },
       "gridPos": {
         "h": 8,

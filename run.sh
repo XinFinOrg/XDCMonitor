@@ -7,16 +7,16 @@ function show_usage {
   echo "Usage: ./run.sh [command]"
   echo ""
   echo "Commands:"
-  echo "  up                Start the complete stack (app + prometheus + grafana) with latest code"
+  echo "  up                Start the complete stack (app + influxdb + grafana) with latest code"
   echo "  down              Stop the complete stack"
   echo "  logs              View logs from all services"
   echo "  rebuild           Rebuild and restart the application container"
   echo "  clean             Stop and remove all containers, volumes and networks"
-  echo "  restart [name]    Restart a specific container (e.g., grafana, prometheus, xdc-monitor)"
+  echo "  restart [name]    Restart a specific container (e.g., grafana, influxdb, xdc-monitor)"
   echo "  xdc-monitor-logs  View logs from the app service only"
   echo "  grafana-logs      View logs from the grafana service only"
-  echo "  prometheus-logs   View logs from the prometheus service only"
-  echo "  clear-prometheus  Clear all prometheus metrics data"
+  echo "  influxdb-logs     View logs from the influxdb service only"
+  echo "  clear-influxdb    Clear all influxdb metrics data"
   echo "  fix-permissions   Fix permissions for data directories"
   echo "  grafana-export    Export Grafana configs to version-controlled directory"
   echo "  grafana-import    Import Grafana configs from version-controlled directory"
@@ -39,14 +39,23 @@ case "$1" in
 
     yarn build
 
-    # Start all services
+    # Start all services - influxdb first to ensure it's ready when xdc-monitor starts
+    echo "Starting InfluxDB..."
+    docker-compose up -d influxdb
+
+    echo "Waiting for InfluxDB to initialize (10 seconds)..."
+    sleep 10
+
+    echo "Starting remaining services..."
     docker-compose up -d
 
-    echo "Services running at:"
-    echo "- XDC Monitor:  http://localhost:3000"
-    echo "- Metrics:      http://localhost:9090/metrics"
-    echo "- Prometheus:   http://localhost:9091"
-    echo "- Grafana:      http://localhost:3001 (admin/admin)"
+    echo ""
+    echo "XDC Monitor is now running!"
+    echo "- Monitoring API: http://localhost:3000"
+    echo "- Grafana Dashboard: http://localhost:3001 "
+    echo "- InfluxDB: http://localhost:8086"
+    echo ""
+    echo "Use './run.sh logs' to view logs"
     ;;
 
   down)
@@ -69,29 +78,45 @@ case "$1" in
     docker-compose logs -f grafana
     ;;
 
-  prometheus-logs)
-    echo "Showing logs from the prometheus service. Press Ctrl+C to exit."
-    docker-compose logs -f prometheus
+  influxdb-logs)
+    echo "Showing logs from the influxdb service. Press Ctrl+C to exit."
+    docker-compose logs -f influxdb
     ;;
 
   rebuild)
     echo "Rebuilding and restarting the application..."
+
+    # Stop the services
     docker-compose down
-    docker-compose build --no-cache
-    # Ensure directories exist with proper permissions
-    ./run.sh fix-permissions
-    docker-compose up -d
-    echo "Rebuild complete. Services are running at:"
-    echo "- XDC Monitor:  http://localhost:3000"
-    echo "- Metrics:      http://localhost:9090/metrics"
-    echo "- Prometheus:   http://localhost:9091"
-    echo "- Grafana:      http://localhost:3001 (admin/admin)"
+
+    # Build the TypeScript code
+    yarn build
+
+    # Start with the same sequence as 'up' command for better reliability
+    echo "Starting InfluxDB..."
+    docker-compose up -d influxdb
+
+    echo "Waiting for InfluxDB to initialize (10 seconds)..."
+    sleep 10
+
+    echo "Building and starting xdc-monitor..."
+    docker-compose up -d --build xdc-monitor
+
+    echo "Starting Grafana..."
+    docker-compose up -d grafana
+
+    echo "Application rebuilt and restarted."
     ;;
 
   clean)
     echo "Stopping and removing all containers, volumes and networks..."
     # Stop and remove all containers
     docker-compose down --volumes --remove-orphans
+
+    # Remove specific containers that might cause issues
+    docker rm -f influxdb 2>/dev/null || true
+    docker rm -f grafana 2>/dev/null || true
+    docker rm -f xdc-monitor 2>/dev/null || true
 
     # Prune containers, volumes and networks
     echo "Removing orphaned containers..."
@@ -100,44 +125,38 @@ case "$1" in
     echo "System cleaned successfully."
     ;;
 
-  clear-prometheus)
-    echo "Clearing Prometheus metrics data..."
+  clear-influxdb)
+    echo "Clearing InfluxDB metrics data..."
     # Stop relevant containers first
-    docker-compose stop prometheus 2>/dev/null || true
+    docker-compose stop influxdb 2>/dev/null || true
+    docker rm -f influxdb 2>/dev/null || true
 
     read -p "Clear metrics data? (y/n) " -n 1 -r
     echo
     if [[ $REPLY =~ ^[Yy]$ ]]; then
-      rm -rf prometheus_data/*
-      mkdir -p prometheus_data
-      echo "Metrics data cleared."
+      docker volume rm xdcmonitor_influxdb-storage 2>/dev/null || true
+      echo "InfluxDB data volume removed."
     fi
 
-    echo "Restarting prometheus..."
+    echo "Restarting InfluxDB..."
     # Fix permissions before starting
     ./run.sh fix-permissions
 
-    docker-compose up -d prometheus
+    docker-compose up -d influxdb
     ;;
 
   fix-permissions)
     echo "Fixing permissions for data directories..."
 
     # Create directories if they don't exist
-    mkdir -p prometheus_data
     mkdir -p grafana_data
+    mkdir -p influxdb_data
     mkdir -p dist
     mkdir -p logs
 
-    # Fix permissions for Prometheus data directory
-    # Prometheus typically runs as nobody:nobody (uid 65534)
-    chmod -R 777 prometheus_data
-
-    # Fix permissions for Grafana data directory
-    # Grafana runs as user 472
+    # Fix permissions for data directories
     chmod -R 777 grafana_data
-
-    # Fix permissions for mounted code directories
+    chmod -R 777 influxdb_data
     chmod -R 777 dist
     chmod -R 777 logs
 
@@ -148,13 +167,27 @@ case "$1" in
     if [ -z "$2" ]; then
       echo "Error: Missing container name"
       echo "Usage: ./run.sh restart [container-name]"
-      echo "Available containers: xdc-monitor, prometheus, grafana"
+      echo "Available containers: xdc-monitor, influxdb, grafana"
       exit 1
     fi
 
     container_name="$2"
     echo "Restarting $container_name container..."
-    docker-compose restart "$container_name"
+
+    # Special handling for grafana to ensure datasources are properly configured
+    if [ "$container_name" = "grafana" ]; then
+      docker-compose stop grafana
+      docker rm -f grafana 2>/dev/null || true
+      docker-compose up -d grafana
+    # Special handling for influxdb to ensure proper initialization
+    elif [ "$container_name" = "influxdb" ]; then
+      docker-compose stop influxdb
+      docker rm -f influxdb 2>/dev/null || true
+      docker-compose up -d influxdb
+    else
+      docker-compose restart "$container_name"
+    fi
+
     echo "$container_name container restarted successfully."
     ;;
 
@@ -184,10 +217,30 @@ case "$1" in
         echo "✓ Exported dashboard provisioning files"
       fi
 
-      # Datasources
+      # Datasources - with token placeholders
       if [ -d "grafana_data/provisioning/datasources" ]; then
-        cp -rf grafana_data/provisioning/datasources/* grafana_config/provisioning/datasources/ 2>/dev/null || true
-        echo "✓ Exported datasource provisioning files"
+        mkdir -p grafana_config/provisioning/datasources
+        for file in grafana_data/provisioning/datasources/*.yaml; do
+          if [ -f "$file" ]; then
+            # Copy file first as a base
+            cp -f "$file" "grafana_config/provisioning/datasources/$(basename "$file")"
+
+            # Get the InfluxDB token from .env
+            if [ -f ".env" ]; then
+              # Extract token without quotes
+              INFLUXDB_TOKEN=$(grep "^INFLUXDB_TOKEN=" .env | sed 's/^INFLUXDB_TOKEN=//')
+              if [ ! -z "$INFLUXDB_TOKEN" ]; then
+                # Use a more robust perl replace instead of sed
+                perl -i -pe 's|"'"$INFLUXDB_TOKEN"'"|__INFLUXDB_TOKEN__|g' "grafana_config/provisioning/datasources/$(basename "$file")"
+                echo "✓ Exported datasource: $(basename "$file") with token placeholder"
+              else
+                echo "✓ Exported datasource: $(basename "$file")"
+              fi
+            else
+              echo "✓ Exported datasource: $(basename "$file")"
+            fi
+          fi
+        done
       fi
 
       # Plugins
@@ -247,10 +300,30 @@ case "$1" in
         echo "✓ Imported dashboard provisioning files"
       fi
 
-      # Datasources
+      # Datasources - with token substitution
       if [ -d "grafana_config/provisioning/datasources" ] && [ "$(ls -A grafana_config/provisioning/datasources 2>/dev/null)" ]; then
-        cp -rf grafana_config/provisioning/datasources/* grafana_data/provisioning/datasources/ 2>/dev/null || true
-        echo "✓ Imported datasource provisioning files"
+        mkdir -p grafana_data/provisioning/datasources
+        for file in grafana_config/provisioning/datasources/*.yaml; do
+          if [ -f "$file" ]; then
+            # Copy file first as a base
+            cp -f "$file" "grafana_data/provisioning/datasources/$(basename "$file")"
+
+            # Get the InfluxDB token from .env
+            if [ -f ".env" ]; then
+              # Extract token without quotes or extra spaces
+              INFLUXDB_TOKEN=$(grep "^INFLUXDB_TOKEN=" .env | sed 's/^INFLUXDB_TOKEN=//' | tr -d '"' | tr -d ' ')
+              if [ ! -z "$INFLUXDB_TOKEN" ]; then
+                # Use perl for more robust replacement that handles special characters like =
+                perl -i -pe 's|__INFLUXDB_TOKEN__|"'"$INFLUXDB_TOKEN"'"|g' "grafana_data/provisioning/datasources/$(basename "$file")"
+                echo "✓ Imported datasource: $(basename "$file") with token from .env"
+              else
+                echo "⚠️ Imported datasource: $(basename "$file") - no token found in .env"
+              fi
+            else
+              echo "⚠️ Imported datasource: $(basename "$file") - .env file not found"
+            fi
+          fi
+        done
       fi
 
       # Plugins
@@ -280,8 +353,13 @@ case "$1" in
     ;;
 
   *)
-    echo "Unknown command: $1"
-    show_usage
-    exit 1
+    if [ -z "$1" ]; then
+      show_usage
+      exit 0
+    else
+      echo "Unknown command: $1"
+      show_usage
+      exit 1
+    fi
     ;;
 esac

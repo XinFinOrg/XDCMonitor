@@ -40,7 +40,7 @@ export class BlockchainService {
           url: this.configService.rpcUrl,
           name: 'Primary RPC',
           type: 'rpc',
-          isMainnet: true,
+          chainId: 50,
           status: 'up',
         },
       });
@@ -55,7 +55,7 @@ export class BlockchainService {
               url: this.configService.wsUrl,
               name: 'Primary WebSocket',
               type: 'websocket',
-              isMainnet: true,
+              chainId: 50,
               status: 'up',
             },
           });
@@ -73,7 +73,7 @@ export class BlockchainService {
         url: this.configService.rpcUrl,
         name: 'Primary RPC',
         type: 'rpc',
-        isMainnet: true,
+        chainId: 50,
         status: 'up',
       },
     };

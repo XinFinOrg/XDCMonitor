@@ -1,172 +1,306 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@config/config.service';
-import * as promClient from 'prom-client';
+import { InfluxDB, Point } from '@influxdata/influxdb-client';
+import { hostname } from 'os';
 
 @Injectable()
 export class MetricsService implements OnModuleInit {
   private readonly logger = new Logger(MetricsService.name);
-  private register: promClient.Registry;
-
-  private blockHeight: promClient.Gauge<string>;
-  private transactionCount: promClient.Counter<string>;
-  private rpcLatency: promClient.Histogram<string>;
-  private rpcStatus: promClient.Gauge<string>;
-  private blockTime: promClient.Gauge<string>;
-  private alertCount: promClient.Counter<string>;
-  private transactionsPerBlock: promClient.Gauge<string>;
-  private websocketStatus: promClient.Gauge<string>;
-  private explorerStatus: promClient.Gauge<string>;
-  private faucetStatus: promClient.Gauge<string>;
+  private influxClient: InfluxDB;
+  private writeApi: any;
+  private connected = false;
+  private reconnectAttempts = 0;
+  private readonly MAX_RECONNECT_ATTEMPTS = 10;
+  private readonly RECONNECT_INTERVAL = 5000; // 5 seconds
+  private readonly INITIAL_CONNECT_DELAY = 30000; // 30 seconds (increased from 15)
+  private connectionQueue: Point[] = [];
 
   constructor(private readonly configService: ConfigService) {
-    this.register = new promClient.Registry();
+    // Wait for InfluxDB to be ready before connecting
+    setTimeout(() => {
+      this.initializeInfluxDB();
+    }, this.INITIAL_CONNECT_DELAY);
+  }
 
-    promClient.collectDefaultMetrics({ register: this.register });
+  private initializeInfluxDB() {
+    try {
+      this.logger.log(`Connecting to InfluxDB at ${this.configService.influxDbUrl}...`);
+      this.logger.log(`Using token: ${this.configService.influxDbToken ? '[SET]' : '[MISSING]'}`);
+      this.logger.log(`Using org: ${this.configService.influxDbOrg}`);
+      this.logger.log(`Using bucket: ${this.configService.influxDbBucket}`);
 
-    this.blockHeight = new promClient.Gauge({
-      name: 'xdc_block_height',
-      help: 'Current XDC blockchain height',
-      labelNames: ['network', 'endpoint'],
-      registers: [this.register],
-    });
+      // Initialize InfluxDB client
+      this.influxClient = new InfluxDB({
+        url: this.configService.influxDbUrl,
+        token: this.configService.influxDbToken,
+      });
 
-    this.transactionCount = new promClient.Counter({
-      name: 'xdc_transaction_count',
-      help: 'Number of XDC transactions processed',
-      labelNames: ['status', 'network'],
-      registers: [this.register],
-    });
+      // Get WriteApi to write data points
+      this.writeApi = this.influxClient.getWriteApi(
+        this.configService.influxDbOrg,
+        this.configService.influxDbBucket,
+        'ns',
+      );
 
-    this.transactionsPerBlock = new promClient.Gauge({
-      name: 'xdc_transactions_per_block',
-      help: 'Number of transactions in each block',
-      labelNames: ['block_number', 'status', 'network'],
-      registers: [this.register],
-    });
+      // Set default tags for all metrics
+      this.writeApi.useDefaultTags({ host: hostname() });
+      this.connected = true;
+      this.reconnectAttempts = 0;
 
-    this.rpcLatency = new promClient.Histogram({
-      name: 'xdc_rpc_latency',
-      help: 'Latency of RPC endpoint responses in ms',
-      labelNames: ['endpoint', 'network'],
-      buckets: [5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000],
-      registers: [this.register],
-    });
+      // Process any queued points
+      this.processQueue();
+    } catch (error) {
+      this.logger.error(`Failed to initialize InfluxDB: ${error.message}`);
+      this.connected = false;
+      this.scheduleReconnect();
+    }
+  }
 
-    this.rpcStatus = new promClient.Gauge({
-      name: 'xdc_rpc_status',
-      help: 'RPC endpoint status (1=up, 0=down)',
-      labelNames: ['endpoint', 'network'],
-      registers: [this.register],
-    });
+  private processQueue() {
+    if (this.connectionQueue.length > 0 && this.connected) {
+      this.logger.log(`Processing ${this.connectionQueue.length} queued data points`);
 
-    this.websocketStatus = new promClient.Gauge({
-      name: 'xdc_websocket_status',
-      help: 'WebSocket endpoint status (1=up, 0=down)',
-      labelNames: ['endpoint', 'network'],
-      registers: [this.register],
-    });
+      for (const point of this.connectionQueue) {
+        try {
+          this.writeApi.writePoint(point);
+        } catch (error) {
+          this.logger.error(`Error writing queued point to InfluxDB: ${error.message}`);
+        }
+      }
 
-    this.explorerStatus = new promClient.Gauge({
-      name: 'xdc_explorer_status',
-      help: 'XDC block explorer status (1=up, 0=down)',
-      labelNames: ['endpoint', 'network'],
-      registers: [this.register],
-    });
+      try {
+        this.writeApi.flush();
+        this.connectionQueue = [];
+      } catch (error) {
+        this.logger.error(`Error flushing queued points to InfluxDB: ${error.message}`);
+      }
+    }
+  }
 
-    this.faucetStatus = new promClient.Gauge({
-      name: 'xdc_faucet_status',
-      help: 'XDC faucet service status (1=up, 0=down)',
-      labelNames: ['endpoint', 'network'],
-      registers: [this.register],
-    });
+  private scheduleReconnect() {
+    if (this.reconnectAttempts < this.MAX_RECONNECT_ATTEMPTS) {
+      this.reconnectAttempts++;
+      this.logger.log(
+        `Attempting to reconnect to InfluxDB (attempt ${this.reconnectAttempts}/${this.MAX_RECONNECT_ATTEMPTS})...`,
+      );
 
-    this.blockTime = new promClient.Gauge({
-      name: 'xdc_block_time',
-      help: 'Time between blocks in seconds',
-      labelNames: ['network'],
-      registers: [this.register],
-    });
-
-    this.alertCount = new promClient.Counter({
-      name: 'xdc_alert_count',
-      help: 'Count of alerts by type and component',
-      labelNames: ['type', 'component', 'network'],
-      registers: [this.register],
-    });
+      setTimeout(() => {
+        this.initializeInfluxDB();
+      }, this.RECONNECT_INTERVAL);
+    } else {
+      this.logger.error(`Failed to connect to InfluxDB after ${this.MAX_RECONNECT_ATTEMPTS} attempts`);
+      // Reset so we can try again later
+      setTimeout(() => {
+        this.reconnectAttempts = 0;
+        this.scheduleReconnect();
+      }, 60000); // Wait 1 minute before starting over
+    }
   }
 
   onModuleInit() {
-    this.logger.log('Metrics service initialized');
+    this.logger.log('InfluxDB metrics service initialized');
+    this.logger.log(
+      `Will connect to InfluxDB at ${this.configService.influxDbUrl} after ${this.INITIAL_CONNECT_DELAY}ms delay`,
+    );
+    this.logger.log(`Using bucket: ${this.configService.influxDbBucket}`);
   }
 
-  getMetrics(): Promise<string> {
-    return this.register.metrics();
-  }
-
-  setBlockHeight(height: number, endpoint: string, networkId: string): void {
-    this.blockHeight.labels(networkId, endpoint).set(height);
-    this.logger.debug(`Set block height for ${endpoint} (network ${networkId}): ${height}`);
-  }
-
-  incrementTransactionCount(status: 'confirmed' | 'pending' | 'failed', networkId: string = '50'): void {
-    this.transactionCount.labels(status, networkId).inc();
-  }
-
-  setTransactionsPerBlock(blockNumber: number, confirmed: number, failed: number, networkId: string = '50'): void {
-    const blockNumberStr = blockNumber.toString();
-
-    // Reset any existing values for this block to ensure we don't have stale data
-    // This is important when refreshing metrics for the same block
-    try {
-      this.transactionsPerBlock.remove({ block_number: blockNumberStr, status: 'confirmed', network: networkId });
-      this.transactionsPerBlock.remove({ block_number: blockNumberStr, status: 'failed', network: networkId });
-    } catch (error) {
-      // Ignore errors if label combination doesn't exist yet
+  /**
+   * Write a point to InfluxDB
+   * @param point InfluxDB Point to write
+   */
+  private async writePoint(point: Point) {
+    if (!this.connected) {
+      // Queue the point for later when connection is established
+      if (this.connectionQueue.length < 1000) {
+        // Limit queue size to prevent memory issues
+        this.connectionQueue.push(point);
+      }
+      return;
     }
 
-    // Set new values
+    try {
+      this.writeApi.writePoint(point);
+      await this.writeApi.flush();
+    } catch (error) {
+      this.logger.error(`Error writing to InfluxDB: ${error.message}`);
+
+      // If connection refused or other serious error, try to reconnect
+      if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT') {
+        this.connected = false;
+        // Queue the point that failed
+        if (this.connectionQueue.length < 1000) {
+          this.connectionQueue.push(point);
+        }
+        this.scheduleReconnect();
+      }
+    }
+  }
+
+  /**
+   * Get metrics endpoint response (for compatibility with existing metrics endpoint)
+   * This will always return an empty string as InfluxDB uses push model instead of pull
+   */
+  async getMetrics(): Promise<string> {
+    return '';
+  }
+
+  /**
+   * Record blockchain block height
+   * @param height Block height
+   * @param endpoint RPC endpoint URL
+   * @param chainId Chain ID
+   */
+  setBlockHeight(height: number, endpoint: string, chainId: string): void {
+    const point = new Point('block_height').tag('chainId', chainId).tag('endpoint', endpoint).intField('value', height);
+
+    this.writePoint(point);
+    this.logger.debug(`Set block height for ${endpoint} (chainId ${chainId}): ${height}`);
+  }
+
+  /**
+   * Increment transaction count by status
+   * @param status Transaction status
+   * @param chainId Chain ID
+   */
+  incrementTransactionCount(status: 'confirmed' | 'pending' | 'failed', chainId: string = '50'): void {
+    const point = new Point('transaction_count').tag('status', status).tag('chainId', chainId).intField('value', 1);
+
+    this.writePoint(point);
+  }
+
+  /**
+   * Record transactions per block
+   * @param blockNumber Block number
+   * @param confirmed Count of confirmed transactions
+   * @param failed Count of failed transactions
+   * @param chainId Chain ID
+   */
+  setTransactionsPerBlock(blockNumber: number, confirmed: number, failed: number, chainId: string = '50'): void {
+    const blockNumberStr = blockNumber.toString();
+
     if (confirmed >= 0) {
-      this.transactionsPerBlock.labels(blockNumberStr, 'confirmed', networkId).set(confirmed);
+      const confirmedPoint = new Point('transactions_per_block')
+        .tag('block_number', blockNumberStr)
+        .tag('status', 'confirmed')
+        .tag('chainId', chainId)
+        .intField('value', confirmed);
+
+      this.writePoint(confirmedPoint);
       this.logger.debug(`Set confirmed transactions for block #${blockNumber}: ${confirmed}`);
     }
 
     if (failed >= 0) {
-      this.transactionsPerBlock.labels(blockNumberStr, 'failed', networkId).set(failed);
+      const failedPoint = new Point('transactions_per_block')
+        .tag('block_number', blockNumberStr)
+        .tag('status', 'failed')
+        .tag('chainId', chainId)
+        .intField('value', failed);
+
+      this.writePoint(failedPoint);
       this.logger.debug(`Set failed transactions for block #${blockNumber}: ${failed}`);
     }
   }
 
-  recordRpcLatency(endpoint: string, latencyMs: number, isMainnet: boolean = true): void {
-    const networkId = isMainnet ? '50' : '51';
-    this.rpcLatency.labels(endpoint, networkId).observe(latencyMs);
+  /**
+   * Record RPC endpoint latency
+   * @param endpoint RPC endpoint URL
+   * @param latencyMs Latency in milliseconds
+   * @param chainId Chain ID
+   */
+  recordRpcLatency(endpoint: string, latencyMs: number, chainId: number = 50): void {
+    const point = new Point('rpc_latency')
+      .tag('endpoint', endpoint)
+      .tag('chainId', chainId.toString())
+      .floatField('value', latencyMs);
+
+    this.writePoint(point);
   }
 
-  setRpcStatus(endpoint: string, isUp: boolean, isMainnet: boolean = true): void {
-    const networkId = isMainnet ? '50' : '51';
-    this.rpcStatus.labels(endpoint, networkId).set(isUp ? 1 : 0);
+  /**
+   * Record RPC endpoint status
+   * @param endpoint RPC endpoint URL
+   * @param isUp Whether the endpoint is up
+   * @param chainId Chain ID
+   */
+  setRpcStatus(endpoint: string, isUp: boolean, chainId: number = 50): void {
+    const point = new Point('rpc_status')
+      .tag('endpoint', endpoint)
+      .tag('chainId', chainId.toString())
+      .intField('value', isUp ? 1 : 0);
+
+    this.writePoint(point);
   }
 
-  setWebsocketStatus(endpoint: string, isUp: boolean, isMainnet: boolean = true): void {
-    const networkId = isMainnet ? '50' : '51';
-    this.websocketStatus.labels(endpoint, networkId).set(isUp ? 1 : 0);
+  /**
+   * Record WebSocket endpoint status
+   * @param endpoint WebSocket endpoint URL
+   * @param isUp Whether the endpoint is up
+   * @param chainId Chain ID
+   */
+  setWebsocketStatus(endpoint: string, isUp: boolean, chainId: number = 50): void {
+    const point = new Point('websocket_status')
+      .tag('endpoint', endpoint)
+      .tag('chainId', chainId.toString())
+      .intField('value', isUp ? 1 : 0);
+
+    this.writePoint(point);
   }
 
-  setExplorerStatus(endpoint: string, isUp: boolean, isMainnet: boolean = true): void {
-    const networkId = isMainnet ? '50' : '51';
-    this.explorerStatus.labels(endpoint, networkId).set(isUp ? 1 : 0);
+  /**
+   * Record explorer status
+   * @param endpoint Explorer URL
+   * @param isUp Whether the explorer is up
+   * @param chainId Chain ID
+   */
+  setExplorerStatus(endpoint: string, isUp: boolean, chainId: number = 50): void {
+    const point = new Point('explorer_status')
+      .tag('endpoint', endpoint)
+      .tag('chainId', chainId.toString())
+      .intField('value', isUp ? 1 : 0);
+
+    this.writePoint(point);
   }
 
-  setFaucetStatus(endpoint: string, isUp: boolean, isMainnet: boolean = true): void {
-    const networkId = isMainnet ? '50' : '51';
-    this.faucetStatus.labels(endpoint, networkId).set(isUp ? 1 : 0);
+  /**
+   * Record faucet status
+   * @param endpoint Faucet URL
+   * @param isUp Whether the faucet is up
+   * @param chainId Chain ID
+   */
+  setFaucetStatus(endpoint: string, isUp: boolean, chainId: number = 50): void {
+    const point = new Point('faucet_status')
+      .tag('endpoint', endpoint)
+      .tag('chainId', chainId.toString())
+      .intField('value', isUp ? 1 : 0);
+
+    this.writePoint(point);
   }
 
-  setBlockTime(seconds: number, network = '50'): void {
-    this.blockTime.labels(network).set(seconds);
+  /**
+   * Record block time
+   * @param seconds Block time in seconds
+   * @param chainId Chain ID
+   */
+  setBlockTime(seconds: number, chainId: number = 50): void {
+    const point = new Point('block_time').tag('chainId', chainId.toString()).floatField('value', seconds);
+
+    this.writePoint(point);
   }
 
-  incrementAlertCount(type: string, component: string, isMainnet: boolean = true): void {
-    const networkId = isMainnet ? '50' : '51';
-    this.alertCount.labels(type, component, networkId).inc();
+  /**
+   * Increment alert count
+   * @param type Alert type
+   * @param component Component that triggered the alert
+   * @param chainId Chain ID
+   */
+  incrementAlertCount(type: string, component: string, chainId: number = 50): void {
+    const point = new Point('alert_count')
+      .tag('type', type)
+      .tag('component', component)
+      .tag('chainId', chainId.toString())
+      .intField('value', 1);
+
+    this.writePoint(point);
   }
 }
