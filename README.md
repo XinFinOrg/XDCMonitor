@@ -84,14 +84,7 @@ A comprehensive Node.js-based monitoring system for the XDC Network. This applic
 The project uses environment variables for configuration. Create a `.env` file in the project root with the following variables:
 
 ```
-# Primary RPC endpoint
-RPC_URL=https://rpc.xinfin.network    # Mainnet
-# RPC_URL=http://157.173.195.189:8555  # Testnet
-CHAIN_ID=50
 SCAN_INTERVAL=15
-
-# WebSocket URL (if available)
-WS_URL=wss://ws.xinfin.network
 
 # Monitoring configuration
 ENABLE_RPC_MONITORING=true
@@ -108,15 +101,8 @@ NOTIFICATION_WEBHOOK_URL=
 TELEGRAM_BOT_TOKEN="your-telegram-bot-token-here"
 TELEGRAM_CHAT_ID="your-telegram-chat-id-here"
 
-# Metrics configuration
-METRICS_PORT=9090
-
-
 # Logging configuration
 LOG_LEVEL=debug
-
-# Multi-RPC monitoring
-ENABLE_MULTI_RPC=true
 
 # InfluxDB Configuration
 INFLUXDB_URL=http://localhost:8086
@@ -170,7 +156,6 @@ docker-compose up -d grafana
 - **RPC Status**: `/api/monitoring/rpc-status` - Status of all RPC endpoints
 - **WebSocket Status**: `/api/monitoring/websocket-status` - Status of WebSocket connections
 - **Overall Status**: `/api/monitoring/status` - Combined status of all monitoring systems
-- **Metrics**: `/metrics` - Prometheus-compatible metrics endpoint
 - **Notifications Test**: `/api/notifications/test` - Test the notification system
 - **Telegram Webhook**: `/api/notifications/telegram` - Endpoint for Grafana to send alerts
 
@@ -187,6 +172,7 @@ The application stores the following metrics in InfluxDB:
 
 - `block_height` - Current block height, tagged with `chainId` and `endpoint`
 - `transaction_count` - Transaction counts by status, tagged with `status` and `chainId`
+- `transactions_per_block` - Transactions per block, tagged with `status`, `block_number`, and `chainId`
 - `rpc_latency` - Response time of RPC endpoints in ms, tagged with `endpoint` and `chainId`
 - `rpc_status` - Status of RPC endpoints (1=up, 0=down), tagged with `endpoint` and `chainId`
 - `websocket_status` - Status of WebSocket endpoints (1=up, 0=down), tagged with `endpoint` and `chainId`
@@ -215,11 +201,23 @@ The dashboards display alerts in various panels:
 - `src/config/` - Configuration management
 - `src/models/` - Data structures and interfaces
 - `src/monitoring/` - Monitoring services
-- `src/metrics/` - Prometheus metrics collection
+- `src/metrics/` - InfluxDB metrics collection
 
-## Grafana Integration
+## InfluxDB and Grafana Integration
 
-For Grafana integration, a data source should be configured pointing to the Prometheus server.
+The project uses InfluxDB for storing metrics and Grafana for visualization. The integration is configured automatically when you start the Docker containers.
+
+### InfluxDB Configuration
+
+The InfluxDB configuration is stored in the `.env` file:
+
+```
+INFLUXDB_TOKEN=your-token-here
+INFLUXDB_ORG=xdc
+INFLUXDB_BUCKET=xdc_metrics
+INFLUXDB_ADMIN_USER=admin
+INFLUXDB_ADMIN_PASSWORD=secure-password
+```
 
 ### Managing Grafana Configurations
 
@@ -259,7 +257,7 @@ This approach allows:
 
 The Grafana dashboards are automatically provisioned when you start the containers. The dashboards and datasources are configured in the `grafana_config/` directory.
 
-1. Login to Grafana at http://localhost:3100 (default credentials from your .env file)
+1. Login to Grafana at http://localhost:3001 (default credentials from your .env file)
 2. You should see the XDC Network dashboards already available
 3. Explore the "XDC Network Unified Dashboard" and "XDC Apothem Testnet Monitoring" dashboards
 
@@ -267,10 +265,21 @@ The Grafana dashboards are automatically provisioned when you start the containe
 
 Grafana alerts are configured to use the NestJS backend API for sending notifications:
 
-1. The alerts are defined in `grafana_data/provisioning/alerting/rules.yaml`
+1. The alerts are defined in `grafana_config/provisioning/alerting/rules.yaml`
 2. Notifications are sent via webhook to the NestJS backend API endpoint
 3. The NestJS backend handles sending notifications to Telegram
 4. This approach keeps Telegram credentials securely in the NestJS backend only
+
+### Troubleshooting Grafana Datasource Issues
+
+If your Grafana dashboards show "No Data," check the following:
+
+1. **InfluxDB Token**: Make sure the token in your `.env` file is correct and doesn't have any special characters issues
+2. **Datasource UID**: Ensure that the InfluxDB datasource in `grafana_config/provisioning/datasources/influxdb.yaml` has the `uid: influxdb` field properly set
+3. **Restart Grafana**: After making changes, restart Grafana with `./run.sh restart grafana`
+4. **Check Network**: Ensure that InfluxDB is running and accessible from Grafana container
+
+If you're seeing issues with the token being truncated in the YAML file, check the `run.sh` script and use the `./run.sh grafana-import` and `./run.sh grafana-export` commands to properly handle special characters.
 
 ### Configured Alert Rules
 
@@ -378,14 +387,14 @@ chmod +x run.sh
 # Show available commands
 ./run.sh help
 
-# Start the complete stack (app + Prometheus + Grafana)
+# Start the complete stack
 ./run.sh up
 
 # View logs
 ./run.sh logs
 
-# Clear prometheus data
-./run.sh clear-prometheus
+# Clear influxdb data
+./run.sh clear-influxdb
 
 # Rebuild containers (after code changes)
 ./run.sh rebuild
@@ -424,15 +433,16 @@ You can also use Docker Compose commands directly:
 
 ### Data Persistence
 
-Prometheus and Grafana data are stored in local directories for persistence and easy access:
+InfluxDB and Grafana data are stored in local directories for persistence and easy access:
 
+- InfluxDB Data: `./influxdb_data/`
 - Grafana Data: `./grafana_data/`
 
 ### Accessing Services
 
 - **XDC Monitor API**: http://localhost:3000
 - **InfluxDB Interface**: http://localhost:8086 (credentials from .env file)
-- **Grafana**: http://localhost:3100 (credentials from .env file)
+- **Grafana**: http://localhost:3001 (credentials from .env file)
 
 ## Contributing
 
@@ -448,7 +458,7 @@ This project follows secure practices for managing sensitive credentials:
 
 ### How Credentials Are Handled
 
-1. **Environment Variables**: All sensitive credentials (like Telegram bot tokens) are stored in the `.env` file, which is excluded from Git.
+1. **Environment Variables**: All sensitive credentials (like Telegram bot tokens and InfluxDB tokens) are stored in the `.env` file, which is excluded from Git.
 
 2. **Centralized Credential Storage**: Telegram credentials are only stored in the NestJS backend's environment, not in Grafana configuration.
 
@@ -463,14 +473,15 @@ The project is set up so you can:
 
 #### What's Safe to Commit:
 
-- `grafana_data/provisioning/dashboards/*.yaml` - Dashboard configurations
-- `grafana_data/provisioning/datasources/*.yaml` - Data source configurations
-- `grafana_data/provisioning/plugins/*.yaml` - Plugin configurations
-- `grafana_data/provisioning/alerting/*.yaml` - Alert configuration (webhook URLs only, no credentials)
+- `grafana_config/provisioning/dashboards/*.yaml` - Dashboard configurations
+- `grafana_config/provisioning/datasources/*.yaml` - Data source configurations (with token placeholders)
+- `grafana_config/provisioning/plugins/*.yaml` - Plugin configurations
+- `grafana_config/provisioning/alerting/*.yaml` - Alert configuration (webhook URLs only, no credentials)
 
 #### What's Excluded from Git:
 
 - `.env` file with sensitive credentials
+- `grafana_data/` directory with runtime data
 
 ## Setup Instructions
 
@@ -486,7 +497,7 @@ The project is set up so you can:
 docker-compose up -d
 ```
 
-3. Access the Grafana dashboard at http://localhost:3100 (default credentials: admin/Admin@123456@789)
+3. Access the Grafana dashboard at http://localhost:3001 (default credentials: admin/Admin@123456@789)
 
 ## Updating Telegram Credentials
 
@@ -544,4 +555,4 @@ cd XDCMonitor
 docker-compose up -d
 ```
 
-3. Access the Grafana dashboard at http://localhost:3100 (default credentials: admin/Admin@123456@789)
+3. Access the Grafana dashboard at http://localhost:3001 (default credentials: admin/Admin@123456@789)

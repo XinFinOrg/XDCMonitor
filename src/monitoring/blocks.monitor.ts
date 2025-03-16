@@ -16,25 +16,12 @@ interface RpcBlockInfo {
 @Injectable()
 export class BlocksMonitorService implements OnModuleInit {
   private readonly logger = new Logger(BlocksMonitorService.name);
-  private lastBlockTime: number = 0;
   private blockInterval: NodeJS.Timeout;
   private lastBlockNumber: number = 0;
-  private lastRpcResponseTime: number = 0;
   private rpcBlockInfo: Map<string, RpcBlockInfo> = new Map();
 
-  // Replace the single timestamp with network-specific timestamps
-  private lastBlockTimestampMainnet: number = 0;
-  private lastBlockTimestampTestnet: number = 0;
   private lastHighestBlockMainnet: number = 0;
   private lastHighestBlockTestnet: number = 0;
-
-  // For backward compatibility
-  private get lastBlockTimestamp(): number {
-    return this.lastBlockTimestampMainnet;
-  }
-  private set lastBlockTimestamp(value: number) {
-    this.lastBlockTimestampMainnet = value;
-  }
 
   constructor(
     private readonly blockchainService: BlockchainService,
@@ -151,53 +138,6 @@ export class BlocksMonitorService implements OnModuleInit {
 
       this.logger.debug(`Successfully monitored ${validResults.length} out of ${activeEndpoints.length} endpoints`);
 
-      // Process active provider's network for transaction processing (keep existing logic)
-      const activeProvider = this.blockchainService.getActiveProvider();
-      const activeChainId = activeProvider.endpoint.chainId;
-      const activeNetworkResults = validResults.filter(r => {
-        const endpoint = activeEndpoints.find(e => e.url === r.endpoint);
-        return endpoint && endpoint.chainId === activeChainId;
-      });
-
-      if (activeNetworkResults.length > 0) {
-        // Get the highest block number among active network endpoints
-        const blockNumbers = activeNetworkResults.map(r => r.blockNumber);
-        const highestBlockNumber = Math.max(...blockNumbers);
-
-        // Only process new blocks we haven't seen before
-        if (highestBlockNumber > this.lastBlockNumber) {
-          this.logger.log(
-            `New block detected on chainId ${activeChainId}: #${highestBlockNumber} (previous: #${this.lastBlockNumber})`,
-          );
-
-          // Only fetch the full block if we need transaction details
-          try {
-            const fullBlock = await this.blockchainService.getBlockByNumber(highestBlockNumber);
-            await this.processBlock(fullBlock, activeChainId.toString());
-          } catch (error) {
-            this.logger.error(`Error fetching full block data for #${highestBlockNumber}: ${error.message}`);
-          }
-
-          // Update last seen block number
-          this.lastBlockNumber = highestBlockNumber;
-        } else {
-          this.logger.debug(`No new blocks since last check. Current highest block: #${highestBlockNumber}`);
-        }
-
-        // This block time calculation is kept for backward compatibility
-        if (this.lastBlockTimestamp > 0) {
-          const blockTime = Math.floor((Date.now() - this.lastBlockTimestamp) / 1000);
-          this.metricsService.setBlockTime(blockTime, activeChainId);
-
-          if (blockTime > this.configService.blockTimeThreshold) {
-            this.logger.warn(
-              `Slow block time detected! Time since last block: ${blockTime}s - Threshold: ${this.configService.blockTimeThreshold}s`,
-            );
-          }
-        }
-        this.lastBlockTimestamp = Date.now();
-      }
-
       // Group results by chainId for separate reporting/alerting
       const mainnetResults = validResults.filter(r => {
         const endpoint = activeEndpoints.find(e => e.url === r.endpoint);
@@ -222,31 +162,35 @@ export class BlocksMonitorService implements OnModuleInit {
             `New Mainnet block detected: #${highestMainnetBlock} (previous: #${this.lastHighestBlockMainnet})`,
           );
 
-          // Calculate and record block time for Mainnet
-          if (this.lastBlockTimestampMainnet > 0) {
-            const mainnetBlockTime = Math.floor((Date.now() - this.lastBlockTimestampMainnet) / 1000);
-            this.metricsService.setBlockTime(mainnetBlockTime, 50); // 50 = Mainnet
-
-            this.logger.debug(`Mainnet block time: ${mainnetBlockTime}s`);
-
-            if (mainnetBlockTime > this.configService.blockTimeThreshold) {
-              this.logger.warn(
-                `Slow Mainnet block time detected! Time since last block: ${mainnetBlockTime}s - Threshold: ${this.configService.blockTimeThreshold}s`,
-              );
-            }
-          }
-
-          // Process the full Mainnet block for transaction details
           try {
-            const fullMainnetBlock = await this.blockchainService.getBlockByNumber(highestMainnetBlock);
-            await this.processBlock(fullMainnetBlock, '50'); // Explicitly use chainId '50' for Mainnet
+            // Fetch the full block with timestamp
+            const fullMainnetBlock = await this.blockchainService.getBlockByNumberForChain(highestMainnetBlock, 50);
+            const previousMainnetBlock = await this.blockchainService.getBlockByNumberForChain(
+              highestMainnetBlock - 1,
+              50,
+            );
+
+            if (previousMainnetBlock) {
+              const mainnetBlockTime = fullMainnetBlock.timestamp - previousMainnetBlock.timestamp;
+              this.metricsService.setBlockTime(mainnetBlockTime, 50); // 50 = Mainnet
+
+              this.logger.debug(`Mainnet block time based on block timestamps: ${mainnetBlockTime}s`);
+
+              if (mainnetBlockTime > this.configService.blockTimeThreshold) {
+                this.logger.warn(
+                  `Slow Mainnet block time detected! Time between blocks: ${mainnetBlockTime}s - Threshold: ${this.configService.blockTimeThreshold}s`,
+                );
+              }
+
+              this.logger.debug(`Updated Mainnet block time metric: ${mainnetBlockTime}s for chainId 50`);
+            }
+
+            await this.processBlock(fullMainnetBlock, '50');
             this.logger.debug(`Processed Mainnet block #${highestMainnetBlock} transactions`);
           } catch (error) {
-            this.logger.error(`Error fetching full Mainnet block data for #${highestMainnetBlock}: ${error.message}`);
+            this.logger.error(`Error processing Mainnet block #${highestMainnetBlock}: ${error.message}`);
           }
 
-          // Update timestamp and block number
-          this.lastBlockTimestampMainnet = Date.now();
           this.lastHighestBlockMainnet = highestMainnetBlock;
         }
       }
@@ -256,37 +200,39 @@ export class BlocksMonitorService implements OnModuleInit {
         const testnetBlockNumbers = testnetResults.map(r => r.blockNumber);
         const highestTestnetBlock = Math.max(...testnetBlockNumbers);
 
-        // Check if we've seen a new block
         if (highestTestnetBlock > this.lastHighestBlockTestnet) {
           this.logger.debug(
             `New Testnet block detected: #${highestTestnetBlock} (previous: #${this.lastHighestBlockTestnet})`,
           );
 
-          // Calculate and record block time for Testnet
-          if (this.lastBlockTimestampTestnet > 0) {
-            const testnetBlockTime = Math.floor((Date.now() - this.lastBlockTimestampTestnet) / 1000);
-            this.metricsService.setBlockTime(testnetBlockTime, 51); // 51 = Testnet
-
-            this.logger.debug(`Testnet block time: ${testnetBlockTime}s`);
-
-            if (testnetBlockTime > this.configService.blockTimeThreshold) {
-              this.logger.warn(
-                `Slow Testnet block time detected! Time since last block: ${testnetBlockTime}s - Threshold: ${this.configService.blockTimeThreshold}s`,
-              );
-            }
-          }
-
-          // Process the full Testnet block for transaction details
           try {
-            const fullTestnetBlock = await this.blockchainService.getBlockByNumber(highestTestnetBlock);
-            await this.processBlock(fullTestnetBlock, '51'); // Explicitly use chainId '51' for Testnet
+            const fullTestnetBlock = await this.blockchainService.getBlockByNumberForChain(highestTestnetBlock, 51);
+            const previousTestnetBlock = await this.blockchainService.getBlockByNumberForChain(
+              highestTestnetBlock - 1,
+              51,
+            );
+
+            if (previousTestnetBlock) {
+              const testnetBlockTime = fullTestnetBlock.timestamp - previousTestnetBlock.timestamp;
+              this.metricsService.setBlockTime(testnetBlockTime, 51);
+
+              this.logger.debug(`Testnet block time based on block timestamps: ${testnetBlockTime}s`);
+
+              if (testnetBlockTime > this.configService.blockTimeThreshold) {
+                this.logger.warn(
+                  `Slow Testnet block time detected! Time between blocks: ${testnetBlockTime}s - Threshold: ${this.configService.blockTimeThreshold}s`,
+                );
+              }
+
+              this.logger.debug(`Updated Testnet block time metric: ${testnetBlockTime}s for chainId 51`);
+            }
+
+            await this.processBlock(fullTestnetBlock, '51');
             this.logger.debug(`Processed Testnet block #${highestTestnetBlock} transactions`);
           } catch (error) {
-            this.logger.error(`Error fetching full Testnet block data for #${highestTestnetBlock}: ${error.message}`);
+            this.logger.error(`Error processing Testnet block #${highestTestnetBlock}: ${error.message}`);
           }
 
-          // Update timestamp and block number
-          this.lastBlockTimestampTestnet = Date.now();
           this.lastHighestBlockTestnet = highestTestnetBlock;
         }
       }
@@ -326,89 +272,57 @@ export class BlocksMonitorService implements OnModuleInit {
     }
   }
 
-  private async processBlock(block: BlockInfo, networkId: string): Promise<void> {
-    this.logger.log(`Processing block #${block.number}: ${block.transactions.length} transactions`);
+  /**
+   * Process a block from either Mainnet or Testnet
+   */
+  async processBlock(block: BlockInfo, chainId: string): Promise<void> {
+    try {
+      this.logger.debug(`Processing block #${block.number} (chainId: ${chainId})`);
 
-    // Process transactions in the block
-    let confirmedTxCount = 0;
-    let failedTxCount = 0;
+      const parsedChainId = parseInt(chainId, 10);
+      const chainName = parsedChainId === 50 ? 'Mainnet' : parsedChainId === 51 ? 'Testnet' : 'Unknown';
 
-    if (block.transactions && block.transactions.length > 0) {
-      // Fetch detailed transaction information to count successful and failed transactions
-      try {
-        // For larger blocks, we might want to limit this processing
-        // If there are too many transactions, we'll process a subset
-        const maxTxToProcess = Math.min(block.transactions.length, 100);
+      let confirmedTxCount = 0;
+      let failedTxCount = 0;
 
-        // Process transactions
-        for (let i = 0; i < maxTxToProcess; i++) {
-          const txHash = block.transactions[i];
-          const tx = await this.blockchainService.getTransaction(txHash);
-          const result = tx ? await this.processTransaction(tx, networkId) : null;
+      if (block.transactions && block.transactions.length > 0) {
+        try {
+          for (let i = 0; i < block.transactions.length; i++) {
+            const txHash = block.transactions[i];
+            try {
+              const tx = await this.blockchainService.getTransaction(txHash);
 
-          if (result) {
-            if (result.status === TransactionStatus.CONFIRMED) {
-              confirmedTxCount++;
-            } else if (result.status === TransactionStatus.FAILED) {
-              failedTxCount++;
+              if (tx) {
+                if (tx.status === TransactionStatus.CONFIRMED) {
+                  confirmedTxCount++;
+                } else if (tx.status === TransactionStatus.FAILED) {
+                  failedTxCount++;
+                } else if (tx.status === TransactionStatus.PENDING) {
+                }
+              }
+            } catch (txError) {
+              this.logger.error(`Error processing transaction ${txHash}: ${txError.message}`);
             }
           }
+        } catch (error) {
+          this.logger.error(`Error processing transactions for block #${block.number}: ${error.message}`);
+          confirmedTxCount = block.transactions.length;
         }
-
-        // If we didn't process all transactions, estimate the rest based on the processed ones
-        if (maxTxToProcess < block.transactions.length) {
-          const remainingTx = block.transactions.length - maxTxToProcess;
-          const confirmedRatio = confirmedTxCount / (confirmedTxCount + failedTxCount || 1);
-          const estimatedAdditionalConfirmed = Math.round(remainingTx * confirmedRatio);
-          const estimatedAdditionalFailed = remainingTx - estimatedAdditionalConfirmed;
-
-          confirmedTxCount += estimatedAdditionalConfirmed;
-          failedTxCount += estimatedAdditionalFailed;
-
-          this.logger.debug(
-            `Estimated additional transactions for large block: ${estimatedAdditionalConfirmed} confirmed, ${estimatedAdditionalFailed} failed`,
-          );
-        }
-
-        // Always set metrics, even if counts are zero
-        this.metricsService.setTransactionsPerBlock(block.number, confirmedTxCount, failedTxCount, networkId);
-
-        this.logger.log(`Block #${block.number} transactions: ${confirmedTxCount} confirmed, ${failedTxCount} failed`);
-      } catch (error) {
-        this.logger.error(`Error processing transactions for block #${block.number}: ${error.message}`);
       }
-    } else {
-      // Even for blocks with no transactions, set the metrics
-      this.metricsService.setTransactionsPerBlock(block.number, 0, 0, networkId);
+
+      this.metricsService.setTransactionsPerBlock(
+        block.number,
+        block.transactions.length,
+        confirmedTxCount,
+        failedTxCount,
+        chainId,
+      );
+      this.logger.debug(
+        `Block #${block.number} on ${chainName} (chainId ${chainId}): ${confirmedTxCount} confirmed, ${failedTxCount} failed transactions`,
+      );
+    } catch (error) {
+      this.logger.error(`Error processing block: ${error.message}`);
     }
-
-    // Increment transaction counter metrics
-    if (confirmedTxCount > 0) {
-      this.metricsService.incrementTransactionCount('confirmed', networkId);
-    }
-
-    if (failedTxCount > 0) {
-      this.metricsService.incrementTransactionCount('failed', networkId);
-    }
-  }
-
-  private async processTransaction(tx: TransactionInfo, networkId: string): Promise<TransactionInfo> {
-    this.logger.debug(`Processing transaction ${tx.hash}`);
-
-    // Track transaction in metrics
-    switch (tx.status) {
-      case TransactionStatus.CONFIRMED:
-        this.metricsService.incrementTransactionCount('confirmed', networkId);
-        break;
-      case TransactionStatus.PENDING:
-        this.metricsService.incrementTransactionCount('pending', networkId);
-        break;
-      case TransactionStatus.FAILED:
-        this.metricsService.incrementTransactionCount('failed', networkId);
-        break;
-    }
-
-    return tx;
   }
 
   isBlockMonitoringEnabled(): boolean {

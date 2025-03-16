@@ -20,8 +20,18 @@ export class ConfigService {
     this.envConfig = dotenv.parse(fs.existsSync(envFile) ? fs.readFileSync(envFile) : '');
   }
 
-  get rpcUrl(): string {
-    return this.get('RPC_URL') || 'https://rpc.xinfin.network';
+  /**
+   * Get the primary RPC URL for a specific chain ID
+   */
+  getPrimaryRpcUrl(chainId: number): string {
+    switch (chainId) {
+      case 50:
+        return 'https://rpc.xinfin.network';
+      case 51:
+        return 'https://rpc.apothem.network';
+      default:
+        return 'https://rpc.xinfin.network';
+    }
   }
 
   get rpcEndpoints(): RpcEndpoint[] {
@@ -116,20 +126,7 @@ export class ConfigService {
       addEndpoint('wss://eaws.xinfin.network', 'XDC Mainnet Archive eWebSocket', 50);
     }
 
-    const customWsUrl = this.get('WS_URL');
-    if (customWsUrl) {
-      addEndpoint(customWsUrl, 'Custom WebSocket', 50);
-    }
-
     return endpoints;
-  }
-
-  get wsUrl(): string | undefined {
-    return this.get('WS_URL');
-  }
-
-  get chainId(): number {
-    return parseInt(this.get('CHAIN_ID') || '50', 10);
   }
 
   get blocksToScan(): number {
@@ -142,10 +139,6 @@ export class ConfigService {
 
   get enableRpcMonitoring(): boolean {
     return this.get('ENABLE_RPC_MONITORING') === 'true';
-  }
-
-  get enableMultiRpc(): boolean {
-    return this.get('ENABLE_MULTI_RPC') === 'true';
   }
 
   get enablePortMonitoring(): boolean {
@@ -179,10 +172,6 @@ export class ConfigService {
 
   get telegramChatId(): string | undefined {
     return this.get('TELEGRAM_CHAT_ID');
-  }
-
-  get metricsPort(): number {
-    return parseInt(this.get('METRICS_PORT') || '9090', 10);
   }
 
   get influxDbUrl(): string {

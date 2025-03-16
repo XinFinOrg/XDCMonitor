@@ -18,65 +18,31 @@ interface WsProviderWithMetadata {
 @Injectable()
 export class BlockchainService {
   private readonly logger = new Logger(BlockchainService.name);
-  private primaryProvider: ethers.JsonRpcProvider;
   private providers: Map<string, ProviderWithMetadata> = new Map();
   private wsProviders: Map<string, WsProviderWithMetadata> = new Map();
   private activeProvider: ProviderWithMetadata;
+  private readonly MAX_FAILURES = 3;
 
   constructor(private readonly configService: ConfigService) {
-    // Initialize the primary provider
-    this.primaryProvider = new ethers.JsonRpcProvider(this.configService.rpcUrl);
+    // Initialize all providers (always use multi-RPC functionality)
+    this.logger.log('Initializing all RPC and WebSocket providers...');
+    this.initializeProviders();
 
-    // Initialize all RPC providers if multi-RPC is enabled
-    if (this.configService.enableMultiRpc) {
-      this.initializeProviders();
+    // Set the active provider to the Mainnet primary one initially
+    const mainnetPrimaryUrl = this.configService.getPrimaryRpcUrl(50);
+    const providerData = this.providers.get(mainnetPrimaryUrl);
+
+    if (providerData) {
+      this.activeProvider = providerData;
+      this.logger.log(`Set active provider to ${providerData.endpoint.name} (${mainnetPrimaryUrl})`);
     } else {
-      this.logger.log('Multi-RPC monitoring is disabled. Using primary RPC endpoint only.');
-
-      // Add only the primary provider to the map
-      this.providers.set(this.configService.rpcUrl, {
-        provider: this.primaryProvider,
-        endpoint: {
-          url: this.configService.rpcUrl,
-          name: 'Primary RPC',
-          type: 'rpc',
-          chainId: 50,
-          status: 'up',
-        },
-      });
-
-      // Initialize WebSocket provider if configured
-      if (this.configService.wsUrl) {
-        try {
-          const wsProvider = new ethers.WebSocketProvider(this.configService.wsUrl);
-          this.wsProviders.set(this.configService.wsUrl, {
-            provider: wsProvider,
-            endpoint: {
-              url: this.configService.wsUrl,
-              name: 'Primary WebSocket',
-              type: 'websocket',
-              chainId: 50,
-              status: 'up',
-            },
-          });
-          this.logger.log(`WebSocket provider initialized: ${this.configService.wsUrl}`);
-        } catch (error) {
-          this.logger.error(`Failed to initialize WebSocket provider: ${error.message}`);
-        }
-      }
+      // Fallback to first available provider if primary not found
+      const firstProvider = Array.from(this.providers.values())[0];
+      this.activeProvider = firstProvider;
+      this.logger.log(
+        `Fallback: Set active provider to ${firstProvider.endpoint.name} (${firstProvider.endpoint.url})`,
+      );
     }
-
-    // Set the active provider to the primary one initially
-    this.activeProvider = {
-      provider: this.primaryProvider,
-      endpoint: {
-        url: this.configService.rpcUrl,
-        name: 'Primary RPC',
-        type: 'rpc',
-        chainId: 50,
-        status: 'up',
-      },
-    };
   }
 
   private async initializeProviders(): Promise<void> {
@@ -260,6 +226,7 @@ export class BlockchainService {
       }
     }
 
+    this.logger.warn(`No more available providers to try.`);
     return false;
   }
 
@@ -292,35 +259,16 @@ export class BlockchainService {
   }
 
   async getBlockByNumber(blockNumber: number): Promise<BlockInfo> {
-    try {
-      const block = await this.activeProvider.provider.getBlock(blockNumber, true);
-
-      if (!block) {
-        throw new Error(`Block #${blockNumber} not found`);
-      }
-
-      return {
-        number: block.number,
-        hash: block.hash,
-        timestamp: block.timestamp,
-        transactions: block.transactions.map(tx => (typeof tx === 'string' ? tx : (tx as { hash: string }).hash)),
-        gasUsed: block.gasUsed,
-        gasLimit: block.gasLimit,
-        parentHash: block.parentHash,
-        miner: block.miner,
-      };
-    } catch (error) {
-      this.logger.error(`Error getting block #${blockNumber}: ${error.message}`);
-
-      if (await this.fallbackToNextAvailableProvider()) {
-        return this.getBlockByNumber(blockNumber);
-      }
-
-      throw error;
-    }
+    const chainId = this.activeProvider.endpoint.chainId;
+    return this.getBlockByNumberForChain(blockNumber, chainId);
   }
 
-  async getBalance(address: string): Promise<AccountBalance> {
+  async getBalance(address: string, failedCount: number = 0): Promise<AccountBalance> {
+    if (failedCount >= this.MAX_FAILURES) {
+      this.logger.warn(`Maximum failure count (${this.MAX_FAILURES}) reached for getBalance. Stopping attempts.`);
+      throw new Error(`Failed to get balance for ${address} after ${failedCount} attempts`);
+    }
+
     try {
       const balance = await this.activeProvider.provider.getBalance(address);
       const blockNumber = await this.activeProvider.provider.getBlockNumber();
@@ -333,15 +281,20 @@ export class BlockchainService {
     } catch (error) {
       this.logger.error(`Error getting balance for ${address}: ${error.message}`);
 
-      if (await this.fallbackToNextAvailableProvider()) {
-        return this.getBalance(address);
+      if (this.isConnectionError(error) && (await this.fallbackToNextAvailableProvider())) {
+        return this.getBalance(address, failedCount + 1);
       }
 
       throw error;
     }
   }
 
-  async getTransaction(hash: string): Promise<TransactionInfo> {
+  async getTransaction(hash: string, failedCount: number = 0): Promise<TransactionInfo> {
+    if (failedCount >= this.MAX_FAILURES) {
+      this.logger.warn(`Maximum failure count (${this.MAX_FAILURES}) reached for getTransaction. Stopping attempts.`);
+      throw new Error(`Failed to get transaction ${hash} after ${failedCount} attempts`);
+    }
+
     try {
       const tx = await this.activeProvider.provider.getTransaction(hash);
 
@@ -376,50 +329,82 @@ export class BlockchainService {
     } catch (error) {
       this.logger.error(`Error getting transaction ${hash}: ${error.message}`);
 
-      if (await this.fallbackToNextAvailableProvider()) {
-        return this.getTransaction(hash);
+      if (!error.message.includes('not found') && (await this.fallbackToNextAvailableProvider())) {
+        return this.getTransaction(hash, failedCount + 1);
       }
 
       throw error;
     }
   }
 
-  async getTransactionCount(address: string): Promise<number> {
+  async getTransactionCount(address: string, failedCount: number = 0): Promise<number> {
+    if (failedCount >= this.MAX_FAILURES) {
+      this.logger.warn(
+        `Maximum failure count (${this.MAX_FAILURES}) reached for getTransactionCount. Stopping attempts.`,
+      );
+      throw new Error(`Failed to get transaction count for ${address} after ${failedCount} attempts`);
+    }
+
     try {
       return await this.activeProvider.provider.getTransactionCount(address);
     } catch (error) {
       this.logger.error(`Error getting transaction count for ${address}: ${error.message}`);
 
-      if (await this.fallbackToNextAvailableProvider()) {
-        return this.getTransactionCount(address);
+      if (this.isConnectionError(error) && (await this.fallbackToNextAvailableProvider())) {
+        return this.getTransactionCount(address, failedCount + 1);
       }
 
       throw error;
     }
   }
 
-  async getCode(address: string): Promise<string> {
+  private isConnectionError(error: any): boolean {
+    return (
+      error &&
+      (error.code === 'ETIMEDOUT' ||
+        error.code === 'ECONNREFUSED' ||
+        error.code === 'ECONNRESET' ||
+        error.code === 'ENOTFOUND' ||
+        error.code === 'ENETUNREACH' ||
+        error.message?.includes('timeout') ||
+        error.message?.includes('connection') ||
+        error.message?.includes('network') ||
+        error.message?.includes('disconnected'))
+    );
+  }
+
+  async getCode(address: string, failedCount: number = 0): Promise<string> {
+    if (failedCount >= this.MAX_FAILURES) {
+      this.logger.warn(`Maximum failure count (${this.MAX_FAILURES}) reached for getCode. Stopping attempts.`);
+      throw new Error(`Failed to get code for ${address} after ${failedCount} attempts`);
+    }
+
     try {
       return await this.activeProvider.provider.getCode(address);
     } catch (error) {
       this.logger.error(`Error getting code for ${address}: ${error.message}`);
 
-      if (await this.fallbackToNextAvailableProvider()) {
-        return this.getCode(address);
+      if (this.isConnectionError(error) && (await this.fallbackToNextAvailableProvider())) {
+        return this.getCode(address, failedCount + 1);
       }
 
       throw error;
     }
   }
 
-  async getGasPrice(): Promise<ethers.BigNumberish> {
+  async getGasPrice(failedCount: number = 0): Promise<ethers.BigNumberish> {
+    if (failedCount >= this.MAX_FAILURES) {
+      this.logger.warn(`Maximum failure count (${this.MAX_FAILURES}) reached for getGasPrice. Stopping attempts.`);
+      throw new Error(`Failed to get gas price after ${failedCount} attempts`);
+    }
+
     try {
       return await this.activeProvider.provider.getFeeData().then(data => data.gasPrice);
     } catch (error) {
       this.logger.error(`Error getting gas price: ${error.message}`);
 
-      if (await this.fallbackToNextAvailableProvider()) {
-        return this.getGasPrice();
+      if (this.isConnectionError(error) && (await this.fallbackToNextAvailableProvider())) {
+        return this.getGasPrice(failedCount + 1);
       }
 
       throw error;
@@ -466,5 +451,65 @@ export class BlockchainService {
       }
     }
     return null;
+  }
+
+  /**
+   * Get a provider for a specific chainId
+   * @param chainId The chain ID (50 for Mainnet, 51 for Testnet)
+   * @returns A provider for the specified chain
+   */
+  getProviderForChainId(chainId: number): ProviderWithMetadata | null {
+    // First try to find the primary provider for this chain
+    const primaryUrl = this.configService.getPrimaryRpcUrl(chainId);
+    const primaryProvider = this.providers.get(primaryUrl);
+
+    if (primaryProvider && primaryProvider.provider) {
+      return primaryProvider;
+    }
+
+    // Otherwise, find any active provider for this chain
+    for (const [, providerData] of this.providers.entries()) {
+      if (providerData.endpoint.chainId === chainId && providerData.provider && providerData.endpoint.status === 'up') {
+        return providerData;
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Get a block by number from a specific chain
+   * @param blockNumber The block number to retrieve
+   * @param chainId The chain ID (50 for Mainnet, 51 for Testnet)
+   * @returns Block information
+   */
+  async getBlockByNumberForChain(blockNumber: number, chainId: number): Promise<BlockInfo> {
+    const providerData = this.getProviderForChainId(chainId);
+
+    if (!providerData || !providerData.provider) {
+      throw new Error(`No active provider found for chainId ${chainId}`);
+    }
+
+    try {
+      const block = await providerData.provider.getBlock(blockNumber, true);
+
+      if (!block) {
+        throw new Error(`Block #${blockNumber} not found on chainId ${chainId}`);
+      }
+
+      return {
+        number: block.number,
+        hash: block.hash,
+        timestamp: block.timestamp,
+        transactions: block.transactions.map(tx => (typeof tx === 'string' ? tx : (tx as { hash: string }).hash)),
+        gasUsed: block.gasUsed,
+        gasLimit: block.gasLimit,
+        parentHash: block.parentHash,
+        miner: block.miner,
+      };
+    } catch (error) {
+      this.logger.error(`Error getting block #${blockNumber} on chainId ${chainId}: ${error.message}`);
+      throw error;
+    }
   }
 }

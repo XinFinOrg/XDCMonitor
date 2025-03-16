@@ -46,8 +46,15 @@ case "$1" in
     echo "Waiting for InfluxDB to initialize (10 seconds)..."
     sleep 10
 
-    echo "Starting remaining services..."
-    docker-compose up -d
+    echo "Ensuring clean state for xdc-monitor..."
+    docker-compose stop xdc-monitor 2>/dev/null || true
+    docker-compose rm -f xdc-monitor 2>/dev/null || true
+
+    echo "Starting xdc-monitor with mounted code volume..."
+    docker-compose up -d xdc-monitor
+
+    echo "Starting Grafana..."
+    docker-compose up -d grafana
 
     echo ""
     echo "XDC Monitor is now running!"
@@ -99,6 +106,10 @@ case "$1" in
     echo "Waiting for InfluxDB to initialize (10 seconds)..."
     sleep 10
 
+    echo "Ensuring clean state for xdc-monitor..."
+    docker-compose stop xdc-monitor 2>/dev/null || true
+    docker-compose rm -f xdc-monitor 2>/dev/null || true
+
     echo "Building and starting xdc-monitor..."
     docker-compose up -d --build xdc-monitor
 
@@ -134,15 +145,24 @@ case "$1" in
     read -p "Clear metrics data? (y/n) " -n 1 -r
     echo
     if [[ $REPLY =~ ^[Yy]$ ]]; then
-      docker volume rm xdcmonitor_influxdb-storage 2>/dev/null || true
-      echo "InfluxDB data volume removed."
+      # Remove the local influxdb_data directory instead of the volume
+      echo "Removing influxdb_data directory..."
+      rm -rf ./influxdb_data/* 2>/dev/null || true
+      echo "InfluxDB data cleared."
     fi
 
     echo "Restarting InfluxDB..."
     # Fix permissions before starting
     ./run.sh fix-permissions
 
+    echo "Starting InfluxDB with initial setup..."
     docker-compose up -d influxdb
+
+    echo "Waiting for InfluxDB to initialize (10 seconds)..."
+    sleep 10
+
+    echo "InfluxDB has been reset and restarted."
+    echo "The bucket '${INFLUXDB_BUCKET}' should be automatically recreated."
     ;;
 
   fix-permissions)

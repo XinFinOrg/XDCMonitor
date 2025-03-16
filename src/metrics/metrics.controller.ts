@@ -2,9 +2,7 @@ import { Controller, Get, Header } from '@nestjs/common';
 import { MetricsService } from './metrics.service';
 
 /**
- * Controller for metrics endpoint.
- * Note: This endpoint is maintained for backward compatibility, but won't serve metrics
- * since we've migrated to InfluxDB push model instead of Prometheus pull model.
+ * Controller for regular /metrics endpoint (with api prefix applied by NestJS)
  */
 @Controller('metrics')
 export class MetricsController {
@@ -13,7 +11,7 @@ export class MetricsController {
   @Get()
   @Header('Content-Type', 'text/plain')
   async getMetrics(): Promise<string> {
-    // This now returns an empty string as metrics are pushed to InfluxDB directly
+    console.log('Metrics endpoint called');
     return this.metricsService.getMetrics();
   }
 }

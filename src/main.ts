@@ -18,8 +18,6 @@ async function bootstrap() {
   await app.listen(port, '0.0.0.0');
 
   logger.log(`XDC Monitor started on port ${port}`);
-  logger.log(`Monitoring RPC: ${configService.rpcUrl}`);
-  logger.log(`Chain ID: ${configService.chainId}`);
 }
 
 bootstrap().catch(err => {

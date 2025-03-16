@@ -34,6 +34,7 @@ services:
       - .env
     volumes:
       - ./logs:/app/logs:rw
+      - ./dist:/app/dist:ro
     environment:
       - NODE_ENV=production
       - INFLUXDB_URL=http://influxdb:8086

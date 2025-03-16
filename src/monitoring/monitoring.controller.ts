@@ -9,14 +9,6 @@ export class MonitoringController {
     private readonly blocksMonitorService: BlocksMonitorService,
   ) {}
 
-  @Get('rpc-status')
-  getRpcStatus() {
-    return {
-      rpcStatus: this.rpcMonitorService.getRpcStatus(),
-      rpcEndpoints: this.rpcMonitorService.getAllRpcStatuses(),
-    };
-  }
-
   @Get('websocket-status')
   getWebsocketStatus() {
     return {
@@ -77,28 +69,6 @@ export class MonitoringController {
     return {
       maxDifference,
       differences: differences.sort((a, b) => b.difference - a.difference),
-    };
-  }
-
-  @Get('status')
-  getStatus() {
-    return {
-      blockMonitoring: this.blocksMonitorService.getBlockMonitoringInfo(),
-      rpcMonitoringEnabled: true,
-      rpc: {
-        status: this.rpcMonitorService.getRpcStatus(),
-        endpoints: this.rpcMonitorService.getAllRpcStatuses(),
-      },
-      websocket: {
-        status: this.rpcMonitorService.getAnyWsStatus(),
-        endpoints: this.rpcMonitorService.getAllWsStatuses(),
-      },
-      explorer: {
-        endpoints: this.rpcMonitorService.getAllExplorerStatuses(),
-      },
-      faucet: {
-        endpoints: this.rpcMonitorService.getAllFaucetStatuses(),
-      },
     };
   }
 }

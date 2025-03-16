@@ -44,11 +44,11 @@ export class RpcMonitorService implements OnModuleInit {
 
     this.portInterval = setInterval(() => {
       this.monitorAllRpcPorts();
-    }, 120 * 1000);
+    }, 30 * 1000);
 
     this.servicesInterval = setInterval(() => {
       this.monitorAllServices();
-    }, 60 * 1000); // Check services every minute
+    }, 30 * 1000); // Check services every minute
 
     this.monitorAllRpcEndpoints();
     this.monitorAllServices();
@@ -88,22 +88,10 @@ export class RpcMonitorService implements OnModuleInit {
     let checkedEndpoints = 0;
     let upEndpoints = 0;
 
-    if (this.configService.enableMultiRpc) {
-      for (const endpoint of this.configService.rpcEndpoints) {
-        const status = await this.monitorRpcEndpoint(endpoint);
-        checkedEndpoints++;
-        if (status) upEndpoints++;
-      }
-    } else {
-      const primaryEndpoint: RpcEndpoint = {
-        url: this.configService.rpcUrl,
-        name: 'Primary RPC',
-        type: 'rpc',
-        chainId: 50,
-      };
-      const status = await this.monitorRpcEndpoint(primaryEndpoint);
-      checkedEndpoints = 1;
-      if (status) upEndpoints = 1;
+    for (const endpoint of this.configService.rpcEndpoints) {
+      const status = await this.monitorRpcEndpoint(endpoint);
+      checkedEndpoints++;
+      if (status) upEndpoints++;
     }
 
     const activeProvider = this.blockchainService.getActiveProvider();
@@ -119,7 +107,7 @@ export class RpcMonitorService implements OnModuleInit {
     try {
       this.logger.debug(`Checking RPC endpoint: ${endpoint.name} (${endpoint.url})`);
 
-      const startTime = Date.now();
+      const startTime = performance.now();
       const response = await axios.post(
         endpoint.url,
         {
@@ -134,23 +122,23 @@ export class RpcMonitorService implements OnModuleInit {
         },
       );
 
-      const elapsedTime = Date.now() - startTime;
+      const elapsedTime = performance.now() - startTime;
+
+      this.metricsService.recordRpcLatency(endpoint.url, elapsedTime, endpoint.chainId);
+
       const isSuccessful = response.status === 200 && response.data && response.data.result;
 
       if (isSuccessful) {
         this.logger.debug(`RPC endpoint ${endpoint.name} is UP (${elapsedTime}ms)`);
         this.rpcStatuses.set(endpoint.url, { status: 'up', latency: elapsedTime });
 
-        // Update metrics with chainId
         this.metricsService.setRpcStatus(endpoint.url, true, endpoint.chainId);
-        this.metricsService.recordRpcLatency(endpoint.url, elapsedTime, endpoint.chainId);
 
         return true;
       } else {
         this.logger.warn(`RPC endpoint ${endpoint.name} returned invalid response`);
         this.rpcStatuses.set(endpoint.url, { status: 'down', latency: elapsedTime });
 
-        // Update metrics with chainId
         this.metricsService.setRpcStatus(endpoint.url, false, endpoint.chainId);
 
         return false;
@@ -173,32 +161,13 @@ export class RpcMonitorService implements OnModuleInit {
 
     this.logger.debug('Checking all RPC ports...');
 
-    if (this.configService.enableMultiRpc) {
-      for (const endpoint of this.configService.rpcEndpoints) {
-        await this.monitorRpcPort(endpoint);
-      }
+    // Monitor all RPC endpoints regardless of enableMultiRpc setting
+    for (const endpoint of this.configService.rpcEndpoints) {
+      await this.monitorRpcPort(endpoint);
+    }
 
-      for (const endpoint of this.configService.wsEndpoints) {
-        await this.monitorWsPort(endpoint);
-      }
-    } else {
-      const primaryRpcEndpoint: RpcEndpoint = {
-        url: this.configService.rpcUrl,
-        name: 'Primary RPC',
-        type: 'rpc',
-        chainId: 50,
-      };
-      await this.monitorRpcPort(primaryRpcEndpoint);
-
-      if (this.configService.wsUrl) {
-        const primaryWsEndpoint: RpcEndpoint = {
-          url: this.configService.wsUrl,
-          name: 'Primary WebSocket',
-          type: 'websocket',
-          chainId: 50,
-        };
-        await this.monitorWsPort(primaryWsEndpoint);
-      }
+    for (const endpoint of this.configService.wsEndpoints) {
+      await this.monitorWsPort(endpoint);
     }
   }
 
@@ -237,7 +206,6 @@ export class RpcMonitorService implements OnModuleInit {
       if (!wsUrl.startsWith('wss://') && !wsUrl.startsWith('ws://')) {
         this.logger.warn(`Invalid WebSocket URL for ${endpoint.name}: ${wsUrl} - Must start with ws:// or wss://`);
         this.wsStatuses.set(endpoint.url, { status: 'down' });
-        // Update metrics with chainId
         this.metricsService.setWebsocketStatus(endpoint.url, false, endpoint.chainId);
         return;
       }
@@ -255,7 +223,6 @@ export class RpcMonitorService implements OnModuleInit {
         if (!connectionSuccessful) {
           this.logger.warn(`WebSocket connection to ${endpoint.name} timed out`);
           this.wsStatuses.set(endpoint.url, { status: 'down' });
-          // Update metrics with chainId
           this.metricsService.setWebsocketStatus(endpoint.url, false, endpoint.chainId);
           socket.terminate();
         }
@@ -265,7 +232,6 @@ export class RpcMonitorService implements OnModuleInit {
         connectionSuccessful = true;
         this.logger.debug(`WebSocket connection to ${endpoint.name} successful`);
         this.wsStatuses.set(endpoint.url, { status: 'up' });
-        // Update metrics with chainId
         this.metricsService.setWebsocketStatus(endpoint.url, true, endpoint.chainId);
         clearTimeout(timeout);
         socket.close();
@@ -274,7 +240,6 @@ export class RpcMonitorService implements OnModuleInit {
       socket.on('error', error => {
         this.logger.warn(`WebSocket connection error for ${endpoint.name}: ${error.message}`);
         this.wsStatuses.set(endpoint.url, { status: 'down' });
-        // Update metrics with chainId
         this.metricsService.setWebsocketStatus(endpoint.url, false, endpoint.chainId);
         clearTimeout(timeout);
 
@@ -285,7 +250,6 @@ export class RpcMonitorService implements OnModuleInit {
     } catch (error) {
       this.logger.error(`Error setting up WebSocket connection for ${endpoint.name}: ${error.message}`);
       this.wsStatuses.set(endpoint.url, { status: 'down' });
-      // Update metrics with chainId
       this.metricsService.setWebsocketStatus(endpoint.url, false, endpoint.chainId);
     }
   }
@@ -297,7 +261,6 @@ export class RpcMonitorService implements OnModuleInit {
 
     this.logger.debug('Checking all services status...');
 
-    // Monitor explorers
     if (this.configService.explorerEndpoints) {
       let explorerChecked = 0;
       let explorerUp = 0;
@@ -307,14 +270,12 @@ export class RpcMonitorService implements OnModuleInit {
         explorerChecked++;
         if (status) explorerUp++;
 
-        // Record metrics with chainId
         this.metricsService.setExplorerStatus(endpoint.url, status, endpoint.chainId);
       }
 
       this.logger.debug(`Explorer status check completed: ${explorerUp}/${explorerChecked} explorers available`);
     }
 
-    // Monitor faucets
     if (this.configService.faucetEndpoints) {
       let faucetChecked = 0;
       let faucetUp = 0;
@@ -324,7 +285,6 @@ export class RpcMonitorService implements OnModuleInit {
         faucetChecked++;
         if (status) faucetUp++;
 
-        // Record metrics with chainId
         this.metricsService.setFaucetStatus(endpoint.url, status, endpoint.chainId);
       }
 
@@ -345,11 +305,9 @@ export class RpcMonitorService implements OnModuleInit {
 
       if (endpoint.url.includes('explorer') || endpoint.url.includes('scan')) {
         this.explorerStatuses.set(endpoint.url, { status: isUp ? 'up' : 'down' });
-        // Update metrics with chainId
         this.metricsService.setExplorerStatus(endpoint.url, isUp, endpoint.chainId);
       } else if (endpoint.url.includes('faucet')) {
         this.faucetStatuses.set(endpoint.url, { status: isUp ? 'up' : 'down' });
-        // Update metrics with chainId
         this.metricsService.setFaucetStatus(endpoint.url, isUp, endpoint.chainId);
       }
 
@@ -360,11 +318,9 @@ export class RpcMonitorService implements OnModuleInit {
 
       if (endpoint.url.includes('explorer') || endpoint.url.includes('scan')) {
         this.explorerStatuses.set(endpoint.url, { status: 'down' });
-        // Update metrics with chainId
         this.metricsService.setExplorerStatus(endpoint.url, false, endpoint.chainId);
       } else if (endpoint.url.includes('faucet')) {
         this.faucetStatuses.set(endpoint.url, { status: 'down' });
-        // Update metrics with chainId
         this.metricsService.setFaucetStatus(endpoint.url, false, endpoint.chainId);
       }
 
@@ -425,19 +381,6 @@ export class RpcMonitorService implements OnModuleInit {
       result[url] = status.status;
     }
     return result;
-  }
-
-  getRpcStatus() {
-    const activeProvider = this.blockchainService.getActiveProvider();
-    const status = this.rpcStatuses.get(activeProvider.endpoint.url) || { status: 'unknown', latency: 0 };
-
-    return {
-      status: status.status,
-      wsStatus: this.getAnyWsStatus(),
-      latency: status.latency,
-      url: activeProvider.endpoint.url,
-      wsUrl: this.configService.wsUrl,
-    };
   }
 
   getAnyWsStatus(): 'up' | 'down' {
