@@ -21,13 +21,56 @@ jobs:
           STAGING_HOST: ${{ secrets.STAGING_HOST }}
           STAGING_USER: ${{ secrets.STAGING_USER }}
         run: |
+          # Create SSH directory first
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+
           # Write the private key to a file
+          echo "Writing SSH key to file..."
           echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
+          ls -la ~/.ssh || echo "Failed to list SSH directory"
 
           # Start the SSH agent manually
+          echo "Starting SSH agent..."
           eval "$(ssh-agent -s)"
+
+          # Check if key file exists and has content
+          if [ -s ~/.ssh/id_ed25519 ]; then
+            echo "SSH key file exists and has content"
+          else
+            echo "ERROR: SSH key file is empty or doesn't exist"
+            ls -la ~/.ssh/
+          fi
+
           ssh-add ~/.ssh/id_ed25519 || echo "Failed to add key to agent: $?"
+
+          # Validate key format
+          echo "Validating SSH key format..."
+          ssh-keygen -l -f ~/.ssh/id_ed25519 && echo "Key format appears valid" || echo "Key format invalid"
+
+          # Show beginning of key (safely)
+          echo "Key begins with:"
+          head -n 1 ~/.ssh/id_ed25519
+          echo "Key ends with:"
+          tail -n 1 ~/.ssh/id_ed25519
+          echo "Key length in bytes:"
+          wc -c ~/.ssh/id_ed25519
+          echo "Line count:"
+          wc -l ~/.ssh/id_ed25519
+
+          # Additional validation
+          if grep -q "BEGIN .* PRIVATE KEY" ~/.ssh/id_ed25519; then
+            echo "Key has proper header"
+          else
+            echo "ERROR: Key lacks proper header!"
+          fi
+
+          if grep -q "END .* PRIVATE KEY" ~/.ssh/id_ed25519; then
+            echo "Key has proper footer"
+          else
+            echo "ERROR: Key lacks proper footer!"
+          fi
 
           # Setup SSH config to use the correct port and skip host checking
           echo "Host $STAGING_HOST" > ~/.ssh/config
