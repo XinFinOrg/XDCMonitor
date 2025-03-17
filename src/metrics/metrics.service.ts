@@ -229,6 +229,17 @@ export class MetricsService implements OnModuleInit {
 
   /**
    * Record transactions per block
+   *
+   * Data is stored in a format optimized for InfluxDB time-series with:
+   * - Each block having three separate points (total, success, failed)
+   * - These points can be queried together using pivot() for tabular display
+   * - Example query for Grafana:
+   *   from(bucket: "xdc_metrics")
+   *     |> filter(fn: (r) => r._measurement == "transactions_per_block" and r.chainId == "50")
+   *     |> keep(columns: ["_value", "block_number", "status"])
+   *     |> group()
+   *     |> pivot(rowKey:["block_number"], columnKey: ["status"], valueColumn: "_value")
+   *     |> sort(columns: ["block_number"], desc: true)
    */
   setTransactionsPerBlock(
     blockNumber: number,

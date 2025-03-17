@@ -1,0 +1,93 @@
+name: Deploy to Staging
+
+on:
+  workflow_run:
+    workflows: ['XDC Monitor CI']
+    branches: [develop]
+    types: [completed]
+
+jobs:
+  deploy-staging:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up SSH
+        uses: webfactory/ssh-agent@v0.7.0
+        with:
+          ssh-private-key: ${{ secrets.STAGING_SSH_KEY }}
+
+      - name: Add host key
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.STAGING_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy to staging server
+        env:
+          STAGING_HOST: ${{ secrets.STAGING_HOST }}
+          STAGING_USER: ${{ secrets.STAGING_USER }}
+          DEPLOY_PATH: ${{ secrets.STAGING_DEPLOY_PATH || '/home/deploy/xdc-monitor' }}
+          INFLUXDB_TOKEN: ${{ secrets.STAGING_INFLUXDB_TOKEN }}
+          INFLUXDB_ORG: ${{ secrets.STAGING_INFLUXDB_ORG }}
+          INFLUXDB_BUCKET: ${{ secrets.STAGING_INFLUXDB_BUCKET }}
+          INFLUXDB_ADMIN_USER: ${{ secrets.STAGING_INFLUXDB_ADMIN_USER }}
+          INFLUXDB_ADMIN_PASSWORD: ${{ secrets.STAGING_INFLUXDB_ADMIN_PASSWORD }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.STAGING_TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.STAGING_TELEGRAM_CHAT_ID }}
+          GRAFANA_ADMIN_USER: ${{ secrets.STAGING_GRAFANA_ADMIN_USER }}
+          GRAFANA_ADMIN_PASSWORD: ${{ secrets.STAGING_GRAFANA_ADMIN_PASSWORD }}
+        run: |
+          echo "Connecting to staging server..."
+          ssh $STAGING_USER@$STAGING_HOST "mkdir -p $DEPLOY_PATH"
+
+          echo "Copying deployment files..."
+          scp docker-compose.yml $STAGING_USER@$STAGING_HOST:$DEPLOY_PATH/
+          scp run.sh $STAGING_USER@$STAGING_HOST:$DEPLOY_PATH/
+
+          echo "Generating .env file with secrets..."
+          cat > env_staging << EOF
+          SCAN_INTERVAL=15
+
+          # Monitoring configuration
+          ENABLE_RPC_MONITORING=true
+          ENABLE_PORT_MONITORING=true
+          ENABLE_BLOCK_MONITORING=true
+          BLOCK_TIME_THRESHOLD=3.0
+
+          # Alert configuration
+          ENABLE_DASHBOARD_ALERTS=true
+          ENABLE_CHAT_NOTIFICATIONS=true
+          NOTIFICATION_WEBHOOK_URL=
+
+          # Telegram notification configuration
+          TELEGRAM_BOT_TOKEN="${TELEGRAM_BOT_TOKEN}"
+          TELEGRAM_CHAT_ID="${TELEGRAM_CHAT_ID}"
+
+          # Logging configuration
+          LOG_LEVEL=info
+
+          # InfluxDB Configuration
+          INFLUXDB_URL=http://localhost:8086
+          INFLUXDB_TOKEN="${INFLUXDB_TOKEN}"
+          INFLUXDB_ORG="${INFLUXDB_ORG}"
+          INFLUXDB_BUCKET="${INFLUXDB_BUCKET}"
+          INFLUXDB_ADMIN_USER="${INFLUXDB_ADMIN_USER}"
+          INFLUXDB_ADMIN_PASSWORD="${INFLUXDB_ADMIN_PASSWORD}"
+
+          # Grafana Admin Credentials
+          GRAFANA_ADMIN_USER="${GRAFANA_ADMIN_USER}"
+          GRAFANA_ADMIN_PASSWORD="${GRAFANA_ADMIN_PASSWORD}"
+          EOF
+
+          echo "Copying the generated .env file to staging server..."
+          scp env_staging $STAGING_USER@$STAGING_HOST:$DEPLOY_PATH/.env
+          echo "Removing the local copy for security..."
+          rm env_staging
+
+          echo "Pulling latest images and restarting services..."
+          ssh $STAGING_USER@$STAGING_HOST "cd $DEPLOY_PATH && docker-compose pull && ./run.sh rebuild"
+
+          echo "Deployment to staging completed successfully!"

@@ -173,6 +173,18 @@ The application stores the following metrics in InfluxDB:
 - `block_height` - Current block height, tagged with `chainId` and `endpoint`
 - `transaction_count` - Transaction counts by status, tagged with `status` and `chainId`
 - `transactions_per_block` - Transactions per block, tagged with `status`, `block_number`, and `chainId`
+  - Stored as three separate points per block (total, success, failed)
+  - Use pivot in queries to transform into a tabular format with one row per block
+  - Example query:
+  ```
+  from(bucket: "xdc_metrics")
+     |> range(start: v.timeRangeStart, stop: v.timeRangeStop)
+     |> filter(fn: (r) => r._measurement == "transactions_per_block" and r.chainId == "50")
+     |> keep(columns: ["_value", "block_number", "status"])
+     |> group()
+     |> pivot(rowKey:["block_number"], columnKey: ["status"], valueColumn: "_value")
+     |> sort(columns: ["block_number"], desc: true)
+  ```
 - `rpc_latency` - Response time of RPC endpoints in ms, tagged with `endpoint` and `chainId`
 - `rpc_status` - Status of RPC endpoints (1=up, 0=down), tagged with `endpoint` and `chainId`
 - `websocket_status` - Status of WebSocket endpoints (1=up, 0=down), tagged with `endpoint` and `chainId`
@@ -280,6 +292,51 @@ If your Grafana dashboards show "No Data," check the following:
 4. **Check Network**: Ensure that InfluxDB is running and accessible from Grafana container
 
 If you're seeing issues with the token being truncated in the YAML file, check the `run.sh` script and use the `./run.sh grafana-import` and `./run.sh grafana-export` commands to properly handle special characters.
+
+### InfluxDB Query Patterns
+
+The system uses several common InfluxDB Flux query patterns:
+
+#### Transforming Time Series Data to Tables
+
+For metrics like `transactions_per_block` that store multiple related points, use the `pivot()` function to convert them to a tabular format:
+
+```
+from(bucket: "xdc_metrics")
+  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)
+  |> filter(fn: (r) => r._measurement == "transactions_per_block" and r.chainId == "50")
+  |> keep(columns: ["_value", "block_number", "status"])
+  |> group()
+  |> pivot(rowKey:["block_number"], columnKey: ["status"], valueColumn: "_value")
+  |> sort(columns: ["block_number"], desc: true)
+```
+
+Key elements:
+
+- `pivot()` reshapes time series data from "long" to "wide" format
+- `rowKey` defines which fields identify unique rows (block_number)
+- `columnKey` defines which field values become column names (status)
+- `valueColumn` defines which field contains the values to display
+
+#### Controlling Column Order
+
+To control column order in pivoted data, you can use multiple `rename()` operations:
+
+```
+// ... previous query steps ...
+|> rename(columns: {failed: "z_failed", success: "y_success", total: "x_total"})
+|> rename(columns: {z_failed: "failed", y_success: "success", x_total: "total"})
+```
+
+This forces columns to display in the order: total, success, failed.
+
+#### JSON String Escaping
+
+In Grafana JSON configuration files, remember to properly escape double quotes in Flux queries:
+
+```json
+"query": "from(bucket: \"xdc_metrics\")\n  |> filter(fn: (r) => r._measurement == \"my_measurement\")"
+```
 
 ### Configured Alert Rules
 
