@@ -20,11 +20,16 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.STAGING_SSH_KEY }}
 
-      - name: Configure SSH and skip host verification
+      - name: Configure SSH and debug key
         env:
           STAGING_HOST: ${{ secrets.STAGING_HOST }}
         run: |
           mkdir -p ~/.ssh
+
+          # Debug SSH agent keys
+          echo "Checking SSH keys loaded in agent:"
+          ssh-add -l
+
           # Create an SSH config that completely bypasses host key checking
           echo "Host *" > ~/.ssh/config
           echo "    StrictHostKeyChecking no" >> ~/.ssh/config
