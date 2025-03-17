@@ -3,7 +3,7 @@ name: Deploy to Staging
 on:
   workflow_run:
     workflows: ['XDC Monitor CI']
-    branches: [develop]
+    branches: [statging]
     types: [completed]
 
 jobs:

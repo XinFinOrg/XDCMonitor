@@ -2,9 +2,9 @@ name: XDC Monitor CI
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main, staging, develop]
   pull_request:
-    branches: [main, develop]
+    branches: [main, staging, develop]
 
 jobs:
   validate:
@@ -73,7 +73,7 @@ jobs:
   publish:
     needs: [validate, security-scan]
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging' || github.ref == 'refs/heads/develop')
 
     steps:
       - name: Checkout code
