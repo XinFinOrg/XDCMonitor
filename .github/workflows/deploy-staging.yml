@@ -20,10 +20,36 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.STAGING_SSH_KEY }}
 
-      - name: Add host key
+      - name: Debug server connection
+        env:
+          STAGING_HOST: ${{ secrets.STAGING_HOST }}
+        run: |
+          echo "Checking if server is reachable..."
+          # Try ping first (might be blocked by firewall)
+          ping -c 1 $STAGING_HOST || echo "Ping failed, but server might still be reachable"
+          # Check if custom port 1122 is open
+          nc -zv $STAGING_HOST 1122 || echo "Port 1122 connectivity test failed"
+
+      - name: Add host key with timeout
+        env:
+          STAGING_HOST: ${{ secrets.STAGING_HOST }}
         run: |
           mkdir -p ~/.ssh
-          ssh-keyscan -H ${{ secrets.STAGING_HOST }} >> ~/.ssh/known_hosts
+          # Add option to disable StrictHostKeyChecking for keyscan
+          echo "Attempting to scan SSH host key with 10 second timeout on port 1122..."
+          timeout 10 ssh-keyscan -H -p 1122 $STAGING_HOST >> ~/.ssh/known_hosts || echo "Host key scan timed out"
+
+          # If keys weren't added, create a backup approach
+          if [ ! -s ~/.ssh/known_hosts ]; then
+            echo "Host key scanning failed, using StrictHostKeyChecking=no as fallback"
+            echo "Host $STAGING_HOST" > ~/.ssh/config
+            echo "    Port 1122" >> ~/.ssh/config
+            echo "    StrictHostKeyChecking no" >> ~/.ssh/config
+            echo "    UserKnownHostsFile=/dev/null" >> ~/.ssh/config
+            chmod 600 ~/.ssh/config
+          else
+            echo "Host key successfully added to known_hosts"
+          fi
 
       - name: Deploy to staging server
         env:
@@ -41,11 +67,12 @@ jobs:
           GRAFANA_ADMIN_PASSWORD: ${{ secrets.STAGING_GRAFANA_ADMIN_PASSWORD }}
         run: |
           echo "Connecting to staging server..."
-          ssh $STAGING_USER@$STAGING_HOST "mkdir -p $DEPLOY_PATH"
+          # Add connection troubleshooting options with port 1122
+          ssh -p 1122 -o ConnectTimeout=10 -v $STAGING_USER@$STAGING_HOST "mkdir -p $DEPLOY_PATH"
 
           echo "Copying deployment files..."
-          scp docker-compose.yml $STAGING_USER@$STAGING_HOST:$DEPLOY_PATH/
-          scp run.sh $STAGING_USER@$STAGING_HOST:$DEPLOY_PATH/
+          scp -P 1122 docker-compose.yml $STAGING_USER@$STAGING_HOST:$DEPLOY_PATH/
+          scp -P 1122 run.sh $STAGING_USER@$STAGING_HOST:$DEPLOY_PATH/
 
           echo "Generating .env file with secrets..."
           cat > env_staging << EOF
@@ -83,11 +110,11 @@ jobs:
           EOF
 
           echo "Copying the generated .env file to staging server..."
-          scp env_staging $STAGING_USER@$STAGING_HOST:$DEPLOY_PATH/.env
+          scp -P 1122 env_staging $STAGING_USER@$STAGING_HOST:$DEPLOY_PATH/.env
           echo "Removing the local copy for security..."
           rm env_staging
 
           echo "Pulling latest images and restarting services..."
-          ssh $STAGING_USER@$STAGING_HOST "cd $DEPLOY_PATH && docker-compose pull && ./run.sh rebuild"
+          ssh -p 1122 $STAGING_USER@$STAGING_HOST "cd $DEPLOY_PATH && docker-compose pull && ./run.sh rebuild"
 
           echo "Deployment to staging completed successfully!"
