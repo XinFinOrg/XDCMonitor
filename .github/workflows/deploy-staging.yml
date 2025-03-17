@@ -20,25 +20,34 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.STAGING_SSH_KEY }}
 
-      - name: Configure SSH and debug key
+      - name: Test SSH agent and server connectivity
         env:
           STAGING_HOST: ${{ secrets.STAGING_HOST }}
+          STAGING_USER: ${{ secrets.STAGING_USER }}
         run: |
+          echo "Creating SSH directory..."
           mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
 
           # Debug SSH agent keys
           echo "Checking SSH keys loaded in agent:"
-          ssh-add -l
+          ssh-add -l || echo "No keys found in SSH agent"
 
-          # Create an SSH config that completely bypasses host key checking
-          echo "Host *" > ~/.ssh/config
+          # Advanced debugging
+          echo "Testing key format from GitHub secret..."
+          ssh-add -L | wc -l || echo "Could not list key contents"
+
+          # Configure SSH to bypass host key checking
+          echo "Host $STAGING_HOST" > ~/.ssh/config
+          echo "    User $STAGING_USER" >> ~/.ssh/config
+          echo "    Port 1122" >> ~/.ssh/config
           echo "    StrictHostKeyChecking no" >> ~/.ssh/config
           echo "    UserKnownHostsFile=/dev/null" >> ~/.ssh/config
+          echo "    LogLevel DEBUG3" >> ~/.ssh/config
           chmod 600 ~/.ssh/config
 
-          # Debug information
-          echo "SSH config created:"
-          cat ~/.ssh/config
+          echo "Testing connection to server..."
+          ssh -v $STAGING_HOST "echo 'SSH CONNECTION SUCCESSFUL'" || echo "SSH connection test failed with code $?"
 
       - name: Deploy to staging server
         env:
@@ -56,12 +65,12 @@ jobs:
           GRAFANA_ADMIN_PASSWORD: ${{ secrets.STAGING_GRAFANA_ADMIN_PASSWORD }}
         run: |
           echo "Connecting to staging server..."
-          # Completely disable host key checking for all connections
-          ssh -p 1122 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10 -v $STAGING_USER@$STAGING_HOST "mkdir -p $DEPLOY_PATH"
+          # Using SSH config for simplicity - all options are defined there
+          ssh $STAGING_HOST "mkdir -p $DEPLOY_PATH"
 
           echo "Copying deployment files..."
-          scp -P 1122 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null docker-compose.yml $STAGING_USER@$STAGING_HOST:$DEPLOY_PATH/
-          scp -P 1122 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null run.sh $STAGING_USER@$STAGING_HOST:$DEPLOY_PATH/
+          scp docker-compose.yml $STAGING_HOST:$DEPLOY_PATH/
+          scp run.sh $STAGING_HOST:$DEPLOY_PATH/
 
           echo "Generating .env file with secrets..."
           cat > env_staging << EOF
@@ -99,11 +108,11 @@ jobs:
           EOF
 
           echo "Copying the generated .env file to staging server..."
-          scp -P 1122 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null env_staging $STAGING_USER@$STAGING_HOST:$DEPLOY_PATH/.env
+          scp env_staging $STAGING_HOST:$DEPLOY_PATH/.env
           echo "Removing the local copy for security..."
           rm env_staging
 
           echo "Pulling latest images and restarting services..."
-          ssh -p 1122 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null $STAGING_USER@$STAGING_HOST "cd $DEPLOY_PATH && docker-compose pull && ./run.sh rebuild"
+          ssh $STAGING_HOST "cd $DEPLOY_PATH && docker-compose pull && ./run.sh rebuild"
 
           echo "Deployment to staging completed successfully!"
