@@ -12,8 +12,8 @@ The workflow consists of three jobs:
 
 Triggered on:
 
-- Push to `main`, `statging` and `develop` branches
-- Pull requests to `main`, `statging` and `develop` branches
+- Push to `main` and `staging` branches
+- Pull requests to `main` and `staging` branches
 
 Steps:
 
@@ -48,7 +48,7 @@ The security scan focuses on:
 
 Triggered only on:
 
-- Push to `main`, `statging` and `develop` branches (not on pull requests)
+- Push to `main` and `staging` branches (not on pull requests)
 - Only runs if both validation and security scanning pass
 
 Steps:
@@ -61,7 +61,7 @@ Steps:
 
 The Docker images are tagged with:
 
-- Branch name (e.g., `main`, `statging`, `develop`)
+- Branch name (e.g., `main`, `staging`)
 - Short commit SHA
 
 ### 2. Staging Deployment Workflow (`deploy-staging.yml`)
@@ -69,7 +69,7 @@ The Docker images are tagged with:
 Triggered automatically when:
 
 - The CI workflow completes successfully
-- On the `statging` branch
+- On the `staging` branch
 
 Steps:
 
