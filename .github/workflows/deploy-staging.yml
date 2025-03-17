@@ -15,29 +15,25 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Set up SSH
-        uses: webfactory/ssh-agent@v0.7.0
-        with:
-          ssh-private-key: ${{ secrets.STAGING_SSH_KEY }}
-
-      - name: Test SSH agent and server connectivity
+      - name: Manual SSH setup
         env:
+          SSH_PRIVATE_KEY: ${{ secrets.STAGING_SSH_KEY }}
           STAGING_HOST: ${{ secrets.STAGING_HOST }}
           STAGING_USER: ${{ secrets.STAGING_USER }}
         run: |
-          echo "Creating SSH directory..."
+          # Create SSH directory
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
 
-          # Debug SSH agent keys
-          echo "Checking SSH keys loaded in agent:"
-          ssh-add -l || echo "No keys found in SSH agent"
+          # Write the private key to a file
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
 
-          # Advanced debugging
-          echo "Testing key format from GitHub secret..."
-          ssh-add -L | wc -l || echo "Could not list key contents"
+          # Start the SSH agent manually
+          eval "$(ssh-agent -s)"
+          ssh-add ~/.ssh/id_ed25519 || echo "Failed to add key to agent: $?"
 
-          # Configure SSH to bypass host key checking
+          # Setup SSH config to use the correct port and skip host checking
           echo "Host $STAGING_HOST" > ~/.ssh/config
           echo "    User $STAGING_USER" >> ~/.ssh/config
           echo "    Port 1122" >> ~/.ssh/config
@@ -46,8 +42,12 @@ jobs:
           echo "    LogLevel DEBUG3" >> ~/.ssh/config
           chmod 600 ~/.ssh/config
 
-          echo "Testing connection to server..."
-          ssh -v $STAGING_HOST "echo 'SSH CONNECTION SUCCESSFUL'" || echo "SSH connection test failed with code $?"
+          # Debug information
+          echo "SSH key loaded. Checking connection..."
+          ssh-add -l || echo "No keys in agent"
+
+          # Test the connection
+          ssh -v $STAGING_HOST "echo 'SSH CONNECTION SUCCESSFUL'" || echo "Connection failed with code $?"
 
       - name: Deploy to staging server
         env:
