@@ -1,15 +1,14 @@
 name: Deploy to Staging
 
 on:
-  workflow_run:
-    workflows: ['XDC Monitor CI']
+  pull_request:
+    types: [closed]
     branches: [staging]
-    types: [completed]
 
 jobs:
   deploy-staging:
     runs-on: ubuntu-latest
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: github.event.pull_request.merged == true
 
     steps:
       - name: Checkout code
