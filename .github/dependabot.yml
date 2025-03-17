@@ -1,0 +1,37 @@
+version: 2
+updates:
+  # Maintain dependencies for npm/yarn
+  - package-ecosystem: 'npm'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+    open-pull-requests-limit: 10
+    versioning-strategy: 'auto'
+    labels:
+      - 'dependencies'
+      - 'security'
+    # Configure automatic security PRs
+    security-updates-only: false
+    # Group all minor and patch updates into a single PR
+    groups:
+      minor-patch-dependencies:
+        patterns:
+          - '*'
+        update-types:
+          - 'minor'
+          - 'patch'
+    # Automatically assign reviewers
+    assignees:
+      - '${{github.actor}}'
+    # Set high priority for known vulnerabilities
+    vulnerability-alerts:
+      enabled: true
+
+  # Keep actions up-to-date
+  - package-ecosystem: 'github-actions'
+    directory: '/'
+    schedule:
+      interval: 'monthly'
+    labels:
+      - 'dependencies'
+      - 'github-actions'

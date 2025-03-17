@@ -3,7 +3,7 @@ name: Deploy to Staging
 on:
   workflow_run:
     workflows: ['XDC Monitor CI']
-    branches: [develop]
+    branches: [staging]
     types: [completed]
 
 jobs:
@@ -15,15 +15,35 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Set up SSH
-        uses: webfactory/ssh-agent@v0.7.0
-        with:
-          ssh-private-key: ${{ secrets.STAGING_SSH_KEY }}
-
-      - name: Add host key
+      - name: Manual SSH setup
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.STAGING_SSH_KEY }}
+          STAGING_HOST: ${{ secrets.STAGING_HOST }}
+          STAGING_USER: ${{ secrets.STAGING_USER }}
         run: |
-          mkdir -p ~/.ssh
-          ssh-keyscan -H ${{ secrets.STAGING_HOST }} >> ~/.ssh/known_hosts
+          # Write the private key to a file
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+
+          # Start the SSH agent manually
+          eval "$(ssh-agent -s)"
+          ssh-add ~/.ssh/id_ed25519 || echo "Failed to add key to agent: $?"
+
+          # Setup SSH config to use the correct port and skip host checking
+          echo "Host $STAGING_HOST" > ~/.ssh/config
+          echo "    User $STAGING_USER" >> ~/.ssh/config
+          echo "    Port 1122" >> ~/.ssh/config
+          echo "    StrictHostKeyChecking no" >> ~/.ssh/config
+          echo "    UserKnownHostsFile=/dev/null" >> ~/.ssh/config
+          echo "    LogLevel DEBUG3" >> ~/.ssh/config
+          chmod 600 ~/.ssh/config
+
+          # Debug information
+          echo "SSH key loaded. Checking connection..."
+          ssh-add -l || echo "No keys in agent"
+
+          # Test the connection
+          ssh -v $STAGING_HOST "echo 'SSH CONNECTION SUCCESSFUL'" || echo "Connection failed with code $?"
 
       - name: Deploy to staging server
         env:
@@ -41,11 +61,12 @@ jobs:
           GRAFANA_ADMIN_PASSWORD: ${{ secrets.STAGING_GRAFANA_ADMIN_PASSWORD }}
         run: |
           echo "Connecting to staging server..."
-          ssh $STAGING_USER@$STAGING_HOST "mkdir -p $DEPLOY_PATH"
+          # Using SSH config for simplicity - all options are defined there
+          ssh $STAGING_HOST "mkdir -p $DEPLOY_PATH"
 
           echo "Copying deployment files..."
-          scp docker-compose.yml $STAGING_USER@$STAGING_HOST:$DEPLOY_PATH/
-          scp run.sh $STAGING_USER@$STAGING_HOST:$DEPLOY_PATH/
+          scp docker-compose.yml $STAGING_HOST:$DEPLOY_PATH/
+          scp run.sh $STAGING_HOST:$DEPLOY_PATH/
 
           echo "Generating .env file with secrets..."
           cat > env_staging << EOF
@@ -83,11 +104,11 @@ jobs:
           EOF
 
           echo "Copying the generated .env file to staging server..."
-          scp env_staging $STAGING_USER@$STAGING_HOST:$DEPLOY_PATH/.env
+          scp env_staging $STAGING_HOST:$DEPLOY_PATH/.env
           echo "Removing the local copy for security..."
           rm env_staging
 
           echo "Pulling latest images and restarting services..."
-          ssh $STAGING_USER@$STAGING_HOST "cd $DEPLOY_PATH && docker-compose pull && ./run.sh rebuild"
+          ssh $STAGING_HOST "cd $DEPLOY_PATH && docker-compose pull && ./run.sh rebuild"
 
           echo "Deployment to staging completed successfully!"
