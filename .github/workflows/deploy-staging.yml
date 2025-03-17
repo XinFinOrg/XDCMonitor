@@ -21,72 +21,98 @@ jobs:
           STAGING_HOST: ${{ secrets.STAGING_HOST }}
           STAGING_USER: ${{ secrets.STAGING_USER }}
         run: |
-          # Create SSH directory first
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
+          # Debug environment
+          echo "Current user: $(whoami)"
+          echo "Home directory: $HOME"
+
+          # Create SSH directory using absolute path
+          SSH_DIR="${HOME}/.ssh"
+          echo "Creating SSH directory: ${SSH_DIR}"
+          mkdir -p "${SSH_DIR}"
+          chmod 700 "${SSH_DIR}"
+          echo "SSH directory created - checking existence:"
+          ls -la "${HOME}/" | grep .ssh
+
+          # Verify directory exists before proceeding
+          if [ ! -d "${SSH_DIR}" ]; then
+            echo "ERROR: SSH directory creation failed!"
+            exit 1
+          fi
 
           # Write the private key to a file
-          echo "Writing SSH key to file..."
-          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
-          ls -la ~/.ssh || echo "Failed to list SSH directory"
+          KEY_FILE="${SSH_DIR}/id_ed25519"
+          echo "Writing SSH key to file: ${KEY_FILE}"
+          echo "$SSH_PRIVATE_KEY" > "${KEY_FILE}"
+          chmod 600 "${KEY_FILE}"
+          echo "SSH key file created:"
+          ls -la "${SSH_DIR}" || echo "Failed to list SSH directory"
 
           # Start the SSH agent manually
           echo "Starting SSH agent..."
           eval "$(ssh-agent -s)"
 
           # Check if key file exists and has content
-          if [ -s ~/.ssh/id_ed25519 ]; then
+          if [ -s "${KEY_FILE}" ]; then
             echo "SSH key file exists and has content"
           else
             echo "ERROR: SSH key file is empty or doesn't exist"
-            ls -la ~/.ssh/
+            ls -la "${SSH_DIR}"
           fi
 
-          ssh-add ~/.ssh/id_ed25519 || echo "Failed to add key to agent: $?"
+          ssh-add "${KEY_FILE}" || echo "Failed to add key to agent: $?"
 
           # Validate key format
           echo "Validating SSH key format..."
-          ssh-keygen -l -f ~/.ssh/id_ed25519 && echo "Key format appears valid" || echo "Key format invalid"
+          ssh-keygen -l -f "${KEY_FILE}" && echo "Key format appears valid" || echo "Key format invalid"
 
           # Show beginning of key (safely)
           echo "Key begins with:"
-          head -n 1 ~/.ssh/id_ed25519
+          head -n 1 "${KEY_FILE}"
           echo "Key ends with:"
-          tail -n 1 ~/.ssh/id_ed25519
+          tail -n 1 "${KEY_FILE}"
           echo "Key length in bytes:"
-          wc -c ~/.ssh/id_ed25519
+          wc -c "${KEY_FILE}"
           echo "Line count:"
-          wc -l ~/.ssh/id_ed25519
+          wc -l "${KEY_FILE}"
 
           # Additional validation
-          if grep -q "BEGIN .* PRIVATE KEY" ~/.ssh/id_ed25519; then
+          if grep -q "BEGIN .* PRIVATE KEY" "${KEY_FILE}"; then
             echo "Key has proper header"
           else
             echo "ERROR: Key lacks proper header!"
           fi
 
-          if grep -q "END .* PRIVATE KEY" ~/.ssh/id_ed25519; then
+          if grep -q "END .* PRIVATE KEY" "${KEY_FILE}"; then
             echo "Key has proper footer"
           else
             echo "ERROR: Key lacks proper footer!"
           fi
 
           # Setup SSH config to use the correct port and skip host checking
-          echo "Host $STAGING_HOST" > ~/.ssh/config
-          echo "    User $STAGING_USER" >> ~/.ssh/config
-          echo "    Port 1122" >> ~/.ssh/config
-          echo "    StrictHostKeyChecking no" >> ~/.ssh/config
-          echo "    UserKnownHostsFile=/dev/null" >> ~/.ssh/config
-          echo "    LogLevel DEBUG3" >> ~/.ssh/config
-          chmod 600 ~/.ssh/config
+          echo "Host $STAGING_HOST" > "${SSH_DIR}/config"
+          echo "    User $STAGING_USER" >> "${SSH_DIR}/config"
+          echo "    Port 1122" >> "${SSH_DIR}/config"
+          echo "    StrictHostKeyChecking no" >> "${SSH_DIR}/config"
+          echo "    UserKnownHostsFile=/dev/null" >> "${SSH_DIR}/config"
+          echo "    LogLevel DEBUG3" >> "${SSH_DIR}/config"
+          chmod 600 "${SSH_DIR}/config"
 
           # Debug information
           echo "SSH key loaded. Checking connection..."
+          echo "SSH config file:"
+          cat "${SSH_DIR}/config"
+
+          # List keys in agent
+          echo "Keys in agent:"
           ssh-add -l || echo "No keys in agent"
 
-          # Test the connection
-          ssh -v $STAGING_HOST "echo 'SSH CONNECTION SUCCESSFUL'" || echo "Connection failed with code $?"
+          # Test the connection with full debugging
+          echo "Testing SSH connection to $STAGING_HOST:1122..."
+          ssh -v -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null $STAGING_HOST "echo 'SSH CONNECTION SUCCESSFUL'" || {
+            echo "Connection failed with code $?"
+            echo "Testing basic connectivity with nc:"
+            which nc && nc -zv $STAGING_HOST 1122 || echo "netcat not available"
+          }
 
       - name: Deploy to staging server
         env:
