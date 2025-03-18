@@ -272,7 +272,7 @@
           "editorMode": "code",
           "expr": "xdc_rpc_status{chainId=\"50\", endpoint=~\"https://rpc.xinfin.network|https://erpc.xinfin.network|https://arpc.xinfin.network|https://earpc.xinfin.network|https://xdc.public-rpc.com|https://rpc.primenumbers.xyz|https://erpc.xdcrpc.com\"}",
           "legendFormat": "{{endpoint}}",
-          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"rpc_status\" and r.chainId == \"50\" and (r.endpoint == \"https://rpc.xinfin.network\" or r.endpoint == \"https://erpc.xinfin.network\" or r.endpoint == \"https://arpc.xinfin.network\" or r.endpoint == \"https://earpc.xinfin.network\" or r.endpoint == \"https://xdc.public-rpc.com\" or r.endpoint == \"https://rpc.primenumbers.xyz\" or r.endpoint == \"https://erpc.xdcrpc.com\"))\n  |> last(column: \"_value\")\n  |> group(columns: [\"endpoint\"])",
+          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"rpc_status\" and r.chainId == \"50\")\n  |> last(column: \"_value\")\n  |> group(columns: [\"endpoint\"])",
           "range": true,
           "refId": "A"
         }
@@ -365,7 +365,7 @@
           "editorMode": "code",
           "expr": "xdc_websocket_status{chainId=\"50\", endpoint=~\"wss://ws.xinfin.network|wss://rpc.xinfin.network/ws|wss://erpc.xinfin.network/ws|wss://xdc.public-rpc.com/ws|wss://rpc.xinfin.network|wss://erpc.xinfin.network|ws://173.212.233.170:8888|wss://ews.xinfin.network|wss://aws.xinfin.network|wss://eaws.xinfin.network\"}",
           "legendFormat": "{{endpoint}}",
-          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"websocket_status\" and r.chainId == \"50\" and (r.endpoint == \"wss://ws.xinfin.network\" or r.endpoint == \"wss://rpc.xinfin.network/ws\" or r.endpoint == \"wss://erpc.xinfin.network/ws\" or r.endpoint == \"wss://xdc.public-rpc.com/ws\" or r.endpoint == \"wss://rpc.xinfin.network\" or r.endpoint == \"wss://erpc.xinfin.network\" or r.endpoint == \"ws://173.212.233.170:8888\" or r.endpoint == \"wss://ews.xinfin.network\" or r.endpoint == \"wss://aws.xinfin.network\" or r.endpoint == \"wss://eaws.xinfin.network\"))\n  |> last(column: \"_value\")\n  |> group(columns: [\"endpoint\"])",
+          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"websocket_status\" and r.chainId == \"50\")\n  |> last(column: \"_value\")\n  |> group(columns: [\"endpoint\"])",
           "range": true,
           "refId": "A"
         }
@@ -1345,6 +1345,7 @@
         "type": "influxdb",
         "uid": "influxdb"
       },
+      "description": "Shows the volume of successful and failed transactions per 5-minute window on the XDC blockchain. This is a key network activity metric that indicates usage levels and transaction processing health. A high failure rate relative to successful transactions could indicate potential network issues.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1451,7 +1452,6 @@
         }
       ],
       "title": "Transaction Volume (5-minute windows)",
-      "description": "Shows the volume of successful and failed transactions per 5-minute window on the XDC blockchain. This is a key network activity metric that indicates usage levels and transaction processing health. A high failure rate relative to successful transactions could indicate potential network issues.",
       "type": "timeseries"
     },
     {
@@ -1879,6 +1879,6 @@
   "timezone": "",
   "title": "XDC Network Unified Dashboard",
   "uid": "xdc-unified-dashboard",
-  "version": 141,
+  "version": 162,
   "weekStart": ""
 }
