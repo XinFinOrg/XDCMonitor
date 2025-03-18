@@ -1,14 +1,12 @@
 name: Deploy to Staging
 
 on:
-  pull_request:
-    types: [closed]
+  push:
     branches: [staging]
 
 jobs:
   deploy-staging:
     runs-on: ubuntu-latest
-    if: github.event.pull_request.merged == true
 
     steps:
       - name: Checkout code
