@@ -34,7 +34,7 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 4,
+  "id": 2,
   "links": [],
   "liveNow": false,
   "panels": [
@@ -81,169 +81,7 @@
         "type": "influxdb",
         "uid": "influxdb"
       },
-      "description": "Current status of all monitored Apothem Testnet RPC endpoints",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [
-            {
-              "options": {
-                "0": {
-                  "color": "red",
-                  "index": 0,
-                  "text": "DOWN"
-                },
-                "1": {
-                  "color": "green",
-                  "index": 1,
-                  "text": "UP"
-                }
-              },
-              "type": "value"
-            }
-          ],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "red",
-                "value": null
-              },
-              {
-                "color": "green",
-                "value": 1
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 4,
-        "w": 12,
-        "x": 0,
-        "y": 9
-      },
-      "id": 2,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": ["lastNotNull"],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "pluginVersion": "10.2.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb"
-          },
-          "editorMode": "code",
-          "expr": "xdc_rpc_status{chainId=\"51\"}",
-          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"rpc_status\" and r.chainId == \"51\")\n  |> last(column: \"_value\")\n  |> group(columns: [\"endpoint\"])",
-          "legendFormat": "{{endpoint}}",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "RPC Endpoint Status",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb"
-      },
-      "description": "Current status of all monitored Apothem Testnet WebSocket endpoints",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [
-            {
-              "options": {
-                "0": {
-                  "color": "red",
-                  "index": 0,
-                  "text": "DOWN"
-                },
-                "1": {
-                  "color": "green",
-                  "index": 1,
-                  "text": "UP"
-                }
-              },
-              "type": "value"
-            }
-          ],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "red",
-                "value": null
-              },
-              {
-                "color": "green",
-                "value": 1
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 4,
-        "w": 12,
-        "x": 12,
-        "y": 9
-      },
-      "id": 6,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": ["lastNotNull"],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "pluginVersion": "10.2.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb"
-          },
-          "editorMode": "code",
-          "expr": "xdc_websocket_status{chainId=\"51\"}",
-          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"websocket_status\" and r.chainId == \"51\")\n  |> last(column: \"_value\")\n  |> group(columns: [\"endpoint\"])",
-          "legendFormat": "{{endpoint}}",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "WebSocket Status",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb"
-      },
-      "description": "Current block height comparison across Apothem Testnet RPC endpoints",
+      "description": "Latest block height on Apothem Testnet.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -264,75 +102,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 4,
-        "w": 12,
-        "x": 12,
-        "y": 9
-      },
-      "id": 4,
-      "options": {
-        "displayMode": "gradient",
-        "minVizHeight": 10,
-        "minVizWidth": 0,
-        "namePlacement": "auto",
-        "orientation": "horizontal",
-        "reduceOptions": {
-          "calcs": ["lastNotNull"],
-          "fields": "",
-          "values": false
-        },
-        "showUnfilled": true,
-        "text": {},
-        "valueMode": "color"
-      },
-      "pluginVersion": "10.2.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb"
-          },
-          "editorMode": "code",
-          "expr": "xdc_block_height{chainId=\"51\"}",
-          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"block_height\" and r.chainId == \"51\")\n  |> last(column: \"_value\")\n  |> group(columns: [\"endpoint\"])",
-          "legendFormat": "Apothem ({{endpoint}})",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Block Height Comparison",
-      "type": "bargauge"
-    },
-    {
-      "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb"
-      },
-      "description": "Current highest block number across all Apothem Testnet RPC endpoints",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "none"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 4,
-        "w": 24,
+        "h": 6,
+        "w": 5,
         "x": 0,
-        "y": 13
+        "y": 9
       },
       "id": 106,
       "options": {
@@ -356,8 +129,8 @@
           },
           "editorMode": "code",
           "expr": "max(xdc_block_height{chainId=\"51\"}) by (chainId)",
-          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"block_height\" and r.chainId == \"51\")\n  |> group(columns: [\"chainId\"])\n  |> max(column: \"_value\")\n  |> yield(name: \"max\")",
           "legendFormat": "Current Block",
+          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"block_height\" and r.chainId == \"51\")\n  |> group(columns: [\"chainId\"])\n  |> max(column: \"_value\")\n  |> yield(name: \"max\")",
           "range": true,
           "refId": "A"
         }
@@ -370,7 +143,7 @@
         "type": "influxdb",
         "uid": "influxdb"
       },
-      "description": "Current block time on Apothem Testnet (in seconds)",
+      "description": "Time between blocks on Apothem Testnet. Lower values indicate healthy network.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -399,10 +172,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 4,
-        "w": 24,
-        "x": 0,
-        "y": 17
+        "h": 6,
+        "w": 5,
+        "x": 5,
+        "y": 9
       },
       "id": 11,
       "options": {
@@ -426,8 +199,8 @@
           },
           "editorMode": "code",
           "expr": "xdc_block_time{chainId=\"51\"}",
-          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"block_time\" and r.chainId == \"51\")\n  |> last(column: \"_value\")",
           "legendFormat": "Block Time (s)",
+          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"block_time\" and r.chainId == \"51\")\n  |> last(column: \"_value\")",
           "range": true,
           "refId": "A"
         }
@@ -436,103 +209,72 @@
       "type": "stat"
     },
     {
-      "collapsed": false,
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 21
-      },
-      "id": 102,
-      "panels": [],
-      "title": "RPC Performance",
-      "type": "row"
-    },
-    {
       "datasource": {
         "type": "influxdb",
         "uid": "influxdb"
       },
-      "description": "Response time for all monitored Apothem Testnet RPC endpoints",
+      "description": "Status of RPC endpoints. Green = up, red = down.",
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "palette-classic"
+            "mode": "thresholds"
           },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "color": "red",
+                  "index": 0,
+                  "text": "DOWN"
+                },
+                "1": {
+                  "color": "green",
+                  "index": 1,
+                  "text": "UP"
+                }
+              },
+              "type": "value"
             }
-          },
-          "mappings": [],
+          ],
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
+                "color": "red",
                 "value": null
               },
               {
-                "color": "yellow",
-                "value": 300
-              },
-              {
-                "color": "red",
-                "value": 500
+                "color": "green",
+                "value": 1
               }
             ]
-          },
-          "unit": "ms"
+          }
         },
         "overrides": []
       },
       "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 22
+        "h": 6,
+        "w": 6,
+        "x": 10,
+        "y": 9
       },
-      "id": 3,
+      "id": 2,
       "options": {
-        "legend": {
-          "calcs": ["mean", "max", "min"],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
         },
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
-        }
+        "text": {
+          "valueSize": 40
+        },
+        "textMode": "auto"
       },
-      "pluginVersion": "9.5.1",
+      "pluginVersion": "10.2.0",
       "targets": [
         {
           "datasource": {
@@ -540,124 +282,31 @@
             "uid": "influxdb"
           },
           "editorMode": "code",
-          "expr": "xdc_rpc_latency{chainId=\"51\"}",
-          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"rpc_latency\" and r.chainId == \"51\")\n  |> group(columns: [\"endpoint\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
+          "expr": "xdc_rpc_status{chainId=\"51\"}",
           "legendFormat": "{{endpoint}}",
+          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"rpc_status\" and r.chainId == \"51\")\n  |> last(column: \"_value\")\n  |> group(columns: [\"endpoint\"])",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "RPC Response Time",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb"
-      },
-      "description": "Block time on Apothem Testnet",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "area"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 1000
-              },
-              {
-                "color": "red",
-                "value": 2000
-              }
-            ]
-          },
-          "unit": "ms"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 22
-      },
-      "id": 9,
-      "options": {
-        "legend": {
-          "calcs": ["mean", "max"],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "9.5.1",
-      "targets": [
+      "title": "RPC Endpoint Status",
+      "transformations": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb"
-          },
-          "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum(rate(xdc_rpc_latency_bucket{chainId=\"51\"}[5m])) by (le))",
-          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"rpc_latency\" and r.chainId == \"51\")\n  |> group()\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
-          "legendFormat": "95th Percentile",
-          "range": true,
-          "refId": "A"
+          "id": "renameByRegex",
+          "options": {
+            "regex": "^_value (.*)$",
+            "renamePattern": "$1"
+          }
         }
       ],
-      "title": "RPC Request Duration (95th Percentile)",
-      "type": "timeseries"
+      "type": "stat"
     },
     {
       "datasource": {
         "type": "influxdb",
         "uid": "influxdb"
       },
-      "description": "Status of RPC endpoints over time (1 = up, 0 = down)",
+      "description": "RPC endpoint availability timeline. Green = up, red = down. Helps identify recurring issues.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -672,7 +321,7 @@
             },
             "insertNulls": false,
             "lineWidth": 0,
-            "spanNulls": true
+            "spanNulls": false
           },
           "mappings": [
             {
@@ -730,22 +379,23 @@
       },
       "gridPos": {
         "h": 6,
-        "w": 24,
-        "x": 0,
-        "y": 30
+        "w": 8,
+        "x": 16,
+        "y": 9
       },
-      "id": 10,
+      "id": 117,
       "options": {
         "alignValue": "center",
+        "connectNulls": "never",
         "legend": {
           "displayMode": "list",
-          "placement": "bottom",
+          "placement": "right",
           "showLegend": true
         },
         "legendDisplayMode": "list",
         "mergeValues": false,
         "rowHeight": 0.9,
-        "showValue": "auto",
+        "showValue": "never",
         "thresholdsStyle": "area",
         "thresholdsTextMap": {
           "0": "Down",
@@ -756,7 +406,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "9.5.1",
+      "pluginVersion": "10.1.0",
       "targets": [
         {
           "datasource": {
@@ -765,13 +415,343 @@
           },
           "editorMode": "code",
           "expr": "xdc_rpc_status{chainId=\"51\"}",
-          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"rpc_status\" and r.chainId == \"51\")\n  |> group(columns: [\"endpoint\"])",
           "legendFormat": "{{endpoint}}",
+          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"rpc_status\" and r.chainId == \"51\")\n  |> keep(columns: [\"_time\", \"_value\", \"endpoint\"])\n  |> group(columns: [\"endpoint\"])",
           "range": true,
           "refId": "A"
         }
       ],
       "title": "RPC Endpoint Status History",
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "_value": true
+            },
+            "indexByName": {
+              "Endpoint URL": 2,
+              "Status": 1,
+              "Time": 0
+            },
+            "renameByName": {
+              "Endpoint URL": "Endpoint URL",
+              "Status": "Status",
+              "Time": "Time"
+            }
+          }
+        }
+      ],
+      "type": "state-timeline"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb"
+      },
+      "description": "Block height comparison across RPC endpoints. Discrepancies indicate sync issues.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 10,
+        "x": 0,
+        "y": 15
+      },
+      "id": 4,
+      "options": {
+        "displayMode": "gradient",
+        "minVizHeight": 10,
+        "minVizWidth": 0,
+        "namePlacement": "auto",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "showUnfilled": true,
+        "text": {},
+        "valueMode": "color"
+      },
+      "pluginVersion": "10.2.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb"
+          },
+          "editorMode": "code",
+          "expr": "xdc_block_height{chainId=\"51\"}",
+          "legendFormat": "Apothem ({{endpoint}})",
+          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"block_height\" and r.chainId == \"51\")\n  |> last(column: \"_value\")\n  |> group(columns: [\"endpoint\"])",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Block Height Comparison",
+      "transformations": [
+        {
+          "id": "renameByRegex",
+          "options": {
+            "regex": "^_value (.*)$",
+            "renamePattern": "$1"
+          }
+        }
+      ],
+      "type": "bargauge"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb"
+      },
+      "description": "Status of WebSocket endpoints. Green = connected, red = disconnected.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "color": "red",
+                  "index": 0,
+                  "text": "DOWN"
+                },
+                "1": {
+                  "color": "green",
+                  "index": 1,
+                  "text": "UP"
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 10,
+        "y": 15
+      },
+      "id": 6,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "text": {
+          "valueSize": 40
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "10.2.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb"
+          },
+          "editorMode": "code",
+          "expr": "xdc_websocket_status{chainId=\"51\"}",
+          "legendFormat": "{{endpoint}}",
+          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"websocket_status\" and r.chainId == \"51\")\n  |> last(column: \"_value\")\n  |> group(columns: [\"endpoint\"])",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "WebSocket Status",
+      "transformations": [
+        {
+          "id": "renameByRegex",
+          "options": {
+            "regex": "^_value (.*)$",
+            "renamePattern": "$1"
+          }
+        }
+      ],
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb"
+      },
+      "description": "WebSocket connectivity timeline. Green = connected, red = disconnected.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "fillOpacity": 70,
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineWidth": 0,
+            "spanNulls": false
+          },
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "color": "red",
+                  "index": 0,
+                  "text": "Down"
+                },
+                "1": {
+                  "color": "green",
+                  "index": 1,
+                  "text": "Up"
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*"
+            },
+            "properties": [
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "red",
+                      "value": null
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 8,
+        "x": 16,
+        "y": 15
+      },
+      "id": 118,
+      "options": {
+        "alignValue": "center",
+        "connectNulls": "never",
+        "legend": {
+          "displayMode": "list",
+          "placement": "right",
+          "showLegend": true
+        },
+        "legendDisplayMode": "list",
+        "mergeValues": false,
+        "rowHeight": 0.9,
+        "showValue": "never",
+        "thresholdsStyle": "area",
+        "thresholdsTextMap": {
+          "0": "Down",
+          "1": "Up"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "10.1.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb"
+          },
+          "editorMode": "code",
+          "expr": "xdc_rpc_status{chainId=\"51\"}",
+          "legendFormat": "{{endpoint}}",
+          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"websocket_status\" and r.chainId == \"51\")\n  |> keep(columns: [\"_time\", \"_value\", \"endpoint\"])\n  |> group(columns: [\"endpoint\"])",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "WS Endpoint Status History",
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "_value": true
+            },
+            "indexByName": {
+              "Endpoint URL": 2,
+              "Status": 1,
+              "Time": 0
+            },
+            "renameByName": {
+              "Endpoint URL": "Endpoint URL",
+              "Status": "Status",
+              "Time": "Time"
+            }
+          }
+        }
+      ],
       "type": "state-timeline"
     },
     {
@@ -780,11 +760,11 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 36
+        "y": 20
       },
-      "id": 103,
+      "id": 120,
       "panels": [],
-      "title": "Endpoints Status",
+      "title": "Transactions",
       "type": "row"
     },
     {
@@ -792,63 +772,96 @@
         "type": "influxdb",
         "uid": "influxdb"
       },
-      "description": "Availability check for Apothem faucet services",
+      "description": "Recent blocks with their total, successful, and failed transaction counts.",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "thresholds"
           },
-          "mappings": [
-            {
-              "options": {
-                "0": {
-                  "color": "red",
-                  "index": 0,
-                  "text": "DOWN"
-                },
-                "1": {
-                  "color": "green",
-                  "index": 1,
-                  "text": "UP"
-                }
-              },
-              "type": "value"
-            }
-          ],
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": true,
+            "inspect": false
+          },
+          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "red",
-                "value": null
-              },
-              {
                 "color": "green",
-                "value": 1
+                "value": null
               }
             ]
           }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Severity"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "critical": {
+                        "color": "red",
+                        "index": 2
+                      },
+                      "info": {
+                        "color": "blue",
+                        "index": 0
+                      },
+                      "warning": {
+                        "color": "orange",
+                        "index": 1
+                      }
+                    },
+                    "type": "value"
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
-        "h": 4,
-        "w": 12,
+        "h": 6,
+        "w": 24,
         "x": 0,
-        "y": 33
+        "y": 21
       },
-      "id": 6,
+      "id": 119,
       "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": ["lastNotNull"],
-          "fields": "",
-          "values": false
+        "cellHeight": "sm",
+        "cellOptions": {
+          "type": "auto"
         },
-        "textMode": "auto"
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": ["sum"],
+          "show": false
+        },
+        "frameIndex": 0,
+        "showHeader": true,
+        "sortBy": [
+          {
+            "desc": true,
+            "displayName": "block"
+          }
+        ]
       },
       "pluginVersion": "10.2.0",
       "targets": [
@@ -858,80 +871,146 @@
             "uid": "influxdb"
           },
           "editorMode": "code",
-          "expr": "xdc_faucet_status{endpoint=~\"https://faucet.apothem.network|https://faucet.blocksscan.io\", chainId=\"51\"}",
-          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"faucet_status\" and r.chainId == \"51\" and (r.endpoint == \"https://faucet.apothem.network\" or r.endpoint == \"https://faucet.blocksscan.io\"))\n  |> last(column: \"_value\")\n  |> group(columns: [\"endpoint\"])",
-          "legendFormat": "{{endpoint}}",
-          "range": true,
+          "format": "table",
+          "hide": false,
+          "instant": true,
+          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"transactions_per_block\" and r.chainId == \"51\")\n  |> keep(columns: [\"_value\", \"block_number\", \"status\"])\n  |> group()\n  |> pivot(rowKey:[\"block_number\"], columnKey: [\"status\"], valueColumn: \"_value\")\n  |> sort(columns: [\"block_number\"], desc: true)",
           "refId": "A"
         }
       ],
-      "title": "Faucet Status",
-      "type": "stat"
+      "title": "Recent Transactions Per Block",
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {},
+            "indexByName": {
+              "block_number": 0,
+              "failed": 3,
+              "success": 2,
+              "total": 1
+            },
+            "renameByName": {
+              "block_number": ""
+            }
+          }
+        }
+      ],
+      "type": "table"
     },
     {
       "datasource": {
         "type": "influxdb",
         "uid": "influxdb"
       },
-      "description": "Availability check for Apothem block explorers",
+      "description": "Visual breakdown of transaction success and failure rates by block number.",
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "thresholds"
+            "mode": "palette-classic"
           },
-          "mappings": [
-            {
-              "options": {
-                "0": {
-                  "color": "red",
-                  "index": 0,
-                  "text": "DOWN"
-                },
-                "1": {
-                  "color": "green",
-                  "index": 1,
-                  "text": "UP"
-                }
-              },
-              "type": "value"
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "Transaction Count (5m)",
+            "axisPlacement": "auto",
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineWidth": 1,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
             }
-          ],
+          },
+          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "red",
-                "value": null
-              },
-              {
                 "color": "green",
-                "value": 1
+                "value": null
               }
             ]
           }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "confirmed"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              },
+              {
+                "id": "displayName",
+                "value": "Success"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "failed"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              },
+              {
+                "id": "displayName",
+                "value": "Failed"
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
-        "h": 4,
+        "h": 8,
         "w": 24,
         "x": 0,
-        "y": 37
+        "y": 27
       },
-      "id": 7,
+      "id": 121,
       "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": ["lastNotNull"],
-          "fields": "",
-          "values": false
+        "barRadius": 0,
+        "barWidth": 0.6,
+        "fullHighlight": false,
+        "groupWidth": 0.8,
+        "legend": {
+          "calcs": ["sum"],
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true
         },
-        "textMode": "auto"
+        "orientation": "auto",
+        "showValue": "auto",
+        "stacking": "normal",
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        },
+        "xField": "block_number",
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 100
       },
-      "pluginVersion": "10.2.0",
       "targets": [
         {
           "datasource": {
@@ -939,15 +1018,84 @@
             "uid": "influxdb"
           },
           "editorMode": "code",
-          "expr": "xdc_explorer_status{endpoint=~\"https://apothem.xdcscan.io|https://apothem.blocksscan.io|https://explorer.apothem.network\", chainId=\"51\"}",
-          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"explorer_status\" and r.chainId == \"51\" and (r.endpoint == \"https://apothem.xdcscan.io\" or r.endpoint == \"https://apothem.blocksscan.io\" or r.endpoint == \"https://explorer.apothem.network\"))\n  |> last(column: \"_value\")\n  |> group(columns: [\"endpoint\"])",
-          "legendFormat": "{{endpoint}}",
-          "range": true,
+          "expr": "xdc_transactions_per_block{status=\"confirmed\", chainId=\"51\"}",
+          "format": "table",
+          "instant": true,
+          "legendFormat": "Success - Block #{{block_number}}",
+          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"transactions_per_block\" and r.status == \"success\" and r.chainId == \"51\")\n  |> keep(columns: [\"_value\", \"block_number\", \"status\"])\n  |> group()\n  |> pivot(rowKey:[\"block_number\"], columnKey: [\"status\"], valueColumn: \"_value\")\n  |> sort(columns: [\"block_number\"], desc: true)",
+          "range": false,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb"
+          },
+          "editorMode": "code",
+          "expr": "xdc_transactions_per_block{status=\"failed\", chainId=\"51\"}",
+          "format": "table",
+          "hide": false,
+          "instant": true,
+          "legendFormat": "Failed - Block #{{block_number}}",
+          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"transactions_per_block\" and r.status == \"failed\" and r.chainId == \"51\")\n  |> keep(columns: [\"_value\", \"block_number\", \"status\"])\n  |> group()\n  |> pivot(rowKey:[\"block_number\"], columnKey: [\"status\"], valueColumn: \"_value\")\n  |> sort(columns: [\"block_number\"], desc: true)",
+          "range": false,
+          "refId": "B"
         }
       ],
-      "title": "Explorer Status",
-      "type": "stat"
+      "title": "Transaction Count by Block Number",
+      "transformations": [
+        {
+          "id": "joinByField",
+          "options": {
+            "byField": "block_number",
+            "mode": "outer"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Time #A": true,
+              "Time #B": true,
+              "__name__": true,
+              "__name__ #A": true,
+              "__name__ #B": true,
+              "instance": true,
+              "instance #A": true,
+              "instance #B": true,
+              "job": true,
+              "job #A": true,
+              "job #B": true,
+              "service": true,
+              "service #A": true,
+              "service #B": true,
+              "status": true,
+              "status #A": true,
+              "status #B": true
+            },
+            "indexByName": {},
+            "renameByName": {
+              "Value #A": "Success",
+              "Value #B": "Failed",
+              "block_number": "Block #"
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "fields": {},
+            "sort": [
+              {
+                "field": "Block #",
+                "order": "ascending"
+              }
+            ]
+          }
+        }
+      ],
+      "type": "barchart"
     },
     {
       "collapsed": false,
@@ -955,7 +1103,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 41
+        "y": 35
       },
       "id": 12,
       "panels": [],
@@ -967,7 +1115,343 @@
         "type": "influxdb",
         "uid": "influxdb"
       },
-      "description": "Block time trend on Apothem Testnet over time",
+      "description": "New blocks created per minute. Normal rate is ~30 blocks/minute.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 36
+      },
+      "id": 122,
+      "options": {
+        "legend": {
+          "calcs": ["min", "max", "mean"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "10.1.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb"
+          },
+          "editorMode": "code",
+          "expr": "rate(xdc_block_height{chainId=\"51\"}[5m])",
+          "legendFormat": "Blocks/min",
+          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"block_height\" and r.chainId == \"51\")\n  |> group(columns: [\"endpoint\"])\n  |> derivative(unit: 1m, nonNegative: true)\n  |> aggregateWindow(every: v.windowPeriod, fn: mean)",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Block Height Growth Rate",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb"
+      },
+      "description": "Successful vs failed transactions per 1-minute window.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Success"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Failed"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "yellow",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 36
+      },
+      "id": 116,
+      "options": {
+        "legend": {
+          "calcs": ["mean", "max"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "10.1.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb"
+          },
+          "editorMode": "code",
+          "expr": "rate(xdc_transaction_count{status=\"confirmed\", chainId=\"51\"}[1m])",
+          "legendFormat": "Success",
+          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"transactions_per_block\" and r.status == \"success\" and r.chainId == \"51\")\n  |> keep(columns: [\"_time\", \"_value\"])\n  |> aggregateWindow(every: 1m, fn: sum, createEmpty: false)",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb"
+          },
+          "editorMode": "code",
+          "expr": "rate(xdc_transaction_count{status=\"failed\", chainId=\"51\"}[1m])",
+          "legendFormat": "Failed",
+          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"transactions_per_block\" and r.status == \"failed\" and r.chainId == \"51\")\n  |> keep(columns: [\"_time\", \"_value\"])\n  |> aggregateWindow(every: 1m, fn: sum, createEmpty: false)",
+          "range": true,
+          "refId": "B"
+        }
+      ],
+      "title": "Transaction Volume (1-minute windows)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb"
+      },
+      "description": "Historical trend of block times. Shows network performance over time.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "area"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 5
+              },
+              {
+                "color": "red",
+                "value": 10
+              }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 44
+      },
+      "id": 112,
+      "options": {
+        "legend": {
+          "calcs": ["mean", "max"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "10.1.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb"
+          },
+          "editorMode": "code",
+          "expr": "xdc_block_time{chainId=\"51\"}",
+          "legendFormat": "Block Time",
+          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"block_time\" and r.chainId == \"51\")\n  |> filter(fn: (r) => r._field == \"value\")\n  |> keep(columns: [\"_time\", \"_value\"])",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Block Time Trend",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb"
+      },
+      "description": "95th percentile of RPC response times. Shows near worst-case performance for each endpoint.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1015,28 +1499,28 @@
               },
               {
                 "color": "yellow",
-                "value": 2
+                "value": 1000
               },
               {
                 "color": "red",
-                "value": 3
+                "value": 2000
               }
             ]
           },
-          "unit": "s"
+          "unit": "ms"
         },
         "overrides": []
       },
       "gridPos": {
         "h": 8,
-        "w": 24,
-        "x": 0,
-        "y": 42
+        "w": 12,
+        "x": 12,
+        "y": 44
       },
-      "id": 13,
+      "id": 123,
       "options": {
         "legend": {
-          "calcs": ["mean", "max"],
+          "calcs": ["min", "max", "mean"],
           "displayMode": "table",
           "placement": "bottom",
           "showLegend": true
@@ -1054,14 +1538,14 @@
             "uid": "influxdb"
           },
           "editorMode": "code",
-          "expr": "xdc_block_time{chainId=\"51\"}",
-          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"block_time\" and r.chainId == \"51\")\n  |> last(column: \"_value\")",
-          "legendFormat": "Block Time",
+          "expr": "histogram_quantile(0.95, sum(rate(xdc_rpc_latency_bucket{chainId=\"51\"}[5m])) by (le, endpoint))",
+          "legendFormat": "{{endpoint}}",
+          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"rpc_latency\" and r.chainId == \"51\")\n  |> group(columns: [\"endpoint\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: (column, tables=<-) => tables |> quantile(q: 0.95, column: column), createEmpty: false)",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Block Time Trend",
+      "title": "RPC Response Times (95th Percentile)",
       "type": "timeseries"
     },
     {
@@ -1070,7 +1554,200 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 50
+        "y": 52
+      },
+      "id": 103,
+      "panels": [],
+      "title": "Endpoints Status",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb"
+      },
+      "description": "Status of testnet faucet services. Green = up, red = down.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "color": "red",
+                  "index": 0,
+                  "text": "DOWN"
+                },
+                "1": {
+                  "color": "green",
+                  "index": 1,
+                  "text": "UP"
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 12,
+        "x": 0,
+        "y": 53
+      },
+      "id": 107,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "10.2.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb"
+          },
+          "editorMode": "code",
+          "expr": "xdc_faucet_status{endpoint=~\"https://faucet.apothem.network|https://faucet.blocksscan.io\", chainId=\"51\"}",
+          "legendFormat": "{{endpoint}}",
+          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"faucet_status\" and r.chainId == \"51\" and (r.endpoint == \"https://faucet.apothem.network\" or r.endpoint == \"https://faucet.blocksscan.io\"))\n  |> last(column: \"_value\")\n  |> group(columns: [\"endpoint\"])",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Faucet Status",
+      "transformations": [
+        {
+          "id": "renameByRegex",
+          "options": {
+            "regex": "^_value (.*)$",
+            "renamePattern": "$1"
+          }
+        }
+      ],
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb"
+      },
+      "description": "Status of block explorer services. Green = up, red = down.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "color": "red",
+                  "index": 0,
+                  "text": "DOWN"
+                },
+                "1": {
+                  "color": "green",
+                  "index": 1,
+                  "text": "UP"
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 12,
+        "x": 12,
+        "y": 53
+      },
+      "id": 7,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "10.2.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb"
+          },
+          "editorMode": "code",
+          "expr": "xdc_explorer_status{endpoint=~\"https://apothem.xdcscan.io|https://apothem.blocksscan.io|https://explorer.apothem.network\", chainId=\"51\"}",
+          "legendFormat": "{{endpoint}}",
+          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"explorer_status\" and r.chainId == \"51\" and (r.endpoint == \"https://apothem.xdcscan.io\" or r.endpoint == \"https://apothem.blocksscan.io\" or r.endpoint == \"https://explorer.apothem.network\"))\n  |> last(column: \"_value\")\n  |> group(columns: [\"endpoint\"])",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Explorer Status",
+      "transformations": [
+        {
+          "id": "renameByRegex",
+          "options": {
+            "regex": "^_value (.*)$",
+            "renamePattern": "$1"
+          }
+        }
+      ],
+      "type": "stat"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 57
       },
       "id": 104,
       "panels": [],
@@ -1082,11 +1759,12 @@
         "type": "influxdb",
         "uid": "influxdb"
       },
+      "description": "Currently active alerts requiring attention.",
       "gridPos": {
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 51
+        "y": 58
       },
       "id": 100,
       "options": {
@@ -1118,13 +1796,13 @@
     "list": []
   },
   "time": {
-    "from": "now-6h",
+    "from": "now-24h",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "",
   "title": "XDC Apothem Testnet Monitoring",
   "uid": "apothem-testnet",
-  "version": 10,
+  "version": 37,
   "weekStart": ""
 }
