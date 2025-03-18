@@ -1,12 +1,15 @@
 name: Deploy to Staging
 
 on:
-  push:
+  workflow_run:
+    workflows: ['XDC Monitor CI']
     branches: [staging]
+    types: [completed]
 
 jobs:
   deploy-staging:
     runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
     steps:
       - name: Checkout code
@@ -175,6 +178,6 @@ jobs:
           rm env_staging
 
           echo "Pulling latest images and restarting services..."
-          ssh $STAGING_HOST "cd $DEPLOY_PATH && docker-compose pull && ./run.sh rebuild"
+          ssh $STAGING_HOST "cd $DEPLOY_PATH && docker-compose pull && ./run.sh grafana-import && ./run.sh rebuild"
 
           echo "Deployment to staging completed successfully!"

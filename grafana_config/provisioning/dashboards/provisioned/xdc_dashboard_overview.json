@@ -479,6 +479,7 @@
         "type": "influxdb",
         "uid": "influxdb"
       },
+      "description": "Shows the mean response time in milliseconds for each RPC endpoint over time. This provides a view of typical everyday performance for comparative analysis.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -539,7 +540,7 @@
       "id": 106,
       "options": {
         "legend": {
-          "calcs": ["mean", "max"],
+          "calcs": ["min", "max", "mean"],
           "displayMode": "table",
           "placement": "right",
           "showLegend": true
@@ -564,7 +565,7 @@
           "refId": "A"
         }
       ],
-      "title": "RPC Latency by Endpoint",
+      "title": "Average RPC Latency by Endpoint",
       "type": "timeseries"
     },
     {
@@ -1048,7 +1049,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "Transaction Count",
+            "axisLabel": "Transaction Count (5m)",
             "axisPlacement": "auto",
             "fillOpacity": 80,
             "gradientMode": "none",
@@ -1250,6 +1251,7 @@
         "type": "influxdb",
         "uid": "influxdb"
       },
+      "description": "Shows how many new blocks are created per minute on the XDC blockchain. A healthy network produces blocks at a consistent rate (typically about 1 block every 2 seconds or ~30 blocks/minute). Sudden drops may indicate network issues, while spikes could indicate catch-up after delays.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1310,7 +1312,7 @@
       "id": 115,
       "options": {
         "legend": {
-          "calcs": ["mean", "max"],
+          "calcs": ["min", "max", "mean"],
           "displayMode": "table",
           "placement": "bottom",
           "showLegend": true
@@ -1330,7 +1332,7 @@
           "editorMode": "code",
           "expr": "rate(xdc_block_height{chainId=\"50\"}[5m])",
           "legendFormat": "Blocks/min",
-          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"block_height\" and r.chainId == \"50\")\n  |> derivative(unit: 1m, nonNegative: true)\n  |> mean()",
+          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"block_height\" and r.chainId == \"50\")\n  |> group(columns: [\"endpoint\"])\n  |> derivative(unit: 1m, nonNegative: true)\n  |> aggregateWindow(every: v.windowPeriod, fn: mean)",
           "range": true,
           "refId": "A"
         }
@@ -1398,7 +1400,7 @@
               }
             ]
           },
-          "unit": "s"
+          "unit": "none"
         },
         "overrides": []
       },
@@ -1430,8 +1432,8 @@
           },
           "editorMode": "code",
           "expr": "rate(xdc_transaction_count{status=\"confirmed\", chainId=\"50\"}[5m])",
-          "legendFormat": "Successful TX/min",
-          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"transaction_count\" and r.status == \"confirmed\" and r.chainId == \"50\")\n  |> derivative(unit: 1m, nonNegative: true)\n  |> group(columns: [\"status\"])",
+          "legendFormat": "Successful Transactions (5m)",
+          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"transactions_per_block\" and r.status == \"success\" and r.chainId == \"50\")\n  |> keep(columns: [\"_time\", \"_value\"])\n  |> aggregateWindow(every: 5m, fn: sum, createEmpty: false)",
           "range": true,
           "refId": "A"
         },
@@ -1442,13 +1444,14 @@
           },
           "editorMode": "code",
           "expr": "rate(xdc_transaction_count{status=\"failed\", chainId=\"50\"}[5m])",
-          "legendFormat": "Failed TX/min",
-          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"transaction_count\" and r.status == \"failed\" and r.chainId == \"50\")\n  |> derivative(unit: 1m, nonNegative: true)\n  |> group(columns: [\"status\"])",
+          "legendFormat": "Failed Transactions (5m)",
+          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"transactions_per_block\" and r.status == \"failed\" and r.chainId == \"50\")\n  |> keep(columns: [\"_time\", \"_value\"])\n  |> aggregateWindow(every: 5m, fn: sum, createEmpty: false)",
           "range": true,
           "refId": "B"
         }
       ],
-      "title": "Transaction Rate",
+      "title": "Transaction Volume (5-minute windows)",
+      "description": "Shows the volume of successful and failed transactions per 5-minute window on the XDC blockchain. This is a key network activity metric that indicates usage levels and transaction processing health. A high failure rate relative to successful transactions could indicate potential network issues.",
       "type": "timeseries"
     },
     {
@@ -1558,6 +1561,7 @@
         "type": "influxdb",
         "uid": "influxdb"
       },
+      "description": "Shows the 95th percentile of response times in milliseconds for each RPC endpoint. This represents the threshold under which 95% of all requests complete, highlighting near-worst-case performance while filtering out extreme outliers.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1626,7 +1630,7 @@
       "id": 113,
       "options": {
         "legend": {
-          "calcs": ["mean", "max"],
+          "calcs": ["min", "max", "mean"],
           "displayMode": "table",
           "placement": "bottom",
           "showLegend": true
@@ -1646,12 +1650,12 @@
           "editorMode": "code",
           "expr": "histogram_quantile(0.95, sum(rate(xdc_rpc_latency_bucket{chainId=\"50\"}[5m])) by (le, endpoint))",
           "legendFormat": "{{endpoint}}",
-          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"rpc_latency\" and r.chainId == \"50\")\n  |> group(columns: [\"endpoint\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: max, createEmpty: false)",
+          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"rpc_latency\" and r.chainId == \"50\")\n  |> group(columns: [\"endpoint\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: (column, tables=<-) => tables |> quantile(q: 0.95, column: column), createEmpty: false)",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "RPC Request Duration (95th Percentile)",
+      "title": "RPC Response Times (95th Percentile)",
       "type": "timeseries"
     },
     {
@@ -1861,7 +1865,7 @@
       "type": "alertlist"
     }
   ],
-  "refresh": "",
+  "refresh": "10s",
   "schemaVersion": 38,
   "tags": ["xdc", "blockchain", "monitoring", "alerts", "rpc"],
   "templating": {
@@ -1875,6 +1879,6 @@
   "timezone": "",
   "title": "XDC Network Unified Dashboard",
   "uid": "xdc-unified-dashboard",
-  "version": 129,
+  "version": 141,
   "weekStart": ""
 }
