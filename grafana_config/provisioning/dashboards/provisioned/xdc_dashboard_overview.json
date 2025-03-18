@@ -56,6 +56,7 @@
         "type": "influxdb",
         "uid": "influxdb"
       },
+      "description": "Latest block height on the XDC Network. Increases as new blocks are added to the blockchain.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -117,7 +118,7 @@
         "type": "influxdb",
         "uid": "influxdb"
       },
-      "description": "Current block height comparison across XDC Network RPC endpoints",
+      "description": "Block height comparison across RPC endpoints. Discrepancies indicate potential synchronization issues.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -201,6 +202,7 @@
         "type": "influxdb",
         "uid": "influxdb"
       },
+      "description": "Current status of HTTPS RPC endpoints. Green = operational, red = down or error.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -294,6 +296,7 @@
         "type": "influxdb",
         "uid": "influxdb"
       },
+      "description": "Current status of WebSocket endpoints. Green = connected, red = disconnected.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -387,7 +390,7 @@
         "type": "influxdb",
         "uid": "influxdb"
       },
-      "description": "Time in seconds between the last two blocks on the XDC Network. Lower values indicate a healthy network.",
+      "description": "Time between the last two blocks. Lower values (2-3s) indicate healthy network operation.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -479,7 +482,7 @@
         "type": "influxdb",
         "uid": "influxdb"
       },
-      "description": "Shows the mean response time in milliseconds for each RPC endpoint over time. This provides a view of typical everyday performance for comparative analysis.",
+      "description": "Mean response time (ms) for each RPC endpoint over time.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -573,7 +576,7 @@
         "type": "influxdb",
         "uid": "influxdb"
       },
-      "description": "Status of RPC endpoints over time (1 = up, 0 = down)",
+      "description": "RPC endpoint availability timeline. Green = up, red = down. Helps identify recurring issues.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -716,7 +719,7 @@
         "type": "influxdb",
         "uid": "influxdb"
       },
-      "description": "Status of RPC endpoints over time (1 = up, 0 = down)",
+      "description": "WebSocket connectivity timeline. Green = connected, red = disconnected.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -826,7 +829,7 @@
           "editorMode": "code",
           "expr": "xdc_rpc_status{chainId=\"50\"}",
           "legendFormat": "{{endpoint}}",
-          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"websocket_status\" and r.chainId == \"50\" and (r.endpoint == \"wss://ws.xinfin.network\" or r.endpoint == \"wss://rpc.xinfin.network/ws\" or r.endpoint == \"wss://erpc.xinfin.network/ws\" or r.endpoint == \"wss://xdc.public-rpc.com/ws\" or r.endpoint == \"wss://rpc.xinfin.network\" or r.endpoint == \"wss://erpc.xinfin.network\" or r.endpoint == \"ws://173.212.233.170:8888\" or r.endpoint == \"wss://ews.xinfin.network\" or r.endpoint == \"wss://aws.xinfin.network\" or r.endpoint == \"wss://eaws.xinfin.network\"))\n  |> keep(columns: [\"_time\", \"_value\", \"endpoint\"])\n  |> group(columns: [\"endpoint\"])",
+          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"websocket_status\" and r.chainId == \"50\")\n  |> keep(columns: [\"_time\", \"_value\", \"endpoint\"])\n  |> group(columns: [\"endpoint\"])",
           "range": true,
           "refId": "A"
         }
@@ -872,6 +875,7 @@
         "type": "influxdb",
         "uid": "influxdb"
       },
+      "description": "Recent blocks with their total, successful, and failed transaction counts.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -882,6 +886,7 @@
             "cellOptions": {
               "type": "auto"
             },
+            "filterable": true,
             "inspect": false
           },
           "mappings": [],
@@ -899,74 +904,35 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "block"
+              "options": "Severity"
             },
             "properties": [
               {
-                "id": "custom.minWidth",
-                "value": 150
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "success"
-            },
-            "properties": [
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "critical": {
+                        "color": "red",
+                        "index": 2
+                      },
+                      "info": {
+                        "color": "blue",
+                        "index": 0
+                      },
+                      "warning": {
+                        "color": "orange",
+                        "index": 1
+                      }
+                    },
+                    "type": "value"
+                  }
+                ]
+              },
               {
                 "id": "custom.cellOptions",
                 "value": {
                   "type": "color-text"
-                }
-              },
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "green",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "failed"
-            },
-            "properties": [
-              {
-                "id": "custom.cellOptions",
-                "value": {
-                  "type": "color-text"
-                }
-              },
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "red",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "total"
-            },
-            "properties": [
-              {
-                "id": "custom.cellOptions",
-                "value": {
-                  "type": "color-text"
-                }
-              },
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "blue",
-                  "mode": "fixed"
                 }
               }
             ]
@@ -1040,6 +1006,7 @@
         "type": "influxdb",
         "uid": "influxdb"
       },
+      "description": "Visual breakdown of transaction success and failure rates by block number.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1251,7 +1218,7 @@
         "type": "influxdb",
         "uid": "influxdb"
       },
-      "description": "Shows how many new blocks are created per minute on the XDC blockchain. A healthy network produces blocks at a consistent rate (typically about 1 block every 2 seconds or ~30 blocks/minute). Sudden drops may indicate network issues, while spikes could indicate catch-up after delays.",
+      "description": "New blocks created per minute. Normal rate is ~30 blocks/minute.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1345,7 +1312,7 @@
         "type": "influxdb",
         "uid": "influxdb"
       },
-      "description": "Shows the volume of successful and failed transactions per 5-minute window on the XDC blockchain. This is a key network activity metric that indicates usage levels and transaction processing health. A high failure rate relative to successful transactions could indicate potential network issues.",
+      "description": "Successful vs failed transactions per 1-minute window.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1355,7 +1322,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "",
+            "axisLabel": "Transaction Count (1m)",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "drawStyle": "line",
@@ -1432,9 +1399,9 @@
             "uid": "influxdb"
           },
           "editorMode": "code",
-          "expr": "rate(xdc_transaction_count{status=\"confirmed\", chainId=\"50\"}[5m])",
-          "legendFormat": "Successful Transactions (5m)",
-          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"transactions_per_block\" and r.status == \"success\" and r.chainId == \"50\")\n  |> keep(columns: [\"_time\", \"_value\"])\n  |> aggregateWindow(every: 5m, fn: sum, createEmpty: false)",
+          "expr": "rate(xdc_transaction_count{status=\"confirmed\", chainId=\"50\"}[1m])",
+          "legendFormat": "Successful Transactions (1m)",
+          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"transactions_per_block\" and r.status == \"success\" and r.chainId == \"50\")\n  |> keep(columns: [\"_time\", \"_value\"])\n  |> aggregateWindow(every: 1m, fn: sum, createEmpty: false)",
           "range": true,
           "refId": "A"
         },
@@ -1444,14 +1411,14 @@
             "uid": "influxdb"
           },
           "editorMode": "code",
-          "expr": "rate(xdc_transaction_count{status=\"failed\", chainId=\"50\"}[5m])",
-          "legendFormat": "Failed Transactions (5m)",
-          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"transactions_per_block\" and r.status == \"failed\" and r.chainId == \"50\")\n  |> keep(columns: [\"_time\", \"_value\"])\n  |> aggregateWindow(every: 5m, fn: sum, createEmpty: false)",
+          "expr": "rate(xdc_transaction_count{status=\"failed\", chainId=\"50\"}[1m])",
+          "legendFormat": "Failed Transactions (1m)",
+          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"transactions_per_block\" and r.status == \"failed\" and r.chainId == \"50\")\n  |> keep(columns: [\"_time\", \"_value\"])\n  |> aggregateWindow(every: 1m, fn: sum, createEmpty: false)",
           "range": true,
           "refId": "B"
         }
       ],
-      "title": "Transaction Volume (5-minute windows)",
+      "title": "Transaction Volume (1-minute windows)",
       "type": "timeseries"
     },
     {
@@ -1459,7 +1426,7 @@
         "type": "influxdb",
         "uid": "influxdb"
       },
-      "description": "Historical trend of block time in seconds. Shows how block time varies over the selected time range.",
+      "description": "Historical trend of block times. Shows network performance over time.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1561,7 +1528,7 @@
         "type": "influxdb",
         "uid": "influxdb"
       },
-      "description": "Shows the 95th percentile of response times in milliseconds for each RPC endpoint. This represents the threshold under which 95% of all requests complete, highlighting near-worst-case performance while filtering out extreme outliers.",
+      "description": "95th percentile of RPC response times. Shows near worst-case performance for each endpoint.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1698,7 +1665,7 @@
         "type": "influxdb",
         "uid": "influxdb"
       },
-      "description": "Recent alert notifications",
+      "description": "Recent alert history showing system health issues and their timing.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1836,6 +1803,7 @@
         "type": "influxdb",
         "uid": "influxdb"
       },
+      "description": "Currently active alerts requiring attention.",
       "gridPos": {
         "h": 6,
         "w": 24,
@@ -1863,6 +1831,144 @@
       },
       "title": "Active Alerts",
       "type": "alertlist"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb"
+      },
+      "description": "Historical record of past alerts with timing and severity.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": true,
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Severity"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "critical": {
+                        "color": "red",
+                        "index": 2
+                      },
+                      "info": {
+                        "color": "blue",
+                        "index": 0
+                      },
+                      "warning": {
+                        "color": "orange",
+                        "index": 1
+                      }
+                    },
+                    "type": "value"
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 74
+      },
+      "id": 124,
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": ["sum"],
+          "show": false
+        },
+        "showHeader": true,
+        "sortBy": [
+          {
+            "desc": true,
+            "displayName": "Time"
+          }
+        ]
+      },
+      "pluginVersion": "10.2.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb"
+          },
+          "editorMode": "code",
+          "expr": "sort_desc(ALERTS)",
+          "format": "table",
+          "instant": true,
+          "legendFormat": "alert",
+          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart)\n  |> filter(fn: (r) => r._measurement == \"alert_count\")\n  |> group(columns: [\"type\", \"component\", \"chainId\"])\n  |> last(column: \"_value\")",
+          "range": false,
+          "refId": "A"
+        }
+      ],
+      "title": "Recent Alert History",
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Value": true
+            },
+            "indexByName": {
+              "Time": 0,
+              "alertname": 1,
+              "alertstate": 2,
+              "instance": 3,
+              "job": 4,
+              "severity": 5
+            },
+            "renameByName": {
+              "Time": "Time",
+              "alertname": "Alert",
+              "alertstate": "State",
+              "instance": "Target",
+              "job": "Service",
+              "severity": "Severity"
+            }
+          }
+        }
+      ],
+      "type": "table"
     }
   ],
   "refresh": "10s",
@@ -1872,13 +1978,13 @@
     "list": []
   },
   "time": {
-    "from": "now-6h",
+    "from": "now-24h",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "",
   "title": "XDC Network Unified Dashboard",
   "uid": "xdc-unified-dashboard",
-  "version": 162,
+  "version": 174,
   "weekStart": ""
 }
