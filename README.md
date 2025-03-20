@@ -75,20 +75,34 @@ The system monitors the following conditions:
 
 Alerts are delivered through multiple channels:
 
-1. **Grafana UI**: All alerts appear in the Grafana dashboard
-2. **Telegram**: Alerts are sent to a configured Telegram chat
-3. **Server Logs**: All alerts are logged in the server's logs
+1. **Grafana UI**: Dashboard alerts appear in the Grafana UI (controlled by `ENABLE_DASHBOARD_ALERTS`)
+2. **Telegram**: Alerts sent to a configured Telegram chat (controlled by `ENABLE_CHAT_NOTIFICATIONS`)
+3. **Webhook**: Alerts sent to an external service via webhook (controlled by `ENABLE_CHAT_NOTIFICATIONS` and requires `NOTIFICATION_WEBHOOK_URL`)
+4. **Server Logs**: All alerts are logged in the server's logs
 
 ### Alert Configuration
 
-Configure Telegram notifications by adding these values to your `.env` file:
+Configure alerts in your `.env` file:
 
 ```
-TELEGRAM_BOT_TOKEN="your-telegram-bot-token-here"
-TELEGRAM_CHAT_ID="your-telegram-chat-id-here"
+# Enable/disable alert channels
 ENABLE_DASHBOARD_ALERTS=true
 ENABLE_CHAT_NOTIFICATIONS=true
+
+# Telegram configuration
+TELEGRAM_BOT_TOKEN="your-telegram-bot-token-here"
+TELEGRAM_CHAT_ID="your-telegram-chat-id-here"
+
+# Webhook configuration
+NOTIFICATION_WEBHOOK_URL="https://hooks.slack.com/services/XXX/YYY/ZZZ"
 ```
+
+The system uses these environment variables to control alert behavior:
+
+- `ENABLE_DASHBOARD_ALERTS`: Controls Grafana dashboard alerts
+- `ENABLE_CHAT_NOTIFICATIONS`: Controls external notifications (Telegram and webhook)
+- `TELEGRAM_BOT_TOKEN` & `TELEGRAM_CHAT_ID`: Required for Telegram notifications
+- `NOTIFICATION_WEBHOOK_URL`: URL to send webhook alerts (for Slack, Discord, etc.)
 
 ### Testing Alerts
 
@@ -183,9 +197,11 @@ docker pull ghcr.io/[organization]/xdc-monitor:sha-abcdef
 The project uses environment variables for configuration. Create a `.env` file in the project root with the following variables:
 
 ```
+# General configuration
+BLOCKS_TO_SCAN=10
 SCAN_INTERVAL=15
 
-# Monitoring configuration
+# Monitoring features
 ENABLE_RPC_MONITORING=true
 ENABLE_PORT_MONITORING=true
 ENABLE_BLOCK_MONITORING=true
@@ -201,7 +217,7 @@ TELEGRAM_BOT_TOKEN="your-telegram-bot-token-here"
 TELEGRAM_CHAT_ID="your-telegram-chat-id-here"
 
 # Logging configuration
-LOG_LEVEL=debug
+LOG_LEVEL=info
 
 # InfluxDB Configuration
 INFLUXDB_URL=http://localhost:8086
@@ -214,7 +230,38 @@ INFLUXDB_ADMIN_PASSWORD=secure-password
 # Grafana Admin Credentials
 GRAFANA_ADMIN_USER=admin
 GRAFANA_ADMIN_PASSWORD=secure-password
+
+# Transaction monitoring configuration
+ENABLE_TRANSACTION_MONITORING=true
+MNEMONIC_WALLET="your mnemonic wallet seed phrase here"
+MAINNET_TEST_PRIVATE_KEY=your-test-wallet-private-key-for-mainnet
+TESTNET_TEST_PRIVATE_KEY=your-test-wallet-private-key-for-testnet
+TEST_RECEIVER_ADDRESS_50=0xReceiverAddressForMainnet
+TEST_RECEIVER_ADDRESS_51=0xReceiverAddressForTestnet
 ```
+
+### Webhook Notifications
+
+The `NOTIFICATION_WEBHOOK_URL` configuration allows you to send alert notifications to external services. You can use any webhook-compatible service:
+
+1. **Slack Incoming Webhook**:
+
+   - Create a webhook URL in your Slack workspace (Apps → Create app → Incoming Webhooks)
+   - Example: `https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXX`
+
+2. **Discord Webhook**:
+
+   - Create a webhook URL in your Discord server (Channel settings → Integrations → Webhooks)
+   - Example: `https://discord.com/api/webhooks/000000000000000000/XXXX`
+
+3. **Microsoft Teams Webhook**:
+
+   - Create a webhook in your Teams channel (... menu → Connectors → Incoming Webhook)
+
+4. **Custom Webhook Endpoint**:
+   - Any HTTP endpoint that accepts JSON POST requests with alert data
+
+When configured, the system will POST JSON data containing alert information to this URL whenever monitoring conditions trigger an alert.
 
 ## Usage
 
@@ -400,14 +447,46 @@ The project follows a clean, modular architecture:
 src/
 ├── common/                  # Shared code across the entire application
 │   ├── constants/           # Configuration constants and defaults
+│   │   ├── config.ts        # Core configuration constants
+│   │   ├── endpoints.ts     # Network endpoints definitions
+│   │   └── monitoring.ts    # Monitoring thresholds and settings
 │   ├── interfaces/          # Shared TypeScript interfaces
+│   │   ├── monitoring.ts    # Monitoring configuration interfaces
+│   │   ├── rpc.interface.ts # RPC endpoints and configuration
+│   │   └── blockchain.ts    # Blockchain data structures
 │   └── utils/               # Utility classes and helper functions
 ├── config/                  # Configuration module and service
+│   ├── config.module.ts     # Configuration module definition
+│   └── config.service.ts    # Service for accessing configuration
 ├── blockchain/              # Blockchain interaction services
 ├── monitoring/              # Core monitoring services
+│   ├── alerts.service.ts    # Alert configuration and delivery
+│   └── transaction.monitor.ts # Transaction monitoring implementation
 ├── metrics/                 # Metrics collection and reporting
 └── models/                  # Data models and interfaces
 ```
+
+### Key Configuration Components
+
+1. **Environment Variables**: Defined in `.env` file with examples in `.env.example`
+
+2. **Config Constants**: Centralized in `src/common/constants/config.ts`
+
+   - `ENV_VARS`: Mapping of all environment variable names
+   - `FEATURE_FLAGS`: Feature toggles for different parts of the system
+   - `DEFAULTS`: Default values when environment variables are missing
+   - `ALERTS`: Alert thresholds and configuration
+
+3. **Configuration Service**: Implemented in `src/config/config.service.ts`
+
+   - Loads configuration from environment variables
+   - Provides typed access with validation
+   - Handles defaults and fallbacks
+
+4. **Interfaces**: Structured type definitions
+   - `MonitoringConfig`: Configuration for all monitoring components
+   - `AlertNotificationConfig`: Configuration for notification channels
+   - `InfluxDbConfig`: Configuration for InfluxDB metrics storage
 
 ### Key Utility Classes
 
@@ -420,9 +499,15 @@ The application includes several powerful utilities:
    - Concurrency control and timeout handling
 
 2. **TimeWindowData**: Efficient time-series data management
+
    - Automatic cleanup of outdated points
    - Statistical functions (min, max, average)
    - Memory-efficient storage
+
+3. **AlertManager**: Centralized alert management
+   - Multiple delivery channels (Telegram, webhook, dashboard)
+   - Alert throttling to prevent notification storms
+   - Severity-based prioritization
 
 ## Contributing
 
