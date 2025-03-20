@@ -1,7 +1,7 @@
-import { Controller, Get, Query, Logger, Post } from '@nestjs/common';
 import { MetricsService } from '@metrics/metrics.service';
-import { AlertsService } from './alerts.service';
-import { RpcMonitorService } from './rpc.monitor';
+import { Controller, Get, Logger, Param, Post, Query } from '@nestjs/common';
+import { AlertsService } from '@monitoring/alerts.service';
+import { RpcMonitorService } from '@monitoring/rpc.monitor';
 
 @Controller('testing')
 export class TestingController {
@@ -35,10 +35,10 @@ export class TestingController {
       return { success: false, message: 'Endpoint parameter is required' };
     }
 
-    this.logger.log(`Simulating RPC endpoint down: ${endpoint}`);
+    this.logger.log(`Simulating RPC down: ${endpoint}`);
     this.metricsService.setRpcStatus(endpoint, false);
 
-    return { success: true, message: `Simulated RPC endpoint ${endpoint} status set to down` };
+    return { success: true, message: `Simulated RPC down for ${endpoint}` };
   }
 
   @Post('simulate-rpc-latency')
@@ -72,5 +72,118 @@ export class TestingController {
     });
 
     return { success: true, message: `${alertType} alert triggered: ${title}` };
+  }
+
+  /**
+   * Test All Alerts
+   * This will trigger all the alerts we've implemented for quick testing
+   */
+  @Get('trigger-all-alerts')
+  async triggerAllAlerts() {
+    this.logger.log('Triggering all alert types for testing');
+
+    // 1. Average Block Time Alert
+    await this.alertsService.createThresholdAlert(
+      'warning',
+      'blockchain',
+      'Average Block Time Exceeded Threshold',
+      3.2,
+      2.5,
+      's',
+    );
+
+    // 2. Transaction Error Alert
+    await this.alertsService.createThresholdAlert(
+      'warning',
+      'transactions',
+      'High Transaction Error Rate',
+      5,
+      3,
+      ' failed transactions in 5 minutes',
+    );
+
+    // 3. High Transaction Volume Alert
+    await this.alertsService.createThresholdAlert(
+      'info',
+      'transactions',
+      'High Transaction Volume',
+      2500,
+      2000,
+      ' transactions in 5 minutes',
+    );
+
+    // 4. RPC Response Time Alert
+    await this.alertsService.createThresholdAlert('error', 'rpc', 'RPC Response Time Excessive', 32000, 30000, 'ms');
+
+    return {
+      success: true,
+      message: 'All test alerts triggered successfully',
+      alerts: [
+        { type: 'Average Block Time', threshold: '2.5s', value: '3.2s' },
+        { type: 'Transaction Errors', threshold: '3 in 5 minutes', value: '5' },
+        { type: 'Transaction Volume', threshold: '2000 in 5 minutes', value: '2500' },
+        { type: 'RPC Response Time', threshold: '30000ms', value: '32000ms' },
+      ],
+    };
+  }
+
+  /**
+   * Test specific alert type
+   */
+  @Get('trigger-alert/:type')
+  async triggerSpecificAlert(@Param('type') alertType: string) {
+    this.logger.log(`Triggering specific alert type: ${alertType}`);
+
+    switch (alertType) {
+      case 'block-time':
+        await this.alertsService.createThresholdAlert(
+          'warning',
+          'blockchain',
+          'Average Block Time Exceeded Threshold',
+          3.2,
+          2.5,
+          's',
+        );
+        return { success: true, message: 'Block time alert triggered' };
+
+      case 'tx-errors':
+        await this.alertsService.createThresholdAlert(
+          'warning',
+          'transactions',
+          'High Transaction Error Rate',
+          5,
+          3,
+          ' failed transactions in 5 minutes',
+        );
+        return { success: true, message: 'Transaction errors alert triggered' };
+
+      case 'tx-volume':
+        await this.alertsService.createThresholdAlert(
+          'info',
+          'transactions',
+          'High Transaction Volume',
+          2500,
+          2000,
+          ' transactions in 5 minutes',
+        );
+        return { success: true, message: 'Transaction volume alert triggered' };
+
+      case 'rpc-time':
+        await this.alertsService.createThresholdAlert(
+          'error',
+          'rpc',
+          'RPC Response Time Excessive',
+          32000,
+          30000,
+          'ms',
+        );
+        return { success: true, message: 'RPC response time alert triggered' };
+
+      default:
+        return {
+          success: false,
+          message: 'Unknown alert type. Available types: block-time, tx-errors, tx-volume, rpc-time',
+        };
+    }
   }
 }

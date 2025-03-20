@@ -25,6 +25,7 @@
       "@models/*": ["src/models/*"],
       "@monitoring/*": ["src/monitoring/*"],
       "@metrics/*": ["src/metrics/*"],
+      "@common/*": ["src/common/*"],
       "@/*": ["src/*"]
     }
   }

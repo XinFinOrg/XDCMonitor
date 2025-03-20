@@ -1,7 +1,11 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { BlockchainService } from '@blockchain/blockchain.service';
-import { ConfigService, RpcEndpoint } from '@config/config.service';
+import { ALERTS, BLOCKCHAIN, PERFORMANCE } from '@common/constants/config';
+import { RpcEndpoint } from '@common/interfaces/rpc.interface';
+import { RpcRetryClient } from '@common/utils/rpc-retry-client';
+import { ConfigService } from '@config/config.service';
 import { MetricsService } from '@metrics/metrics.service';
+import { AlertsService } from '@monitoring/alerts.service';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import axios from 'axios';
 
 let WebSocket;
@@ -22,10 +26,14 @@ export class RpcMonitorService implements OnModuleInit {
   private portInterval: NodeJS.Timeout;
   private servicesInterval: NodeJS.Timeout;
 
+  // Map of RPC clients by endpoint URL
+  private rpcClients: Map<string, RpcRetryClient> = new Map();
+
   constructor(
     private readonly blockchainService: BlockchainService,
     private readonly configService: ConfigService,
     private readonly metricsService: MetricsService,
+    private readonly alertsService: AlertsService,
   ) {}
 
   onModuleInit() {
@@ -34,6 +42,7 @@ export class RpcMonitorService implements OnModuleInit {
 
   startMonitoring() {
     this.initializeStatusMaps();
+    this.initializeRpcClients();
 
     const rpcCheckInterval = 30 * 1000; // Check every 30 seconds
     this.logger.log(`Starting RPC monitoring with interval of ${rpcCheckInterval / 1000} seconds`);
@@ -48,107 +57,171 @@ export class RpcMonitorService implements OnModuleInit {
 
     this.servicesInterval = setInterval(() => {
       this.monitorAllServices();
-    }, 30 * 1000); // Check services every minute
+    }, 60 * 1000);
 
+    // Run initial checks
     this.monitorAllRpcEndpoints();
+    this.monitorAllRpcPorts();
     this.monitorAllServices();
   }
 
+  /**
+   * Initialize RPC clients for all endpoints
+   */
+  private initializeRpcClients() {
+    const rpcEndpoints = this.configService.getRpcEndpoints();
+
+    for (const endpoint of rpcEndpoints) {
+      if (!this.rpcClients.has(endpoint.url)) {
+        this.logger.debug(`Initializing RPC client for ${endpoint.name} (${endpoint.url})`);
+
+        const client = new RpcRetryClient(endpoint.url, {
+          maxRetries: PERFORMANCE.RPC_CLIENT.MAX_RETRY_ATTEMPTS,
+          retryDelayMs: PERFORMANCE.RPC_CLIENT.RETRY_DELAY_MS,
+          timeoutMs: PERFORMANCE.RPC_CLIENT.DEFAULT_TIMEOUT_MS,
+        });
+
+        this.rpcClients.set(endpoint.url, client);
+      }
+    }
+  }
+
+  /**
+   * Get or create an RPC client for an endpoint
+   */
+  private getRpcClient(endpoint: RpcEndpoint): RpcRetryClient {
+    if (!this.rpcClients.has(endpoint.url)) {
+      this.logger.debug(`Creating new RPC client for ${endpoint.name} (${endpoint.url})`);
+
+      const client = new RpcRetryClient(endpoint.url, {
+        maxRetries: PERFORMANCE.RPC_CLIENT.MAX_RETRY_ATTEMPTS,
+        retryDelayMs: PERFORMANCE.RPC_CLIENT.RETRY_DELAY_MS,
+        timeoutMs: PERFORMANCE.RPC_CLIENT.DEFAULT_TIMEOUT_MS,
+      });
+
+      this.rpcClients.set(endpoint.url, client);
+      return client;
+    }
+
+    return this.rpcClients.get(endpoint.url);
+  }
+
   private initializeStatusMaps() {
-    for (const endpoint of this.configService.rpcEndpoints) {
-      this.rpcStatuses.set(endpoint.url, { status: 'up', latency: 0 });
+    const rpcEndpoints = this.configService.getRpcEndpoints();
+    const wsEndpoints = this.configService.getWsEndpoints();
+    const explorerEndpoints = this.configService.explorerEndpoints;
+    const faucetEndpoints = this.configService.faucetEndpoints;
+
+    for (const endpoint of rpcEndpoints) {
+      this.rpcStatuses.set(endpoint.url, { status: 'down', latency: 0 });
     }
 
-    for (const endpoint of this.configService.wsEndpoints) {
-      this.wsStatuses.set(endpoint.url, { status: 'down' });
-    }
-
-    // Initialize explorer statuses
-    if (this.configService.explorerEndpoints) {
-      for (const endpoint of this.configService.explorerEndpoints) {
-        this.explorerStatuses.set(endpoint.url, { status: 'down' });
+    if (WebSocket) {
+      for (const endpoint of wsEndpoints) {
+        this.wsStatuses.set(endpoint.url, { status: 'down' });
       }
     }
 
-    // Initialize faucet statuses
-    if (this.configService.faucetEndpoints) {
-      for (const endpoint of this.configService.faucetEndpoints) {
-        this.faucetStatuses.set(endpoint.url, { status: 'down' });
-      }
+    for (const endpoint of explorerEndpoints) {
+      this.explorerStatuses.set(endpoint.url, { status: 'down' });
+    }
+
+    for (const endpoint of faucetEndpoints) {
+      this.faucetStatuses.set(endpoint.url, { status: 'down' });
     }
   }
 
   async monitorAllRpcEndpoints() {
-    if (!this.configService.enableRpcMonitoring) {
+    if (this.configService.enableRpcMonitoring !== true) {
+      this.logger.debug('RPC monitoring is disabled via configuration. Skipping RPC check.');
       return;
     }
 
-    this.logger.debug('Checking all RPC endpoints status...');
-    const startTime = Date.now();
-    let checkedEndpoints = 0;
-    let upEndpoints = 0;
+    this.logger.debug('Checking all RPC endpoints...');
+    const endpoints = this.configService.getRpcEndpoints();
 
-    for (const endpoint of this.configService.rpcEndpoints) {
-      const status = await this.monitorRpcEndpoint(endpoint);
-      checkedEndpoints++;
-      if (status) upEndpoints++;
-    }
+    const checkPromises = endpoints.map(async endpoint => {
+      try {
+        const isUp = await this.monitorRpcEndpoint(endpoint);
 
-    const activeProvider = this.blockchainService.getActiveProvider();
-    this.logger.debug(`Current active provider: ${activeProvider.endpoint.name} (${activeProvider.endpoint.url})`);
+        if (isUp) {
+          this.logger.debug(`RPC endpoint ${endpoint.name} (${endpoint.url}) is UP`);
+        } else {
+          this.logger.warn(`RPC endpoint ${endpoint.name} (${endpoint.url}) is DOWN`);
+        }
 
-    const elapsedTime = Date.now() - startTime;
-    this.logger.log(
-      `RPC status check completed in ${elapsedTime}ms: ${upEndpoints}/${checkedEndpoints} endpoints available`,
-    );
+        return { endpoint, isUp };
+      } catch (error) {
+        this.logger.error(`Error checking RPC endpoint ${endpoint.name}: ${error.message}`);
+        return { endpoint, isUp: false };
+      }
+    });
+
+    await Promise.all(checkPromises);
   }
 
   async monitorRpcEndpoint(endpoint: RpcEndpoint): Promise<boolean> {
-    try {
-      this.logger.debug(`Checking RPC endpoint: ${endpoint.name} (${endpoint.url})`);
+    this.logger.debug(`Checking RPC endpoint: ${endpoint.name} (${endpoint.url})`);
+    const client = this.getRpcClient(endpoint);
 
-      const startTime = performance.now();
-      const response = await axios.post(
-        endpoint.url,
-        {
-          jsonrpc: '2.0',
-          method: 'eth_blockNumber',
-          params: [],
-          id: 1,
-        },
-        {
-          timeout: 10000,
-          headers: { 'Content-Type': 'application/json' },
-        },
+    try {
+      const startTime = Date.now();
+
+      // Using the RpcRetryClient to get the block number
+      const blockNumberHex = await client.call<string>(
+        BLOCKCHAIN.RPC.METHODS.GET_BLOCK_NUMBER,
+        [],
+        { timeoutMs: 5000 }, // Short timeout for monitoring
       );
 
-      const elapsedTime = performance.now() - startTime;
+      const endTime = Date.now();
+      const latency = endTime - startTime;
 
-      this.metricsService.recordRpcLatency(endpoint.url, elapsedTime, endpoint.chainId);
+      // Convert hex to number
+      const blockNumber = parseInt(blockNumberHex, 16);
 
-      const isSuccessful = response.status === 200 && response.data && response.data.result;
-
-      if (isSuccessful) {
-        this.logger.debug(`RPC endpoint ${endpoint.name} is UP (${elapsedTime}ms)`);
-        this.rpcStatuses.set(endpoint.url, { status: 'up', latency: elapsedTime });
-
-        this.metricsService.setRpcStatus(endpoint.url, true, endpoint.chainId);
-
-        return true;
-      } else {
-        this.logger.warn(`RPC endpoint ${endpoint.name} returned invalid response`);
-        this.rpcStatuses.set(endpoint.url, { status: 'down', latency: elapsedTime });
-
-        this.metricsService.setRpcStatus(endpoint.url, false, endpoint.chainId);
-
-        return false;
+      if (isNaN(blockNumber)) {
+        throw new Error('Invalid block number response');
       }
+
+      // Update status and latency
+      this.rpcStatuses.set(endpoint.url, { status: 'up', latency });
+
+      // Report metrics
+      this.metricsService.setRpcStatus(endpoint.url, true, endpoint.chainId);
+      this.metricsService.recordRpcLatency(endpoint.url, latency, endpoint.chainId);
+
+      // Check for high latency
+      if (latency > ALERTS.THRESHOLDS.RPC_LATENCY_ERROR_MS) {
+        this.alertsService.error(
+          ALERTS.TYPES.RPC_HIGH_LATENCY,
+          'rpc',
+          `High RPC latency on ${endpoint.name}: ${latency}ms`,
+        );
+      } else if (latency > ALERTS.THRESHOLDS.RPC_LATENCY_WARNING_MS) {
+        this.alertsService.warning(
+          ALERTS.TYPES.RPC_HIGH_LATENCY,
+          'rpc',
+          `Elevated RPC latency on ${endpoint.name}: ${latency}ms`,
+        );
+      }
+
+      return true;
     } catch (error) {
-      this.logger.warn(`RPC endpoint ${endpoint.name} is DOWN: ${error.message}`);
+      this.logger.warn(`RPC endpoint ${endpoint.name} is down: ${error.message}`);
+
+      // Update status
       this.rpcStatuses.set(endpoint.url, { status: 'down', latency: 0 });
 
-      // Update metrics with chainId
+      // Report metrics
       this.metricsService.setRpcStatus(endpoint.url, false, endpoint.chainId);
+
+      // Alert on RPC endpoint down
+      this.alertsService.error(
+        ALERTS.TYPES.RPC_ENDPOINT_DOWN,
+        'rpc',
+        `RPC endpoint ${endpoint.name} is not responding: ${error.message}`,
+      );
 
       return false;
     }
@@ -162,11 +235,11 @@ export class RpcMonitorService implements OnModuleInit {
     this.logger.debug('Checking all RPC ports...');
 
     // Monitor all RPC endpoints regardless of enableMultiRpc setting
-    for (const endpoint of this.configService.rpcEndpoints) {
+    for (const endpoint of this.configService.getRpcEndpoints()) {
       await this.monitorRpcPort(endpoint);
     }
 
-    for (const endpoint of this.configService.wsEndpoints) {
+    for (const endpoint of this.configService.getWsEndpoints()) {
       await this.monitorWsPort(endpoint);
     }
   }
@@ -335,7 +408,7 @@ export class RpcMonitorService implements OnModuleInit {
   getAllRpcStatuses() {
     const statuses = [];
 
-    for (const endpoint of this.configService.rpcEndpoints) {
+    for (const endpoint of this.configService.getRpcEndpoints()) {
       const status = this.rpcStatuses.get(endpoint.url) || { status: 'unknown', latency: 0 };
       statuses.push({
         name: endpoint.name,
@@ -353,7 +426,7 @@ export class RpcMonitorService implements OnModuleInit {
   getAllWsStatuses() {
     const statuses = [];
 
-    for (const endpoint of this.configService.wsEndpoints) {
+    for (const endpoint of this.configService.getWsEndpoints()) {
       const status = this.wsStatuses.get(endpoint.url) || { status: 'unknown' };
       statuses.push({
         name: endpoint.name,

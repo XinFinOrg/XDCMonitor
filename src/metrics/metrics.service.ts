@@ -1,8 +1,6 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@config/config.service';
 import { InfluxDB, Point, WriteApi } from '@influxdata/influxdb-client';
-import { hostname } from 'os';
-import { URL } from 'url';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 
 /**
  * InfluxDB Metrics Service
@@ -35,8 +33,9 @@ export class MetricsService implements OnModuleInit {
    * Initialize the service when the module is loaded
    */
   onModuleInit() {
+    const influxConfig = this.configService.getInfluxDbConfig();
     this.logger.log('InfluxDB metrics service initialized');
-    this.logger.log(`Using bucket: ${this.configService.influxDbBucket}`);
+    this.logger.log(`Using bucket: ${influxConfig.bucket}`);
     this.logger.log(
       `Metrics will be batched (size: ${this.BATCH_SIZE}) and flushed every ${this.FLUSH_INTERVAL / 1000} seconds`,
     );
@@ -47,33 +46,29 @@ export class MetricsService implements OnModuleInit {
    */
   private initializeInfluxDB() {
     try {
-      this.logger.log(`Connecting to InfluxDB at ${this.configService.influxDbUrl}...`);
-      this.logger.log(`Using token: ${this.configService.influxDbToken ? '[SET]' : '[MISSING]'}`);
-      this.logger.log(`Using org: ${this.configService.influxDbOrg}`);
-      this.logger.log(`Using bucket: ${this.configService.influxDbBucket}`);
+      const influxConfig = this.configService.getInfluxDbConfig();
+      this.logger.log(`Connecting to InfluxDB at ${influxConfig.url}...`);
+      this.logger.log(`Using token: ${influxConfig.token ? '[SET]' : '[MISSING]'}`);
+      this.logger.log(`Using org: ${influxConfig.org}`);
+      this.logger.log(`Using bucket: ${influxConfig.bucket}`);
 
       // Initialize InfluxDB client
       this.influxClient = new InfluxDB({
-        url: this.configService.influxDbUrl,
-        token: this.configService.influxDbToken,
+        url: influxConfig.url,
+        token: influxConfig.token,
         timeout: 30000, // 30 seconds timeout
       });
 
       // Configure WriteApi with batching and retries
-      this.writeApi = this.influxClient.getWriteApi(
-        this.configService.influxDbOrg,
-        this.configService.influxDbBucket,
-        'ns',
-        {
-          batchSize: this.BATCH_SIZE,
-          flushInterval: this.FLUSH_INTERVAL,
-          maxRetries: 5,
-          maxRetryDelay: 15000,
-          minRetryDelay: 1000,
-          retryJitter: 1000,
-          defaultTags: {},
-        },
-      );
+      this.writeApi = this.influxClient.getWriteApi(influxConfig.org, influxConfig.bucket, 'ns', {
+        batchSize: this.BATCH_SIZE,
+        flushInterval: this.FLUSH_INTERVAL,
+        maxRetries: 5,
+        maxRetryDelay: 15000,
+        minRetryDelay: 1000,
+        retryJitter: 1000,
+        defaultTags: {},
+      });
 
       // Set connection state and process queue
       this.connected = true;
@@ -349,5 +344,96 @@ export class MetricsService implements OnModuleInit {
         .tag('chainId', chainId.toString())
         .intField('value', 1),
     );
+  }
+
+  /**
+   * Record transaction results
+   *
+   * Records the success/failure of test transactions, including:
+   * - Type of transaction (normal or contract deployment)
+   * - Success or failure
+   * - Confirmation duration (ms)
+   * - Gas used
+   * - Chain ID
+   * - RPC endpoint name
+   */
+  setTransactionMonitorResult(
+    type: 'normal_transaction' | 'contract_deployment',
+    success: boolean,
+    duration: number,
+    gasUsed: number,
+    chainId: string,
+    rpcName: string,
+  ): void {
+    // Record success/failure status
+    this.writePoint(
+      new Point('transaction_monitor')
+        .tag('type', type)
+        .tag('chainId', chainId)
+        .tag('rpc', rpcName)
+        .booleanField('success', success),
+    );
+
+    // Record confirmation duration
+    this.writePoint(
+      new Point('transaction_monitor_confirmation_time')
+        .tag('type', type)
+        .tag('chainId', chainId)
+        .tag('rpc', rpcName)
+        .intField('duration_ms', duration),
+    );
+
+    // Record gas used (if transaction was successful)
+    if (success && gasUsed > 0) {
+      this.writePoint(
+        new Point('transaction_monitor_gas_used')
+          .tag('type', type)
+          .tag('chainId', chainId)
+          .tag('rpc', rpcName)
+          .intField('gas', gasUsed),
+      );
+    }
+
+    this.logger.debug(
+      `Recorded transaction test: type=${type}, chainId=${chainId}, rpc=${rpcName}, ` +
+        `success=${success}, duration=${duration}ms, gas=${gasUsed}`,
+    );
+  }
+
+  /**
+   * Record wallet balance information
+   *
+   * @param chainId The chain ID ('50' for Mainnet, '51' for Testnet)
+   * @param balance The wallet balance in XDC
+   * @param sufficient Whether the balance is sufficient for testing
+   */
+  setWalletBalance(chainId: string, balance: string, sufficient: boolean): void {
+    const chainName = chainId === '50' ? 'Mainnet' : 'Testnet';
+
+    this.writePoint(
+      new Point('transaction_wallet_balance')
+        .tag('chainId', chainId)
+        .tag('network', chainName)
+        .tag('sufficient', sufficient ? 'true' : 'false')
+        .floatField('balance', parseFloat(balance)),
+    );
+
+    // Also record a separate boolean field for "sufficient" to make it easier to query
+    this.writePoint(
+      new Point('transaction_wallet_status')
+        .tag('chainId', chainId)
+        .tag('network', chainName)
+        .booleanField('sufficient_balance', sufficient),
+    );
+  }
+
+  /**
+   * Record transactions per minute
+   */
+  setTransactionsPerMinute(txPerMinute: number, chainId: number = 50): void {
+    this.writePoint(
+      new Point('transactions_per_minute').tag('chainId', chainId.toString()).floatField('value', txPerMinute),
+    );
+    this.logger.debug(`Set transactions per minute for chainId ${chainId}: ${txPerMinute.toFixed(2)}`);
   }
 }

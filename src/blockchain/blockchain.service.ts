@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ethers } from 'ethers';
-import { ConfigService, RpcEndpoint } from '@config/config.service';
+import { ConfigService } from '@config/config.service';
+import { RpcEndpoint } from '@common/interfaces/rpc.interface';
 import { BlockInfo } from '@models/block.interface';
 import { AccountBalance } from '@models/account.interface';
 import { TransactionInfo, TransactionStatus } from '@models/transaction.interface';
@@ -48,10 +49,10 @@ export class BlockchainService {
   private async initializeProviders(): Promise<void> {
     this.logger.log('Initializing blockchain providers...');
 
-    const endpoints = this.configService.rpcEndpoints;
+    const endpoints = this.configService.getRpcEndpoints();
     this.logger.log(`Found ${endpoints.length} RPC endpoints`);
 
-    const wsEndpoints = this.configService.wsEndpoints;
+    const wsEndpoints = this.configService.getWsEndpoints();
     this.logger.log(`Found ${wsEndpoints.length} WebSocket endpoints: ${JSON.stringify(wsEndpoints.map(e => e.url))}`);
 
     endpoints.forEach(endpoint => {
@@ -511,5 +512,114 @@ export class BlockchainService {
       this.logger.error(`Error getting block #${blockNumber} on chainId ${chainId}: ${error.message}`);
       throw error;
     }
+  }
+
+  /**
+   * Send a normal transaction
+   * @param privateKey The private key to sign the transaction
+   * @param to The recipient address
+   * @param value The amount to send in XDC
+   * @param chainId The chain ID (50 for mainnet, 51 for testnet)
+   * @param rpcUrl Optional specific RPC URL to use for this transaction
+   * @returns The transaction receipt
+   */
+  async sendTransaction(privateKey: string, to: string, value: string, chainId: string = '50', rpcUrl?: string) {
+    this.logger.debug(`Preparing to send ${value} XDC to ${to} on chain ${chainId}${rpcUrl ? ` via ${rpcUrl}` : ''}`);
+
+    // Use ethers.js to create and send a transaction
+    const provider = rpcUrl ? this.getProviderByUrl(rpcUrl) : this.getProviderForChain(chainId);
+
+    if (!provider) {
+      throw new Error(`No provider available for ${rpcUrl || 'chainId ' + chainId}`);
+    }
+
+    const wallet = new ethers.Wallet(privateKey, provider);
+
+    const valueInWei = ethers.parseEther(value);
+
+    const tx = await wallet.sendTransaction({
+      to: to,
+      value: valueInWei,
+      // Let ethers estimate gas price and limit
+    });
+
+    this.logger.debug(`Transaction sent with hash: ${tx.hash}`);
+
+    // Wait for transaction to be mined (1 confirmation)
+    const receipt = await tx.wait(1);
+
+    return {
+      transactionHash: tx.hash,
+      blockNumber: receipt.blockNumber,
+      gasUsed: Number(receipt.gasUsed),
+      status: receipt.status === 1 ? TransactionStatus.CONFIRMED : TransactionStatus.FAILED,
+    };
+  }
+
+  /**
+   * Deploy a smart contract
+   * @param privateKey The private key to sign the transaction
+   * @param bytecode The contract bytecode
+   * @param constructorArgs The constructor arguments (if any)
+   * @param chainId The chain ID (50 for mainnet, 51 for testnet)
+   * @param rpcUrl Optional specific RPC URL to use for this deployment
+   * @returns The transaction receipt and contract address
+   */
+  async deployContract(
+    privateKey: string,
+    bytecode: string,
+    constructorArgs: any[] = [],
+    chainId: string = '50',
+    rpcUrl?: string,
+  ) {
+    this.logger.debug(`Preparing to deploy contract on chain ${chainId}${rpcUrl ? ` via ${rpcUrl}` : ''}`);
+
+    // Use ethers.js to deploy a contract
+    const provider = rpcUrl ? this.getProviderByUrl(rpcUrl) : this.getProviderForChain(chainId);
+
+    if (!provider) {
+      throw new Error(`No provider available for ${rpcUrl || 'chainId ' + chainId}`);
+    }
+
+    const wallet = new ethers.Wallet(privateKey, provider);
+
+    // Create contract factory
+    const factory = new ethers.ContractFactory(
+      [], // ABI not needed for deployment
+      bytecode,
+      wallet,
+    );
+
+    // Deploy the contract
+    const contract = await factory.deploy(...constructorArgs);
+    const deployTx = contract.deploymentTransaction();
+    this.logger.debug(`Contract deployment transaction sent with hash: ${deployTx.hash}`);
+
+    // Wait for deployment to be mined
+    const receipt = await deployTx.wait(1);
+
+    return {
+      transactionHash: deployTx.hash,
+      contractAddress: await contract.getAddress(),
+      blockNumber: receipt.blockNumber,
+      gasUsed: Number(receipt.gasUsed),
+      status: receipt.status === 1 ? TransactionStatus.CONFIRMED : TransactionStatus.FAILED,
+    };
+  }
+
+  /**
+   * Get a provider for a specific chain
+   * @param chainId The chain ID (50 for mainnet, 51 for testnet)
+   * @returns A provider for the specified chain
+   */
+  getProviderForChain(chainId: string): ethers.JsonRpcProvider {
+    const chainIdNum = parseInt(chainId, 10);
+    const providerData = this.getProviderForChainId(chainIdNum);
+
+    if (!providerData || !providerData.provider) {
+      throw new Error(`No active provider found for chainId ${chainId}`);
+    }
+
+    return providerData.provider;
   }
 }

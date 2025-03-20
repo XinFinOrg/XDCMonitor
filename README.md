@@ -11,6 +11,100 @@ A comprehensive Node.js-based monitoring system for the XDC Network. This applic
 - **Alert System**: Dashboard alerts, Telegram notifications, webhook notifications
 - **Metrics Collection**: InfluxDB time-series database, Grafana dashboards
 
+## Architecture
+
+The XDC Monitor has been optimized with a modular, maintainable architecture:
+
+### Core Components
+
+- **Shared Constants**: Configuration values are centralized in the `common/constants` directory
+- **Enhanced Queue System**: Resilient job processing with retry, timeout, and prioritization
+- **Time-Series Data Management**: Efficient time window data structures for metrics
+- **Modular Services**: Clean separation of concerns with specialized service modules
+
+### Performance Optimizations
+
+- **Batched Processing**: Transaction processing uses parallel batching for higher throughput
+- **Priority-based Queue**: Critical operations (like mainnet block processing) get priority
+- **Efficient Memory Usage**: Time-window data structures automatically clean up old data
+- **Smart Error Handling**: Automatic retry with exponential backoff for transient failures
+
+### Technical Details
+
+- **Framework**: NestJS for enterprise-grade dependency injection and modular architecture
+- **Time Series DB**: InfluxDB for efficient storage and querying of time-series metrics
+- **Visualization**: Grafana dashboards for real-time monitoring and alerting
+- **Container Support**: Docker and Docker Compose for easy deployment and scaling
+
+## Alert System
+
+The XDC Monitor includes a comprehensive alert system to notify you of important network events.
+
+### Alert Types
+
+The system monitors the following conditions:
+
+1. **Average Block Time**
+
+   - Alerts when the average block time over the last 100 blocks exceeds 2.5 seconds
+   - Severity: Warning
+   - Component: blockchain
+   - Threshold: 2.5 seconds
+
+2. **Transaction Errors**
+
+   - Alerts when more than 3 failed transactions are detected across all blocks in a 5-minute period
+   - Severity: Warning
+   - Component: transactions
+   - Threshold: 3 failed transactions in 5 minutes
+
+3. **High Transaction Volume**
+
+   - Alerts when more than 2000 transactions are processed within a 5-minute period
+   - Severity: Info
+   - Component: transactions
+   - Threshold: 2000 transactions per 5 minutes
+
+4. **RPC Response Time**
+   - Alerts when an RPC endpoint takes more than 30 seconds to respond
+   - Severity: Critical
+   - Component: rpc
+   - Threshold: 30 seconds (30,000 ms)
+
+### Alert Delivery
+
+Alerts are delivered through multiple channels:
+
+1. **Grafana UI**: All alerts appear in the Grafana dashboard
+2. **Telegram**: Alerts are sent to a configured Telegram chat
+3. **Server Logs**: All alerts are logged in the server's logs
+
+### Alert Configuration
+
+Configure Telegram notifications by adding these values to your `.env` file:
+
+```
+TELEGRAM_BOT_TOKEN="your-telegram-bot-token-here"
+TELEGRAM_CHAT_ID="your-telegram-chat-id-here"
+ENABLE_DASHBOARD_ALERTS=true
+ENABLE_CHAT_NOTIFICATIONS=true
+```
+
+### Testing Alerts
+
+You can test the alert system using these API endpoints:
+
+```bash
+# Test all alerts at once
+curl http://your-server:3000/api/testing/trigger-all-alerts
+
+# Test specific alert types
+curl http://your-server:3000/api/testing/trigger-alert/block-time
+curl http://your-server:3000/api/testing/trigger-alert/tx-errors
+curl http://your-server:3000/api/testing/trigger-alert/tx-volume
+curl http://your-server:3000/api/testing/trigger-alert/rpc-time
+```
+
 ## CI/CD Pipeline
 
 This project uses GitHub Actions for continuous integration and deployment:
@@ -297,6 +391,38 @@ To use the CI/CD workflows, you need to set up these secrets in your GitHub repo
 - `STAGING_TELEGRAM_CHAT_ID`: Telegram chat ID for notifications
 - `STAGING_GRAFANA_ADMIN_USER`: Grafana admin username
 - `STAGING_GRAFANA_ADMIN_PASSWORD`: Grafana admin password
+
+## Code Organization
+
+The project follows a clean, modular architecture:
+
+```
+src/
+├── common/                  # Shared code across the entire application
+│   ├── constants/           # Configuration constants and defaults
+│   ├── interfaces/          # Shared TypeScript interfaces
+│   └── utils/               # Utility classes and helper functions
+├── config/                  # Configuration module and service
+├── blockchain/              # Blockchain interaction services
+├── monitoring/              # Core monitoring services
+├── metrics/                 # Metrics collection and reporting
+└── models/                  # Data models and interfaces
+```
+
+### Key Utility Classes
+
+The application includes several powerful utilities:
+
+1. **EnhancedQueue**: For reliable processing of blocks and transactions
+
+   - Priorities for critical tasks
+   - Automatic retry of failed operations
+   - Concurrency control and timeout handling
+
+2. **TimeWindowData**: Efficient time-series data management
+   - Automatic cleanup of outdated points
+   - Statistical functions (min, max, average)
+   - Memory-efficient storage
 
 ## Contributing
 

@@ -34,6 +34,36 @@ groups:
           severity: warning
           component: blockchain
 
+      # CUSTOM ALERT 1: Average Block Time > 2.5 seconds (100 recent blocks)
+      - uid: average-block-time-high
+        title: 'Average Block Time Exceeded Threshold'
+        condition: A
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: InfluxDB
+            model:
+              query: |
+                from(bucket: "xdc_metrics")
+                  |> range(start: -15m)
+                  |> filter(fn: (r) => r._measurement == "block_time")
+                  |> filter(fn: (r) => r._field == "value")
+                  |> tail(n: 100)
+                  |> mean()
+                  |> filter(fn: (r) => r._value > 2.5)
+              refId: A
+        noDataState: OK
+        execErrState: Error
+        for: 30s
+        annotations:
+          description: 'Average block time for last 100 blocks is {{ $values.A.Value | printf "%.2f" }} seconds, which exceeds threshold of 2.5 seconds'
+          summary: 'XDC Network average block time is high'
+        labels:
+          severity: warning
+          component: blockchain
+
       # 2. RPC Endpoint Down (from rpc.monitor.ts)
       - uid: rpc-endpoint-down
         title: 'RPC Endpoint Down'
@@ -92,6 +122,35 @@ groups:
           severity: warning
           component: rpc
 
+      # CUSTOM ALERT 4: RPC Response Time > 30 seconds
+      - uid: rpc-response-timeout
+        title: 'RPC Response Time Excessive'
+        condition: A
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: InfluxDB
+            model:
+              query: |
+                from(bucket: "xdc_metrics")
+                  |> range(start: -10m)
+                  |> filter(fn: (r) => r._measurement == "rpc")
+                  |> filter(fn: (r) => r._field == "latency")
+                  |> last()
+                  |> filter(fn: (r) => r._value > 30000)
+              refId: A
+        noDataState: OK
+        execErrState: Error
+        for: 10s
+        annotations:
+          description: 'RPC endpoint {{ $labels.endpoint }} response time {{ $values.A.Value | printf "%.0f" }}ms exceeds 30 seconds timeout threshold'
+          summary: 'XDC RPC extreme latency detected'
+        labels:
+          severity: critical
+          component: rpc
+
       # 4. Block Height Discrepancy Alert
       - uid: block-height-difference
         title: 'Block Height Discrepancy'
@@ -145,3 +204,63 @@ groups:
         labels:
           severity: warning
           component: blockchain
+
+      # CUSTOM ALERT 2: Transactions Error > 3 in one block (during 5 minutes)
+      - uid: high-tx-error-rate
+        title: 'High Transaction Error Rate'
+        condition: A
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: InfluxDB
+            model:
+              query: |
+                from(bucket: "xdc_metrics")
+                  |> range(start: -5m)
+                  |> filter(fn: (r) => r._measurement == "transactions_per_block")
+                  |> filter(fn: (r) => r._field == "value")
+                  |> filter(fn: (r) => r.status == "failed")
+                  |> sum()
+                  |> filter(fn: (r) => r._value > 3)
+              refId: A
+        noDataState: OK
+        execErrState: Error
+        for: 10s
+        annotations:
+          description: 'Total of {{ $values.A.Value | printf "%.0f" }} failed transactions in the last 5 minutes, exceeding threshold of 3'
+          summary: 'XDC Network high transaction error rate'
+        labels:
+          severity: warning
+          component: transactions
+
+      # CUSTOM ALERT 3: Transactions > 2000 in 5 minutes
+      - uid: high-tx-volume
+        title: 'High Transaction Volume'
+        condition: A
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: InfluxDB
+            model:
+              query: |
+                from(bucket: "xdc_metrics")
+                  |> range(start: -5m)
+                  |> filter(fn: (r) => r._measurement == "transactions_per_block")
+                  |> filter(fn: (r) => r._field == "value")
+                  |> filter(fn: (r) => r.status == "total")
+                  |> sum()
+                  |> filter(fn: (r) => r._value > 2000)
+              refId: A
+        noDataState: OK
+        execErrState: Error
+        for: 10s
+        annotations:
+          description: 'Total of {{ $values.A.Value | printf "%.0f" }} transactions in the last 5 minutes, exceeding threshold of 2000'
+          summary: 'XDC Network high transaction volume'
+        labels:
+          severity: info
+          component: transactions
