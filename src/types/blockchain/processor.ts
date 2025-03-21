@@ -1,4 +1,4 @@
-import { BlockInfo } from '@models/block.interface';
+import { BlockInfo } from './block';
 
 /**
  * Block processing job with chain information

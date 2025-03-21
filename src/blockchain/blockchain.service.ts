@@ -1,23 +1,18 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ethers } from 'ethers';
 import { ConfigService } from '@config/config.service';
-import { RpcEndpoint } from '@common/interfaces/rpc.interface';
-import { BlockInfo } from '@models/block.interface';
-import { AccountBalance } from '@models/account.interface';
-import { TransactionInfo, TransactionStatus } from '@models/transaction.interface';
-
-interface ProviderWithMetadata {
-  provider: ethers.JsonRpcProvider;
-  endpoint: RpcEndpoint;
-}
-
-interface WsProviderWithMetadata {
-  provider: ethers.WebSocketProvider;
-  endpoint: RpcEndpoint;
-}
+import {
+  AccountBalance,
+  BlockInfo,
+  ProviderWithMetadata,
+  RpcEndpoint,
+  TransactionInfo,
+  TransactionStatus,
+  WsProviderWithMetadata,
+} from '@types';
 
 @Injectable()
-export class BlockchainService {
+export class BlockchainService implements OnModuleInit {
   private readonly logger = new Logger(BlockchainService.name);
   private providers: Map<string, ProviderWithMetadata> = new Map();
   private wsProviders: Map<string, WsProviderWithMetadata> = new Map();
@@ -25,9 +20,21 @@ export class BlockchainService {
   private readonly MAX_FAILURES = 3;
 
   constructor(private readonly configService: ConfigService) {
-    // Initialize all providers (always use multi-RPC functionality)
+    // Initialize Map objects
+    this.providers = new Map<string, ProviderWithMetadata>();
+    this.wsProviders = new Map<string, WsProviderWithMetadata>();
+
+    // Initialize providers first and set active provider later using onModuleInit
+    this.logger.log('Providers will be initialized during module initialization...');
+  }
+
+  /**
+   * NestJS lifecycle hook that runs after the module is initialized
+   */
+  async onModuleInit() {
+    // Initialize all providers
     this.logger.log('Initializing all RPC and WebSocket providers...');
-    this.initializeProviders();
+    await this.initializeProviders();
 
     // Set the active provider to the Mainnet primary one initially
     const mainnetPrimaryUrl = this.configService.getPrimaryRpcUrl(50);
@@ -38,15 +45,35 @@ export class BlockchainService {
       this.logger.log(`Set active provider to ${providerData.endpoint.name} (${mainnetPrimaryUrl})`);
     } else {
       // Fallback to first available provider if primary not found
-      const firstProvider = Array.from(this.providers.values())[0];
-      this.activeProvider = firstProvider;
-      this.logger.log(
-        `Fallback: Set active provider to ${firstProvider.endpoint.name} (${firstProvider.endpoint.url})`,
-      );
+      if (this.providers.size > 0) {
+        const firstProvider = Array.from(this.providers.values())[0];
+        this.activeProvider = firstProvider;
+        this.logger.log(
+          `Fallback: Set active provider to ${firstProvider.endpoint.name} (${firstProvider.endpoint.url})`,
+        );
+      } else {
+        this.logger.error('No providers available after initialization');
+        // Create a minimal provider as fallback to prevent app crashes
+        this.activeProvider = {
+          provider: new ethers.JsonRpcProvider(mainnetPrimaryUrl),
+          endpoint: {
+            url: mainnetPrimaryUrl,
+            name: 'Fallback Provider',
+            type: 'rpc',
+            chainId: 50,
+            status: 'down',
+          },
+        };
+      }
     }
   }
 
-  private async initializeProviders(): Promise<void> {
+  /**
+   * Initialize RPC and WebSocket providers for all endpoints
+   * This method is called during initialization but can also be called
+   * by monitoring services to refresh provider status
+   */
+  public async initializeProviders(): Promise<void> {
     this.logger.log('Initializing blockchain providers...');
 
     const endpoints = this.configService.getRpcEndpoints();
@@ -55,7 +82,7 @@ export class BlockchainService {
     const wsEndpoints = this.configService.getWsEndpoints();
     this.logger.log(`Found ${wsEndpoints.length} WebSocket endpoints: ${JSON.stringify(wsEndpoints.map(e => e.url))}`);
 
-    endpoints.forEach(endpoint => {
+    for (const endpoint of endpoints) {
       try {
         if (!endpoint.url || !endpoint.url.startsWith('http')) {
           this.logger.warn(`Invalid RPC URL: ${endpoint.url}`);
@@ -63,10 +90,24 @@ export class BlockchainService {
             provider: null,
             endpoint: { ...endpoint, status: 'down' },
           });
-          return;
+          continue;
         }
 
-        const provider = new ethers.JsonRpcProvider(endpoint.url);
+        // Use a timeout for provider creation
+        const provider = new ethers.JsonRpcProvider(endpoint.url, undefined, {
+          staticNetwork: true,
+          polling: true,
+          cacheTimeout: 2000, // 2 seconds
+        });
+
+        // Test the provider with a basic call
+        const networkPromise = provider.getNetwork();
+        const networkTimeout = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Network detection timeout')), 5000),
+        );
+
+        await Promise.race([networkPromise, networkTimeout]);
+
         this.providers.set(endpoint.url, { provider, endpoint: { ...endpoint, status: 'up' } });
         this.logger.log(`Initialized RPC provider: ${endpoint.name} (${endpoint.url})`);
       } catch (error) {
@@ -76,13 +117,43 @@ export class BlockchainService {
           endpoint: { ...endpoint, status: 'down' },
         });
       }
-    });
+    }
 
-    wsEndpoints.forEach(endpoint => {
+    for (const endpoint of wsEndpoints) {
       this.initializeWebSocketProvider(endpoint);
-    });
+    }
+
+    // Test all providers after initialization
+    await this.testAllProviders();
   }
 
+  /**
+   * Tests all providers and updates their status
+   */
+  private async testAllProviders(): Promise<void> {
+    this.logger.debug('Testing all providers...');
+
+    const testPromises = Array.from(this.providers.entries()).map(async ([url, providerData]) => {
+      if (!providerData.provider) {
+        return;
+      }
+
+      try {
+        await providerData.provider.getBlockNumber();
+        providerData.endpoint.status = 'up';
+        this.logger.debug(`Provider ${providerData.endpoint.name} (${url}) is UP`);
+      } catch (error) {
+        providerData.endpoint.status = 'down';
+        this.logger.warn(`Provider ${providerData.endpoint.name} (${url}) is DOWN: ${error.message}`);
+      }
+    });
+
+    await Promise.all(testPromises);
+  }
+
+  /**
+   * Initialize a WebSocket provider for an endpoint
+   */
   private initializeWebSocketProvider(endpoint: RpcEndpoint): void {
     try {
       if (!endpoint.url.startsWith('ws://') && !endpoint.url.startsWith('wss://')) {
@@ -174,24 +245,66 @@ export class BlockchainService {
     }
   }
 
+  /**
+   * Get an ethers provider for a specific URL
+   * @param url The RPC endpoint URL
+   * @returns The provider if available, or null
+   */
   getProviderByUrl(url: string): ethers.JsonRpcProvider | null {
     const providerData = this.providers.get(url);
     return providerData ? providerData.provider : null;
   }
 
+  /**
+   * Get provider metadata for a specific URL
+   * This is useful for RPC monitoring services that need the full provider info
+   * @param url The RPC endpoint URL
+   * @returns The provider metadata if available, or null
+   */
+  getProviderMetadataByUrl(url: string): ProviderWithMetadata | null {
+    return this.providers.get(url) || null;
+  }
+
+  /**
+   * Get a WebSocket provider for a specific URL
+   * @param url The WebSocket endpoint URL
+   * @returns The WebSocket provider if available, or null
+   */
   getWsProviderByUrl(url: string): ethers.WebSocketProvider | null {
     const providerData = this.wsProviders.get(url);
     return providerData ? providerData.provider : null;
   }
 
+  /**
+   * Get WebSocket provider metadata for a specific URL
+   * @param url The WebSocket endpoint URL
+   * @returns The WebSocket provider metadata if available, or null
+   */
+  getWsProviderMetadataByUrl(url: string): WsProviderWithMetadata | null {
+    return this.wsProviders.get(url) || null;
+  }
+
+  /**
+   * Get all RPC providers with their metadata
+   * This is useful for services that need to iterate through all providers
+   */
   getAllProviders(): ProviderWithMetadata[] {
     return Array.from(this.providers.values());
   }
 
+  /**
+   * Get all WebSocket providers with their metadata
+   * This is useful for services that need to iterate through all WS providers
+   */
   getAllWsProviders(): WsProviderWithMetadata[] {
     return Array.from(this.wsProviders.values());
   }
 
+  /**
+   * Set the active provider for blockchain operations
+   * @param url The URL of the provider to set as active
+   * @returns Whether the provider was successfully set
+   */
   setActiveProvider(url: string): boolean {
     const providerData = this.providers.get(url);
     if (providerData && providerData.provider) {
@@ -202,6 +315,9 @@ export class BlockchainService {
     return false;
   }
 
+  /**
+   * Get the currently active provider
+   */
   getActiveProvider(): ProviderWithMetadata {
     return this.activeProvider;
   }
@@ -300,7 +416,7 @@ export class BlockchainService {
       const tx = await this.activeProvider.provider.getTransaction(hash);
 
       if (!tx) {
-        throw new Error(`Transaction ${hash} not found`);
+        throw new Error(`Chain ${this.activeProvider.endpoint.chainId} transaction ${hash} not found`);
       }
 
       const receipt = await this.activeProvider.provider.getTransactionReceipt(hash);
@@ -328,7 +444,9 @@ export class BlockchainService {
         transactionIndex: tx.index,
       };
     } catch (error) {
-      this.logger.error(`Error getting transaction ${hash}: ${error.message}`);
+      this.logger.error(
+        `Error getting chainId ${this.activeProvider.endpoint.chainId} transaction ${hash}: ${error.message}`,
+      );
 
       if (!error.message.includes('not found') && (await this.fallbackToNextAvailableProvider())) {
         return this.getTransaction(hash, failedCount + 1);
@@ -349,7 +467,9 @@ export class BlockchainService {
     try {
       return await this.activeProvider.provider.getTransactionCount(address);
     } catch (error) {
-      this.logger.error(`Error getting transaction count for ${address}: ${error.message}`);
+      this.logger.error(
+        `Error getting chainId ${this.activeProvider.endpoint.chainId} transaction count ${address}: ${error.message}`,
+      );
 
       if (this.isConnectionError(error) && (await this.fallbackToNextAvailableProvider())) {
         return this.getTransactionCount(address, failedCount + 1);
@@ -479,37 +599,61 @@ export class BlockchainService {
   }
 
   /**
-   * Get a block by number from a specific chain
-   * @param blockNumber The block number to retrieve
-   * @param chainId The chain ID (50 for Mainnet, 51 for Testnet)
-   * @returns Block information
+   * Get a block by number for a specific chain
    */
   async getBlockByNumberForChain(blockNumber: number, chainId: number): Promise<BlockInfo> {
     const providerData = this.getProviderForChainId(chainId);
 
-    if (!providerData || !providerData.provider) {
-      throw new Error(`No active provider found for chainId ${chainId}`);
+    if (!providerData) {
+      const errorMsg = `No active provider found for chain ID ${chainId}`;
+      this.logger.error(errorMsg);
+      throw new Error(errorMsg);
+    }
+
+    if (!providerData.provider) {
+      const errorMsg = `Provider exists but is not initialized for chain ID ${chainId}`;
+      this.logger.error(errorMsg);
+      throw new Error(errorMsg);
     }
 
     try {
-      const block = await providerData.provider.getBlock(blockNumber, true);
+      // Convert block number to hex
+      const blockParam = `0x${blockNumber.toString(16)}`;
+
+      // Get block with transactions as objects
+      const block = await providerData.provider.send('eth_getBlockByNumber', [blockParam, true]);
 
       if (!block) {
-        throw new Error(`Block #${blockNumber} not found on chainId ${chainId}`);
+        throw new Error(`Block ${blockNumber} not found on chain ${chainId}`);
       }
 
+      // Parse block data
+      const timestamp = parseInt(block.timestamp, 16) * 1000; // Convert to milliseconds
+
+      // Ensure number is properly set
+      const parsedBlockNumber = block.number ? parseInt(block.number, 16) : blockNumber;
+
+      // Extract transaction hashes
+      const transactions = Array.isArray(block.transactions)
+        ? block.transactions.map(tx => (typeof tx === 'string' ? tx : tx.hash || ''))
+        : [];
+
+      // Convert gas values from hex to BigInt
+      const gasUsed = block.gasUsed ? BigInt(block.gasUsed) : BigInt(0);
+      const gasLimit = block.gasLimit ? BigInt(block.gasLimit) : BigInt(0);
+
       return {
-        number: block.number,
-        hash: block.hash,
-        timestamp: block.timestamp,
-        transactions: block.transactions.map(tx => (typeof tx === 'string' ? tx : (tx as { hash: string }).hash)),
-        gasUsed: block.gasUsed,
-        gasLimit: block.gasLimit,
-        parentHash: block.parentHash,
-        miner: block.miner,
+        number: parsedBlockNumber,
+        hash: block.hash || '',
+        parentHash: block.parentHash || '',
+        timestamp,
+        transactions,
+        gasUsed,
+        gasLimit,
+        miner: block.miner || '',
       };
     } catch (error) {
-      this.logger.error(`Error getting block #${blockNumber} on chainId ${chainId}: ${error.message}`);
+      this.logger.error(`Failed to get block ${blockNumber} for chain ${chainId}: ${error.message}`);
       throw error;
     }
   }
@@ -621,5 +765,51 @@ export class BlockchainService {
     }
 
     return providerData.provider;
+  }
+
+  /**
+   * Update provider status based on monitoring results
+   * This method is called by RpcMonitorService when it detects endpoint issues
+   * @param url The RPC endpoint URL
+   * @param isUp Whether the endpoint is responding
+   */
+  updateProviderStatus(url: string, isUp: boolean): void {
+    const providerData = this.providers.get(url);
+    if (providerData) {
+      const previousStatus = providerData.endpoint.status;
+      providerData.endpoint.status = isUp ? 'up' : 'down';
+
+      if (previousStatus !== providerData.endpoint.status) {
+        this.logger.log(
+          `Provider status changed: ${providerData.endpoint.name} (${url}) is now ${providerData.endpoint.status}`,
+        );
+
+        // If the active provider went down, consider switching
+        if (!isUp && this.activeProvider.endpoint.url === url) {
+          this.logger.warn(`Active provider ${providerData.endpoint.name} is down, attempting to switch...`);
+          this.fallbackToNextAvailableProvider();
+        }
+      }
+    }
+  }
+
+  /**
+   * Update WebSocket provider status based on monitoring results
+   * This method is called by RpcMonitorService when it detects endpoint issues
+   * @param url The WebSocket endpoint URL
+   * @param isUp Whether the endpoint is responding
+   */
+  updateWsProviderStatus(url: string, isUp: boolean): void {
+    const providerData = this.wsProviders.get(url);
+    if (providerData) {
+      const previousStatus = providerData.endpoint.status;
+      providerData.endpoint.status = isUp ? 'up' : 'down';
+
+      if (previousStatus !== providerData.endpoint.status) {
+        this.logger.log(
+          `WebSocket provider status changed: ${providerData.endpoint.name} (${url}) is now ${providerData.endpoint.status}`,
+        );
+      }
+    }
   }
 }

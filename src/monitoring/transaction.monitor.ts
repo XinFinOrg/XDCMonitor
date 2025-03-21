@@ -1,7 +1,7 @@
 import { BlockchainService } from '@blockchain/blockchain.service';
 import { ConfigService } from '@config/config.service';
 import { MetricsService } from '@metrics/metrics.service';
-import { TransactionStatus } from '@models/transaction.interface';
+import { TransactionStatus } from '@types';
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { ethers } from 'ethers';
@@ -57,9 +57,22 @@ export class TransactionMonitorService implements OnModuleInit {
    * Derive wallet address from private key
    */
   private getAddressFromPrivateKey(privateKey: string): string {
-    if (!privateKey) return '';
+    if (!privateKey) {
+      this.logger.warn('No private key provided');
+      return '';
+    }
+
     try {
-      const wallet = new ethers.Wallet(privateKey);
+      // Ensure private key has proper format
+      const formattedKey = privateKey.startsWith('0x') ? privateKey : `0x${privateKey}`;
+
+      // Validate private key length (should be 32 bytes / 64 hex chars after 0x)
+      if (formattedKey.length !== 66) {
+        this.logger.error(`Invalid private key length: ${formattedKey.length - 2} characters, expected 64`);
+        return '';
+      }
+
+      const wallet = new ethers.Wallet(formattedKey);
       return wallet.address;
     } catch (error) {
       this.logger.error(`Failed to derive address from private key: ${error.message}`);

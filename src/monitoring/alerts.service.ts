@@ -182,19 +182,12 @@ export class AlertsService {
 
   /**
    * Create a warning-level alert
+   * NOTE: This method is disabled as per requirement to turn off warning alerts
    */
   async warning(alertType: string, component: string, message: string): Promise<void> {
-    if (this.shouldThrottle(alertType)) {
-      this.logger.debug(`Throttling warning alert: ${alertType}`);
-      return;
-    }
-
-    await this.addAlert({
-      type: 'warning',
-      component,
-      title: this.formatAlertTitle(alertType),
-      message,
-    });
+    // Warnings are disabled - only log to debug
+    this.logger.debug(`WARNING ALERT SUPPRESSED: ${alertType} - ${message}`);
+    return;
   }
 
   /**
@@ -262,7 +255,8 @@ export class AlertsService {
         await this.error('threshold_exceeded', component, `${title} - ${message}`);
         break;
       case 'warning':
-        await this.warning('threshold_warning', component, `${title} - ${message}`);
+        // Warning alerts are disabled - only log to debug
+        this.logger.debug(`WARNING THRESHOLD SUPPRESSED: ${title} - ${message}`);
         break;
       case 'info':
         await this.info('threshold_notification', component, `${title} - ${message}`);

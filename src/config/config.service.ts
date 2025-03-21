@@ -1,11 +1,10 @@
 import { DEFAULTS, ENV_VARS, FEATURE_FLAGS, NETWORK } from '@common/constants/config';
-import { AlertNotificationConfig, InfluxDbConfig, MonitoringConfig } from '@common/interfaces/monitoring';
 import { ConfigurationError } from '@common/utils/error-handler';
 import { Injectable, Logger } from '@nestjs/common';
 import * as dotenv from 'dotenv';
 import * as fs from 'fs';
 import { join } from 'path';
-import { RpcEndpoint } from '@common/interfaces/rpc.interface';
+import { RpcEndpoint, AlertNotificationConfig, MonitoringConfig, InfluxDbConfig } from '@types';
 import {
   EXPLORER_ENDPOINTS,
   FAUCET_ENDPOINTS,
@@ -179,7 +178,7 @@ export class ConfigService {
       };
 
       this.monitoringConfig = {
-        scanIntervalMs: this.getNumber(ENV_VARS.SCAN_INTERVAL_MS, DEFAULTS.SCAN_INTERVAL_MS),
+        scanIntervalMs: this.getNumber(ENV_VARS.SCAN_INTERVAL, DEFAULTS.SCAN_INTERVAL) * 1000,
         blocksToScan: this.getNumber(ENV_VARS.BLOCKS_TO_SCAN, DEFAULTS.BLOCKS_TO_SCAN),
         enableBlocksMonitoring: this.isFeatureEnabled(FEATURE_FLAGS.ENABLE_BLOCK_MONITORING, true),
         enableTransactionsMonitoring: this.isFeatureEnabled(FEATURE_FLAGS.ENABLE_TRANSACTION_MONITORING, true),
@@ -285,7 +284,7 @@ export class ConfigService {
   getWsEndpoints(): RpcEndpoint[] {
     // Filter out conditional WS endpoints if not enabled
     return WS_ENDPOINTS.filter(
-      endpoint => !endpoint.conditional || this.getBoolean('ENABLE_ADDITIONAL_WS_ENDPOINTS', false),
+      endpoint => (endpoint as any).conditional !== true || this.getBoolean('ENABLE_ADDITIONAL_WS_ENDPOINTS', false),
     );
   }
 

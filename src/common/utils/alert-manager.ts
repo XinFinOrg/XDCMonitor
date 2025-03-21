@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import axios from 'axios';
+import TelegramBot from 'node-telegram-bot-api';
 
 export enum AlertSeverity {
   INFO = 'info',
@@ -256,28 +257,190 @@ export class AlertManager {
       throw new Error('Telegram bot token or chat ID is not configured');
     }
 
-    // Format the message
-    const severity =
-      alert.severity === AlertSeverity.CRITICAL
-        ? '🔴 CRITICAL'
-        : alert.severity === AlertSeverity.WARNING
-          ? '🟠 WARNING'
-          : '🔵 INFO';
+    // Format message for Telegram
+    const severityEmoji =
+      alert.severity === AlertSeverity.CRITICAL ? '🔴' : alert.severity === AlertSeverity.WARNING ? '⚠️' : '🔵';
 
-    const message = `${severity}: ${alert.title}\n\n${alert.message}\n\nComponent: ${alert.component}\nCategory: ${alert.category}`;
-
-    const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
-    const payload = {
-      chat_id: chatId,
-      text: message,
-      parse_mode: 'Markdown',
-    };
+    const message = `${severityEmoji} *${alert.title}*\n\n${alert.message}\n\n📱 *Component:* ${
+      alert.component
+    }\n🔍 *Category:* ${alert.category}\n⏰ *Time:* ${new Date(alert.timestamp).toLocaleString()}`;
 
     try {
-      const response = await axios.post(url, payload);
-      this.logger.debug(`Telegram notification sent, message ID: ${response.data?.result?.message_id}`);
+      // Create a new bot instance with polling disabled
+      const bot = new TelegramBot(botToken, {
+        polling: false,
+        // Fix for EFATAL: AggregateError - force IPv4
+        request: {
+          // Proper type for the request options
+          agentClass: require('https').Agent,
+          agentOptions: {
+            keepAlive: true,
+            family: 4, // Force IPv4
+          },
+        } as any, // Use type assertion to bypass type checking issues
+      });
+
+      // Send the message with retry logic
+      const result = await this.sendTelegramMessageSafely(bot, chatId, message);
+
+      if (result) {
+        this.logger.debug(`Telegram notification sent, message ID: ${result.message_id}`);
+      } else {
+        // If all retries with the bot lib failed, try the direct HTTP fallback method
+        this.logger.debug('All retries failed with bot library, attempting fallback HTTP method');
+        const fallbackResult = await this.sendTelegramFallback(botToken, chatId, message, 'Markdown');
+
+        if (fallbackResult) {
+          this.logger.debug('Telegram notification sent using fallback HTTP method');
+        } else {
+          // If even the fallback failed, try one more time with plain text
+          const plainTextResult = await this.sendTelegramFallback(
+            botToken,
+            chatId,
+            message
+              .replace(/\*/g, '')
+              .replace(/📱 [*]Component:[*]/g, '📱 Component:')
+              .replace(/🔍 [*]Category:[*]/g, '🔍 Category:')
+              .replace(/⏰ [*]Time:[*]/g, '⏰ Time:'),
+          );
+
+          if (plainTextResult) {
+            this.logger.debug('Telegram notification sent using fallback HTTP method with plain text');
+          } else {
+            throw new Error('Failed to send Telegram message after all retry methods');
+          }
+        }
+      }
     } catch (error) {
-      throw new Error(`Telegram error: ${(error as Error).message}`);
+      this.logger.error(`Failed to send Telegram notification: ${(error as Error).message}`);
+      this.logger.debug(`Telegram error stack: ${(error as Error).stack}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Fallback method to send Telegram messages using direct HTTP API calls
+   * when the node-telegram-bot-api fails
+   */
+  private async sendTelegramFallback(
+    botToken: string,
+    chatId: string | number,
+    text: string,
+    parseMode?: string,
+  ): Promise<boolean> {
+    try {
+      this.logger.debug('Attempting to send message using fallback HTTP method');
+
+      // Simple text cleanup
+      const cleanText = text.replace(/\*/g, '');
+
+      // Create the request URL
+      const apiUrl = `https://api.telegram.org/bot${botToken}/sendMessage`;
+
+      // Prepare the request data
+      const data: any = {
+        chat_id: chatId,
+        text: cleanText,
+        disable_web_page_preview: true,
+      };
+
+      // Only add parse_mode if specified
+      if (parseMode) {
+        data.parse_mode = parseMode;
+      }
+
+      // Send the request with axios
+      const response = await axios.post(apiUrl, data, {
+        // Force IPv4 for the HTTP request
+        httpsAgent: new (require('https').Agent)({
+          family: 4,
+          keepAlive: true,
+          timeout: 10000,
+        }),
+        timeout: 10000,
+      });
+
+      if (response.status === 200 && response.data && response.data.ok) {
+        this.logger.debug('Successfully sent message using fallback HTTP method');
+        return true;
+      } else {
+        this.logger.warn(`Fallback HTTP method failed with status: ${response.status}`);
+        return false;
+      }
+    } catch (error) {
+      this.logger.error(`Fallback HTTP method also failed: ${(error as Error).message}`);
+      return false;
+    }
+  }
+
+  /**
+   * Helper function to safely send Telegram messages with retries
+   * @param bot - The Telegram bot instance
+   * @param chatId - The chat to send message to
+   * @param text - Message text
+   * @param options - Additional options
+   * @param retryCount - Current retry attempt
+   */
+  private async sendTelegramMessageSafely(
+    bot: TelegramBot,
+    chatId: string | number,
+    text: string,
+    options: TelegramBot.SendMessageOptions = { parse_mode: 'Markdown' },
+    retryCount = 0,
+  ): Promise<TelegramBot.Message | null> {
+    try {
+      return await bot.sendMessage(chatId, text, options);
+    } catch (error) {
+      const errorMessage = (error as Error).message || 'Unknown error';
+      this.logger.warn(`Failed to send Telegram message to ${chatId}: ${errorMessage}`);
+
+      // Log more details about the error
+      if (error instanceof Error && error.stack) {
+        this.logger.debug(`Telegram error details: ${error.stack}`);
+      }
+
+      // Network errors may need more time before retry
+      const isNetworkError =
+        errorMessage.includes('ETIMEDOUT') ||
+        errorMessage.includes('ECONNRESET') ||
+        errorMessage.includes('ECONNREFUSED') ||
+        errorMessage.includes('EFATAL') ||
+        errorMessage.includes('AggregateError');
+
+      const retryDelay = isNetworkError ? 3000 * (retryCount + 1) : 1000 * (retryCount + 1);
+
+      if (retryCount < 3) {
+        this.logger.debug(`Retrying Telegram message send (attempt ${retryCount + 1}) in ${retryDelay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, retryDelay));
+
+        // Try with a simpler message format on second retry to avoid formatting issues
+        if (retryCount >= 1) {
+          // Simplify the message format
+          const plainText = text.replace(/\*/g, '').replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
+
+          return this.sendTelegramMessageSafely(bot, chatId, plainText, { parse_mode: undefined }, retryCount + 1);
+        }
+
+        return this.sendTelegramMessageSafely(bot, chatId, text, options, retryCount + 1);
+      }
+
+      if (options && options.parse_mode === 'Markdown') {
+        try {
+          // Try without special formatting on final attempt
+          this.logger.debug('Attempting final retry without Markdown formatting');
+          // Send a simplified message with no formatting
+          const plainText = text
+            .replace(/\*/g, '')
+            .replace(/📱 \*Component:\*/g, '📱 Component:')
+            .replace(/🔍 \*Category:\*/g, '🔍 Category:')
+            .replace(/⏰ \*Time:\*/g, '⏰ Time:');
+
+          return await bot.sendMessage(chatId, plainText, { parse_mode: undefined });
+        } catch (innerError) {
+          this.logger.error(`Final Telegram retry also failed: ${(innerError as Error).message}`);
+        }
+      }
+      return null;
     }
   }
 

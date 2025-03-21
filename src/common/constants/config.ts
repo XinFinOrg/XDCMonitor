@@ -43,9 +43,8 @@ export const BLOCKCHAIN = {
     // Default scan interval in milliseconds
     DEFAULT_SCAN_INTERVAL_MS: 5000,
 
-    // Block time thresholds in seconds
-    BLOCK_TIME_WARNING_THRESHOLD: 5,
-    BLOCK_TIME_ERROR_THRESHOLD: 10,
+    // Block time thresholds in seconds (only critical threshold)
+    BLOCK_TIME_ERROR_THRESHOLD: 10, // 10 seconds
   },
 };
 
@@ -87,7 +86,7 @@ export const ENV_VARS = {
   TESTNET_RPC_ENDPOINTS: 'TESTNET_RPC_ENDPOINTS',
 
   // Monitoring configuration
-  SCAN_INTERVAL_MS: 'SCAN_INTERVAL_MS',
+  SCAN_INTERVAL: 'SCAN_INTERVAL',
   BLOCKS_TO_SCAN: 'BLOCKS_TO_SCAN',
   TRANSACTION_HISTORY_WINDOW_MS: 'TRANSACTION_HISTORY_WINDOW_MS',
   SLOW_RPC_THRESHOLD_MS: 'SLOW_RPC_THRESHOLD_MS',
@@ -148,7 +147,7 @@ export const DEFAULTS = {
   LOG_LEVEL: 'info',
 
   // Monitoring defaults
-  SCAN_INTERVAL_MS: 10000, // 10 seconds
+  SCAN_INTERVAL: 10, // 10 seconds
   BLOCKS_TO_SCAN: 10,
   TRANSACTION_HISTORY_WINDOW_MS: 3600000, // 1 hour
   SLOW_RPC_THRESHOLD_MS: 1000, // 1 second
@@ -186,19 +185,14 @@ export const TIME_MS = {
 // Alert thresholds
 export const ALERT_THRESHOLDS = {
   // Block monitoring
-  MISSED_BLOCKS_WARNING: 3,
   MISSED_BLOCKS_CRITICAL: 10,
-  BLOCK_TIME_WARNING_FACTOR: 2, // 2x target block time
   BLOCK_TIME_CRITICAL_FACTOR: 5, // 5x target block time
 
   // RPC monitoring
-  RPC_LATENCY_WARNING_MS: 1000, // 1 second
   RPC_LATENCY_CRITICAL_MS: 5000, // 5 seconds
-  RPC_FAILURE_RATE_WARNING: 0.1, // 10%
   RPC_FAILURE_RATE_CRITICAL: 0.3, // 30%
 
   // Transaction monitoring
-  LOW_TRANSACTION_COUNT_WARNING_FACTOR: 0.5, // 50% of average
   LOW_TRANSACTION_COUNT_CRITICAL_FACTOR: 0.2, // 20% of average
 } as const;
 
@@ -270,18 +264,16 @@ export const ALERTS = {
   // Thresholds
   THRESHOLDS: {
     // RPC
-    RPC_LATENCY_WARNING_MS: 1000,
-    RPC_LATENCY_ERROR_MS: 3000,
+    RPC_LATENCY_ERROR_MS: 30000, // 30 seconds
 
     // Sync
-    SYNC_LAG_WARNING_BLOCKS: 5,
-    SYNC_LAG_ERROR_BLOCKS: 10,
+    SYNC_LAG_ERROR_BLOCKS: 10, // 10 blocks
 
     // Transaction volume
-    TX_VOLUME_LOW_THRESHOLD: 10,
+    TX_VOLUME_LOW_THRESHOLD: 10, // 10 transactions
 
     // Wallet balance
-    MIN_WALLET_BALANCE_XDC: 10,
+    MIN_WALLET_BALANCE_XDC: 1, // 1 XDC
   },
 
   // Notification settings

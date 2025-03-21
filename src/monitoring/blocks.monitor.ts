@@ -1,8 +1,7 @@
 import { BlockchainService } from '@blockchain/blockchain.service';
 import { ConfigService } from '@config/config.service';
 import { MetricsService } from '@metrics/metrics.service';
-import { BlockInfo } from '@models/block.interface';
-import { TransactionStatus } from '@models/transaction.interface';
+import { BlockInfo, BlockProcessingJob, TransactionStatus } from '@types';
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import {
   CHAIN_ID_TO_NAME,
@@ -14,7 +13,6 @@ import {
 } from '../common/constants/block-monitoring';
 import { ALERTS, BLOCKCHAIN, PERFORMANCE } from '@common/constants/config';
 import { MAINNET_CHAIN_ID, TESTNET_CHAIN_ID } from '@common/constants/endpoints';
-import { BlockProcessingJob } from '@common/interfaces/block-processor.interface';
 import { EnhancedQueue, Priority } from '@common/utils/enhanced-queue';
 import { RpcRetryClient } from '@common/utils/rpc-retry-client';
 import { TimeWindowData } from '@common/utils/time-window-data';
@@ -48,7 +46,6 @@ export interface BlockMonitoringInfo {
     testnet: string;
   };
   blockTimeThreshold: {
-    warning: number;
     error: number;
   };
   scanInterval: number;
@@ -120,9 +117,27 @@ export class BlocksMonitorService implements OnModuleInit {
   };
 
   // Use TimeWindowData for transaction tracking
-  private transactionCounts: TimeWindowData;
+  private transactionCounts: { [network: string]: TimeWindowData } = {
+    [NETWORK_MAINNET]: new TimeWindowData({
+      windowDurationMs: TRANSACTION_HISTORY_WINDOW_MS,
+      maxDataPoints: RECENT_BLOCKS_SAMPLE_SIZE,
+    }),
+    [NETWORK_TESTNET]: new TimeWindowData({
+      windowDurationMs: TRANSACTION_HISTORY_WINDOW_MS,
+      maxDataPoints: RECENT_BLOCKS_SAMPLE_SIZE,
+    }),
+  };
 
-  private failedTransactions: TimeWindowData;
+  private failedTransactions: { [network: string]: TimeWindowData } = {
+    [NETWORK_MAINNET]: new TimeWindowData({
+      windowDurationMs: TRANSACTION_HISTORY_WINDOW_MS,
+      maxDataPoints: RECENT_BLOCKS_SAMPLE_SIZE,
+    }),
+    [NETWORK_TESTNET]: new TimeWindowData({
+      windowDurationMs: TRANSACTION_HISTORY_WINDOW_MS,
+      maxDataPoints: RECENT_BLOCKS_SAMPLE_SIZE,
+    }),
+  };
 
   // Enhanced block processing queue
   private blockProcessingQueue: EnhancedQueue<BlockProcessingJob>;
@@ -130,6 +145,8 @@ export class BlocksMonitorService implements OnModuleInit {
   // Client for each chain
   private mainnetClient: RpcRetryClient;
   private testnetClient: RpcRetryClient;
+
+  private initialBlockProcessed = false;
 
   constructor(
     private readonly blockchainService: BlockchainService,
@@ -144,21 +161,38 @@ export class BlocksMonitorService implements OnModuleInit {
       maxRetries: 3, // Retry failed blocks up to 3 times
       retryDelayMs: 2000, // Wait 2 seconds between retries
       processingTimeoutMs: 60000, // 1 minute timeout for processing
-      getItemId: job => `${job.chainId}-${job.block.number}`, // Unique ID based on chain and block number
+      getItemId: job => {
+        // Safely handle both cases where block is null or has a number
+        if (job.block && job.block.number !== undefined) {
+          return `${job.chainId}-${job.block.number}`;
+        }
+        // Use blockNumber when block object is null
+        if (job.blockNumber !== undefined) {
+          return `${job.chainId}-${job.blockNumber}`;
+        }
+        // Fallback to timestamp if nothing else is available
+        return `${job.chainId}-${job.timestamp || Date.now()}`;
+      },
       onSuccess: (job, result) => {
-        this.logger.debug(`Successfully processed block #${job.block.number} on chain ${job.chainId}`);
+        // Safely access block number from either job.block or job.blockNumber
+        const blockNum = job.block?.number || job.blockNumber;
+        this.logger.debug(`Successfully processed block #${blockNum} on chain ${job.chainId}`);
       },
       onError: (job, error, attempts) => {
+        // Safely access block number from either job.block or job.blockNumber
+        const blockNum = job.block?.number || job.blockNumber;
         this.logger.warn(
-          `Error processing block #${job.block.number} on chain ${job.chainId} (attempt ${attempts}): ${error.message}`,
+          `Error processing block #${blockNum} on chain ${job.chainId} (attempt ${attempts}): ${error.message}`,
         );
       },
       onMaxRetries: (job, error, attempts) => {
+        // Safely access block number from either job.block or job.blockNumber
+        const blockNum = job.block?.number || job.blockNumber;
         this.logger.error(
-          `Failed to process block #${job.block.number} on chain ${job.chainId} after ${attempts} attempts: ${error.message}`,
+          `Failed to process block #${blockNum} on chain ${job.chainId} after ${attempts} attempts: ${error.message}`,
         );
         // Create an alert for persistent block processing failures
-        this.alertsService.error(`Failed to process block #${job.block.number}`, error.message, 'blockchain');
+        this.alertsService.error(`Failed to process block #${blockNum}`, error.message, 'blockchain');
       },
     });
 
@@ -204,14 +238,82 @@ export class BlocksMonitorService implements OnModuleInit {
     }
   }
 
+  /**
+   * Initialize the service when the module is ready
+   */
   async onModuleInit() {
-    this.logger.log(`Block monitoring service initialized (enabled: ${this.monitoringEnabled})`);
-    this.logger.log(`Mainnet primary endpoint: ${this.mainnetPrimaryEndpoint}`);
-    this.logger.log(`Testnet primary endpoint: ${this.testnetPrimaryEndpoint}`);
-    this.logger.log(`Block scan interval: ${this.scanIntervalMs}ms`);
+    this.logger.log('Initializing block monitoring service...');
 
-    if (this.monitoringEnabled) {
-      this.startMonitoring();
+    try {
+      // Load configuration from ConfigService
+      this.scanIntervalMs = this.configService.scanInterval * 1000 || 15000;
+      this.monitoringEnabled = this.configService.enableBlockMonitoring === true;
+      this.mainnetPrimaryEndpoint = this.configService.getPrimaryRpcUrl(MAINNET_CHAIN_ID);
+      this.testnetPrimaryEndpoint = this.configService.getPrimaryRpcUrl(TESTNET_CHAIN_ID);
+
+      this.logger.log(`Block monitoring service configured (enabled: ${this.monitoringEnabled})`);
+      this.logger.log(`Mainnet primary endpoint: ${this.mainnetPrimaryEndpoint}`);
+      this.logger.log(`Testnet primary endpoint: ${this.testnetPrimaryEndpoint}`);
+      this.logger.log(`Block scan interval: ${this.scanIntervalMs}ms`);
+
+      // Initialize RPC clients with more robust error handling
+      await this.initializeRpcClients();
+
+      // Start monitoring if enabled
+      if (this.monitoringEnabled) {
+        this.logger.log('Starting block monitoring with a delayed start...');
+        setTimeout(() => this.startMonitoring(), 5000); // 5-second delay to ensure services are ready
+      } else {
+        this.logger.log('Block monitoring is disabled in configuration');
+      }
+    } catch (error) {
+      this.logger.error(`Failed to initialize block monitoring service: ${error.message}`);
+      // Still try to start monitoring after a longer delay if it's enabled
+      if (this.monitoringEnabled) {
+        this.logger.log('Attempting to start monitoring despite initialization error...');
+        setTimeout(() => this.startMonitoring(), 10000); // 10-second delay
+      }
+    }
+  }
+
+  /**
+   * Initialize RPC clients with robust error handling
+   */
+  private async initializeRpcClients() {
+    try {
+      this.logger.log('Initializing RPC clients for block monitoring...');
+
+      // Initialize mainnet client with multiple retries
+      this.mainnetClient = new RpcRetryClient(this.mainnetPrimaryEndpoint, {
+        maxRetries: 5,
+        retryDelayMs: 1000,
+        timeoutMs: 10000,
+      });
+
+      // Initialize testnet client with multiple retries
+      this.testnetClient = new RpcRetryClient(this.testnetPrimaryEndpoint, {
+        maxRetries: 5,
+        retryDelayMs: 1000,
+        timeoutMs: 10000,
+      });
+
+      // Test connections to ensure they're working
+      const mainnetTest = this.mainnetClient.call('eth_chainId').catch(err => {
+        this.logger.error(`Failed to connect to mainnet: ${err.message}`);
+        return null;
+      });
+
+      const testnetTest = this.testnetClient.call('eth_chainId').catch(err => {
+        this.logger.error(`Failed to connect to testnet: ${err.message}`);
+        return null;
+      });
+
+      const [mainnetChainId, testnetChainId] = await Promise.all([mainnetTest, testnetTest]);
+
+      this.logger.log(`RPC clients initialized - Mainnet: ${!!mainnetChainId}, Testnet: ${!!testnetChainId}`);
+    } catch (error) {
+      this.logger.error(`Error initializing RPC clients: ${error.message}`);
+      throw error;
     }
   }
 
@@ -224,8 +326,8 @@ export class BlocksMonitorService implements OnModuleInit {
       this.logger.log('Starting block monitoring');
     }
 
-    // Set initial scan interval
-    setTimeout(() => this.monitorBlocks(), 1000);
+    // Set initial scan interval with a slight delay to ensure blockchain service is initialized
+    setTimeout(() => this.monitorBlocks(), 3000);
   }
 
   /**
@@ -263,8 +365,19 @@ export class BlocksMonitorService implements OnModuleInit {
     try {
       const client = chainId === BLOCKCHAIN.CHAIN_IDS.MAINNET ? this.mainnetClient : this.testnetClient;
 
+      if (!client) {
+        this.logger.error(`No RPC client available for chain ${chainId}`);
+        return;
+      }
+
       // Get latest block
       const blockNumber = await client.call<string>(BLOCKCHAIN.RPC.METHODS.GET_BLOCK_NUMBER);
+
+      if (!blockNumber) {
+        this.logger.error(`Received null or empty block number from RPC for chain ${chainId}`);
+        return;
+      }
+
       const latestBlock = parseInt(blockNumber, 16);
 
       if (isNaN(latestBlock)) {
@@ -339,13 +452,25 @@ export class BlocksMonitorService implements OnModuleInit {
     // Skip for very low block numbers
     if (latestBlock < BLOCKCHAIN.BLOCKS.MISSING_BLOCKS_RANGE) return;
 
-    const startBlock = latestBlock - BLOCKCHAIN.BLOCKS.MISSING_BLOCKS_RANGE;
-
     try {
-      // We'll just queue the missing blocks for processing
-      // The processing logic will request blocks one by one
-      for (let i = startBlock; i <= latestBlock; i++) {
-        this.enqueueBlock(chainId, i, Priority.LOW);
+      // Only check a subset of blocks in each iteration to prevent too many
+      // concurrent requests that might lead to "number of null" errors
+      const startBlock = latestBlock - BLOCKCHAIN.BLOCKS.MISSING_BLOCKS_RANGE;
+
+      // Only process a subset of the blocks at a time
+      // This helps reduce load on the RPC node and prevents overwhelming the queue
+      const blockCheckInterval = Math.max(1, Math.floor(BLOCKCHAIN.BLOCKS.MISSING_BLOCKS_RANGE / 10));
+
+      for (let i = startBlock; i <= latestBlock; i += blockCheckInterval) {
+        this.logger.debug(`Checking for missing block #${i} on chain ${chainId}`);
+
+        try {
+          // Use lower priority for missing block checks
+          this.enqueueBlock(chainId, i, Priority.LOW);
+        } catch (err) {
+          // Log but continue with other blocks
+          this.logger.warn(`Failed to enqueue block #${i} for chain ${chainId}: ${err.message}`);
+        }
       }
     } catch (error) {
       this.logger.error(`Error checking missing blocks for chain ${chainId}: ${error.message}`);
@@ -353,7 +478,7 @@ export class BlocksMonitorService implements OnModuleInit {
   }
 
   /**
-   * Check for slow block times
+   * Check for slow block times - only critical alerts
    */
   private checkBlockTime(blockTime: number, chainId: string) {
     const chainName = chainId === BLOCKCHAIN.CHAIN_IDS.MAINNET ? 'Mainnet' : 'Testnet';
@@ -364,12 +489,6 @@ export class BlocksMonitorService implements OnModuleInit {
         'blocks',
         `${chainName} block time is very high: ${blockTime.toFixed(1)} seconds`,
       );
-    } else if (blockTime > BLOCKCHAIN.BLOCKS.BLOCK_TIME_WARNING_THRESHOLD) {
-      this.alertsService.warning(
-        ALERTS.TYPES.HIGH_BLOCK_TIME,
-        'blocks',
-        `${chainName} block time is high: ${blockTime.toFixed(1)} seconds`,
-      );
     }
   }
 
@@ -377,6 +496,12 @@ export class BlocksMonitorService implements OnModuleInit {
    * Enqueue a block for processing
    */
   private enqueueBlock(chainId: string, blockNumber: number, priority: Priority = Priority.NORMAL) {
+    // Validate block number before enqueueing
+    if (blockNumber === undefined || blockNumber === null || isNaN(blockNumber)) {
+      this.logger.error(`Attempted to enqueue invalid block number: ${blockNumber} for chain ${chainId}`);
+      return;
+    }
+
     const job: BlockProcessingJob = {
       block: null, // Will be fetched when processing
       chainId: parseInt(chainId, 10), // Convert to number as required by the interface
@@ -386,6 +511,7 @@ export class BlocksMonitorService implements OnModuleInit {
       priority,
     };
 
+    this.logger.debug(`Enqueueing block #${blockNumber} for chain ${chainId} with priority ${priority}`);
     this.blockProcessingQueue.enqueue(job, priority);
   }
 
@@ -395,7 +521,29 @@ export class BlocksMonitorService implements OnModuleInit {
   private async processBlockJob(job: BlockProcessingJob): Promise<void> {
     // Fetch the block using the job's chain ID and block number
     try {
+      // Add a delay on first run to allow providers to initialize
+      if (!this.initialBlockProcessed) {
+        this.logger.debug(`First block processing - adding short delay to ensure providers are ready`);
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        this.initialBlockProcessed = true;
+      }
+
       const block = await this.blockchainService.getBlockByNumberForChain(job.blockNumber, job.chainId);
+
+      // Enhanced safety check to ensure the block is valid and has all required properties
+      if (!block) {
+        this.logger.error(`Null block received for block #${job.blockNumber} on chain ${job.chainId}`);
+        throw new Error(`Null block received for block #${job.blockNumber} on chain ${job.chainId}`);
+      }
+
+      if (block.number === undefined || block.number === null) {
+        this.logger.error(`Invalid block received for block #${job.blockNumber}: missing number property`);
+        throw new Error(`Invalid block received for block #${job.blockNumber}: missing number property`);
+      }
+
+      // Log success for debugging
+      this.logger.debug(`Successfully fetched block #${block.number} on chain ${job.chainId}`);
+
       return this.processBlock(block, job.chainId.toString());
     } catch (error) {
       this.logger.error(`Failed to fetch block for processing: ${error.message}`);
@@ -408,6 +556,11 @@ export class BlocksMonitorService implements OnModuleInit {
    */
   async processBlock(block: BlockInfo, chainId: string): Promise<void> {
     try {
+      // Additional safety check at the start of processing
+      if (!block || block.number === undefined || block.number === null) {
+        throw new Error(`Invalid block data received for chain ${chainId}: missing or invalid block number`);
+      }
+
       this.logger.debug(`Processing block #${block.number} (chainId: ${chainId})`);
 
       const parsedChainId = parseInt(chainId, 10);
@@ -442,7 +595,7 @@ export class BlocksMonitorService implements OnModuleInit {
                 // Safe error logging with explicit typing
                 const txId = typeof txIdentifier === 'string' ? txIdentifier : (txIdentifier as { hash: string }).hash;
 
-                this.logger.error(`Error processing transaction ${txId}: ${txError.message}`);
+                this.logger.error(`Error processing chain ${chainId} transaction ${txId}: ${txError.message}`);
                 return null;
               }
             });
@@ -450,7 +603,9 @@ export class BlocksMonitorService implements OnModuleInit {
             await Promise.all(txPromises);
           }
         } catch (error) {
-          this.logger.error(`Error processing transactions for block #${block.number}: ${error.message}`);
+          this.logger.error(
+            `Error processing chain ${chainId} transactions for block #${block.number}: ${error.message}`,
+          );
           confirmedTxCount = block.transactions.length; // Assume confirmed if we can't verify
         }
       }
@@ -564,7 +719,6 @@ export class BlocksMonitorService implements OnModuleInit {
         testnet: this.testnetPrimaryEndpoint,
       },
       blockTimeThreshold: {
-        warning: BLOCKCHAIN.BLOCKS.BLOCK_TIME_WARNING_THRESHOLD,
         error: BLOCKCHAIN.BLOCKS.BLOCK_TIME_ERROR_THRESHOLD,
       },
       scanInterval: this.scanIntervalMs,
