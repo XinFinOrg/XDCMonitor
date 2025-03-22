@@ -15,3 +15,6 @@ export * from './monitoring/alerts';
 export * from './monitoring/metrics';
 export * from './monitoring/status';
 export * from './monitoring/services';
+
+// Block monitoring types
+export * from './monitoring/block-monitoring';

@@ -107,7 +107,7 @@ export class MetricsManager {
    * @param value Value to record
    * @param metadata Additional metadata (tags, etc.)
    */
-  recordMetric(name: string, value: number, metadata: Record<string, string> = {}): void {
+  recordMetric(name: string, value: number, metadata: Record<string, string> = {}, chainId: number): void {
     if (!this.metrics.has(name)) {
       this.logger.warn(`Attempted to record unregistered metric "${name}". Register it first.`);
       return;
@@ -141,7 +141,7 @@ export class MetricsManager {
     }
 
     // Check thresholds
-    this.checkThresholds(name, value);
+    this.checkThresholds(name, value, chainId);
   }
 
   /**
@@ -149,7 +149,7 @@ export class MetricsManager {
    * @param name Metric name
    * @param value Current value
    */
-  private checkThresholds(name: string, value: number): void {
+  private checkThresholds(name: string, value: number, chainId: number): void {
     const metric = this.metrics.get(name);
     if (!metric) return;
 
@@ -181,7 +181,7 @@ export class MetricsManager {
             !violation.alerted && (!threshold.minDurationMs || violationDuration >= threshold.minDurationMs);
 
           if (shouldAlert) {
-            this.triggerThresholdAlert(name, value, threshold);
+            this.triggerThresholdAlert(name, value, threshold, chainId);
             violation.alerted = true;
           }
         }
@@ -216,7 +216,12 @@ export class MetricsManager {
   /**
    * Trigger an alert for a threshold violation
    */
-  private async triggerThresholdAlert(metricName: string, value: number, threshold: MetricThreshold): Promise<void> {
+  private async triggerThresholdAlert(
+    metricName: string,
+    value: number,
+    threshold: MetricThreshold,
+    chainId: number,
+  ): Promise<void> {
     const operatorText = {
       gt: 'exceeds',
       lt: 'is below',

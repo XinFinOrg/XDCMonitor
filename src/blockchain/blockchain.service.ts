@@ -337,7 +337,9 @@ export class BlockchainService implements OnModuleInit {
           this.logger.log(`Fallback to provider: ${providerData.endpoint.name} (${providerData.endpoint.url})`);
           return true;
         } catch (error) {
-          this.logger.warn(`Provider ${providerData.endpoint.name} is not responding, trying next...`);
+          this.logger.warn(
+            `Chain ${providerData.endpoint.chainId} provider ${providerData.endpoint.name} - ${providerData.endpoint.url} is not responding, trying next...`,
+          );
           providerData.endpoint.status = 'down';
         }
       }

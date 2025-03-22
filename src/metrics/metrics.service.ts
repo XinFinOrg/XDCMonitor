@@ -1,5 +1,6 @@
 import { ConfigService } from '@config/config.service';
 import { InfluxDB, Point, WriteApi } from '@influxdata/influxdb-client';
+import { Alert } from '@monitoring/alerts.service';
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 
 /**
@@ -216,10 +217,38 @@ export class MetricsService implements OnModuleInit {
    * Record blockchain block height
    */
   setBlockHeight(height: number, endpoint: string, chainId: string): void {
-    this.writePoint(
-      new Point('block_height').tag('chainId', chainId).tag('endpoint', endpoint).intField('value', height),
-    );
-    this.logger.debug(`Set block height for ${endpoint} (chainId ${chainId}): ${height}`);
+    const point = new Point('block_height')
+      .tag('chainId', chainId)
+      .tag('endpoint', endpoint)
+      .intField('height', height);
+
+    this.writePoint(point);
+  }
+
+  /**
+   * Record block height variance between RPC endpoints for a network
+   * @param network Network identifier (mainnet/testnet)
+   * @param variance The block height variance in number of blocks
+   */
+  setBlockHeightVariance(network: string, variance: number): void {
+    const point = new Point('block_height_variance').tag('network', network).intField('variance', variance);
+
+    this.writePoint(point);
+  }
+
+  /**
+   * Record block response time for an endpoint
+   * @param endpoint RPC endpoint
+   * @param responseTimeMs Response time in milliseconds
+   * @param chainId Chain ID
+   */
+  setBlockResponseTime(endpoint: string, responseTimeMs: number, chainId: number): void {
+    const point = new Point('block_response_time')
+      .tag('endpoint', endpoint)
+      .tag('chainId', chainId.toString())
+      .intField('ms', responseTimeMs);
+
+    this.writePoint(point);
   }
 
   /**
@@ -334,15 +363,19 @@ export class MetricsService implements OnModuleInit {
   }
 
   /**
-   * Increment alert count
+   * Save alert history
+   *
+   * @param alert Alert object
+   * @param chainId Chain ID
    */
-  incrementAlertCount(type: string, component: string, chainId: number = 50): void {
+  saveAlert(alert: Alert, chainId?: number): void {
     this.writePoint(
-      new Point('alert_count')
-        .tag('type', type)
-        .tag('component', component)
-        .tag('chainId', chainId.toString())
-        .intField('value', 1),
+      new Point('alert_history')
+        .tag('type', alert.type)
+        .tag('title', alert.title)
+        .tag('component', alert.component)
+        .tag('chainId', chainId?.toString() || 'null')
+        .stringField('value', alert.message),
     );
   }
 

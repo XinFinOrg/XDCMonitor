@@ -238,6 +238,7 @@ export class RpcMonitorService implements OnModuleInit {
           ALERTS.TYPES.RPC_HIGH_LATENCY,
           'rpc',
           `High RPC latency on ${endpoint.name}: ${latency}ms`,
+          endpoint.chainId,
         );
       }
 
@@ -258,7 +259,8 @@ export class RpcMonitorService implements OnModuleInit {
       this.alertsService.error(
         ALERTS.TYPES.RPC_ENDPOINT_DOWN,
         'rpc',
-        `RPC endpoint ${endpoint.name} is not responding: ${error.message}`,
+        `RPC chain ${endpoint.chainId} endpoint ${endpoint.name} - ${endpoint.url} is not responding: ${error.message}`,
+        endpoint.chainId,
       );
 
       return false;

@@ -2,6 +2,16 @@ import { AppModule } from '@/app.module';
 import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  // Don't exit the process
+});
+
+process.on('uncaughtException', error => {
+  console.error('Uncaught Exception:', error);
+  // Don't exit the process
+});
+
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
   const app = await NestFactory.create(AppModule);

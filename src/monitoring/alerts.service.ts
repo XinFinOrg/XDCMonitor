@@ -132,7 +132,7 @@ export class AlertsService {
   /**
    * Add a new alert and potentially send notifications
    */
-  async addAlert(alert: Omit<Alert, 'timestamp'>): Promise<void> {
+  async addAlert(alert: Omit<Alert, 'timestamp'>, chainId?: number): Promise<void> {
     const fullAlert: Alert = {
       ...alert,
       timestamp: new Date(),
@@ -157,54 +157,57 @@ export class AlertsService {
       shouldNotify: true,
     });
 
-    // Record metric for the alert
-    if (alert.component) {
-      this.metricsService.incrementAlertCount(alert.type, alert.component);
-    }
+    this.metricsService.saveAlert(fullAlert, chainId);
   }
 
   /**
    * Create an error-level alert
    */
-  async error(alertType: string, component: string, message: string): Promise<void> {
+  async error(alertType: string, component: string, message: string, chainId?: number): Promise<void> {
     if (this.shouldThrottle(alertType)) {
       this.logger.debug(`Throttling error alert: ${alertType}`);
       return;
     }
 
-    await this.addAlert({
-      type: 'error',
-      component,
-      title: this.formatAlertTitle(alertType),
-      message,
-    });
+    await this.addAlert(
+      {
+        type: 'error',
+        component,
+        title: this.formatAlertTitle(alertType),
+        message,
+      },
+      chainId,
+    );
   }
 
   /**
    * Create a warning-level alert
    * NOTE: This method is disabled as per requirement to turn off warning alerts
    */
-  async warning(alertType: string, component: string, message: string): Promise<void> {
+  async warning(alertType: string, component: string, message: string, chainId?: number): Promise<void> {
     // Warnings are disabled - only log to debug
-    this.logger.debug(`WARNING ALERT SUPPRESSED: ${alertType} - ${message}`);
+    this.logger.debug(`WARNING ALERT SUPPRESSED: ${alertType} - ${message} (${chainId})`);
     return;
   }
 
   /**
    * Create an info-level alert
    */
-  async info(alertType: string, component: string, message: string): Promise<void> {
+  async info(alertType: string, component: string, message: string, chainId?: number): Promise<void> {
     if (this.shouldThrottle(alertType)) {
       this.logger.debug(`Throttling info alert: ${alertType}`);
       return;
     }
 
-    await this.addAlert({
-      type: 'info',
-      component,
-      title: this.formatAlertTitle(alertType),
-      message,
-    });
+    await this.addAlert(
+      {
+        type: 'info',
+        component,
+        title: this.formatAlertTitle(alertType),
+        message,
+      },
+      chainId,
+    );
   }
 
   /**
@@ -247,19 +250,22 @@ export class AlertsService {
     currentValue: number,
     thresholdValue: number,
     unit: string = '',
+    chainId?: number,
   ): Promise<void> {
     const message = `Current value: ${currentValue}${unit} (Threshold: ${thresholdValue}${unit})`;
 
     switch (severity) {
       case 'error':
-        await this.error('threshold_exceeded', component, `${title} - ${message}`);
+        await this.error('threshold_exceeded', component, `${title} - ${message}`, chainId);
         break;
       case 'warning':
         // Warning alerts are disabled - only log to debug
-        this.logger.debug(`WARNING THRESHOLD SUPPRESSED: ${title} - ${message}`);
+        this.logger.debug(
+          `WARNING THRESHOLD SUPPRESSED: ${title} - ${message} ${chainId ? `- ( chain ${chainId})` : ''}`,
+        );
         break;
       case 'info':
-        await this.info('threshold_notification', component, `${title} - ${message}`);
+        await this.info('threshold_notification', component, `${title} - ${message}`, chainId);
         break;
     }
   }
