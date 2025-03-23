@@ -410,7 +410,11 @@ case "$1" in
       for file in grafana_config/config/*; do
         if [ -f "$file" ]; then
           filename=$(basename "$file")
-          cp -f "$file" "grafana_data/config/" 2>/dev/null || true
+          # Remove destination if it's a directory
+          if [ -d "grafana_data/config/$filename" ]; then
+            rm -rf "grafana_data/config/$filename"
+          fi
+          cp -f "$file" "grafana_data/config/$filename" 2>/dev/null || true
           echo "  ✓ $filename"
         fi
       done
@@ -431,8 +435,13 @@ case "$1" in
         mkdir -p grafana_data/provisioning/datasources
         for file in grafana_config/provisioning/datasources/*.yaml; do
           if [ -f "$file" ]; then
+            filename=$(basename "$file")
+            # Remove destination if it's a directory
+            if [ -d "grafana_data/provisioning/datasources/$filename" ]; then
+              rm -rf "grafana_data/provisioning/datasources/$filename"
+            fi
             # Copy file first as a base
-            cp -f "$file" "grafana_data/provisioning/datasources/$(basename "$file")"
+            cp -f "$file" "grafana_data/provisioning/datasources/$filename"
 
             # Get the InfluxDB token from .env
             if [ -f ".env" ]; then
@@ -440,13 +449,13 @@ case "$1" in
               INFLUXDB_TOKEN=$(grep "^INFLUXDB_TOKEN=" .env | sed 's/^INFLUXDB_TOKEN=//' | tr -d '"' | tr -d ' ')
               if [ ! -z "$INFLUXDB_TOKEN" ]; then
                 # Use perl for more robust replacement that handles special characters like =
-                perl -i -pe 's|__INFLUXDB_TOKEN__|"'"$INFLUXDB_TOKEN"'"|g' "grafana_data/provisioning/datasources/$(basename "$file")"
-                echo "✓ Imported datasource: $(basename "$file") with token from .env"
+                perl -i -pe 's|__INFLUXDB_TOKEN__|"'"$INFLUXDB_TOKEN"'"|g' "grafana_data/provisioning/datasources/$filename"
+                echo "✓ Imported datasource: $filename with token from .env"
               else
-                echo "⚠️ Imported datasource: $(basename "$file") - no token found in .env"
+                echo "⚠️ Imported datasource: $filename - no token found in .env"
               fi
             else
-              echo "⚠️ Imported datasource: $(basename "$file") - .env file not found"
+              echo "⚠️ Imported datasource: $filename - .env file not found"
             fi
           fi
         done

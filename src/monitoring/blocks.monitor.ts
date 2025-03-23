@@ -400,7 +400,24 @@ export class BlocksMonitorService implements OnModuleInit {
     this._monitoringTimeout = setTimeout(async () => {
       if (this.monitoringEnabled) {
         try {
-          await this.monitorBlocks();
+          // OPTIMIZATION: Use a more direct approach without extra layers
+          // Process chains directly without additional async function calls
+          try {
+            // Check mainnet
+            this.logger.debug('Checking mainnet...');
+            await this.checkChain(BLOCKCHAIN.CHAIN_IDS.MAINNET);
+
+            // Check testnet
+            this.logger.debug('Checking testnet...');
+            await this.checkChain(BLOCKCHAIN.CHAIN_IDS.TESTNET);
+
+            this.logger.debug('Chain checks completed successfully');
+          } catch (chainError) {
+            this.logger.error(`Error in block monitoring loop: ${chainError.message}`);
+          }
+
+          // Schedule next cycle
+          this.scheduleNextMonitoringCycle();
         } catch (e) {
           this.logger.error(`Fatal error in monitoring loop: ${e.message}`);
           // Try to restart monitoring after a delay to avoid infinite error loops
@@ -504,7 +521,10 @@ export class BlocksMonitorService implements OnModuleInit {
       // Store primary endpoint block height
       endpointBlockHeights[primaryEndpoint] = latestBlock;
 
-      // Process the latest block data
+      // DIRECT UPDATE: Set block height in metrics immediately (no queue)
+      this.metricsService.setBlockHeight(latestBlock, primaryEndpoint, chainId);
+
+      // Process the latest block data for other metrics
       await this.processLatestBlockData(chainId, primaryEndpoint, latestBlock);
     } catch (error) {
       this.handlePrimaryEndpointError(chainId, primaryEndpoint, error);
@@ -517,9 +537,6 @@ export class BlocksMonitorService implements OnModuleInit {
   private async processLatestBlockData(chainId: string, primaryEndpoint: string, latestBlock: number): Promise<void> {
     // Get network key for this chain
     const networkKey = this.getNetworkKey(chainId);
-
-    // Set block height in metrics for primary endpoint
-    this.metricsService.setBlockHeight(latestBlock, primaryEndpoint, chainId);
 
     // Fetch the latest block for its timestamp
     try {
@@ -555,7 +572,8 @@ export class BlocksMonitorService implements OnModuleInit {
         }
       }
 
-      // Queue the latest block for full processing
+      // Queue the latest block for full processing (transactions, etc.)
+      // but NOT for block height updates (already done directly)
       this.enqueueBlock(chainId, latestBlock);
     } catch (error) {
       this.logger.error(`Error fetching blocks for time calculation: ${error.message}`);
@@ -631,7 +649,7 @@ export class BlocksMonitorService implements OnModuleInit {
           // Save to our tracking object
           endpointBlockHeights[endpoint] = blockNumber;
 
-          // Set metrics for this endpoint
+          // DIRECT UPDATE: Set block height metrics immediately for this endpoint
           this.metricsService.setBlockHeight(blockNumber, endpoint, chainId);
           this.metricsService.setRpcStatus(endpoint, true, parseInt(chainId));
         }
