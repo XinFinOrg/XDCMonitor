@@ -9,8 +9,9 @@
     "target": "ES2021",
     "sourceMap": true,
     "outDir": "./dist",
+    "rootDir": "./src",
     "baseUrl": "./",
-    "incremental": true,
+    "incremental": false,
     "skipLibCheck": true,
     "strictNullChecks": false,
     "noImplicitAny": false,
@@ -22,10 +23,13 @@
     "paths": {
       "@blockchain/*": ["src/blockchain/*"],
       "@config/*": ["src/config/*"],
-      "@models/*": ["src/models/*"],
       "@monitoring/*": ["src/monitoring/*"],
       "@metrics/*": ["src/metrics/*"],
+      "@common/*": ["src/common/*"],
+      "@types": ["src/types"],
+      "@types/*": ["src/types/*"],
       "@/*": ["src/*"]
     }
-  }
+  },
+  "exclude": ["backup", "backup/**/*", "dist", "node_modules"]
 }

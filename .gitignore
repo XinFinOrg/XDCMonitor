@@ -36,7 +36,6 @@ Thumbs.db
 
 # IDEs and editors
 .idea
-.vscode
 .project
 .classpath
 .c9/
@@ -60,3 +59,6 @@ grafana_data/
 
 # Exclude ALL InfluxDB data
 influxdb_data/
+
+# Exclude all tsbuildinfo files
+*.tsbuildinfo

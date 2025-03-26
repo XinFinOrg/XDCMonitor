@@ -34,7 +34,7 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 3,
+  "id": 5,
   "links": [],
   "liveNow": false,
   "panels": [
@@ -78,7 +78,7 @@
       },
       "gridPos": {
         "h": 6,
-        "w": 5,
+        "w": 3,
         "x": 0,
         "y": 1
       },
@@ -141,7 +141,7 @@
       "gridPos": {
         "h": 11,
         "w": 7,
-        "x": 5,
+        "x": 3,
         "y": 1
       },
       "id": 122,
@@ -205,19 +205,15 @@
       "description": "Current status of HTTPS RPC endpoints. Green = operational, red = down or error.",
       "fieldConfig": {
         "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
+          "fieldMinMax": false,
           "mappings": [
             {
               "options": {
                 "0": {
-                  "color": "red",
                   "index": 0,
                   "text": "Down"
                 },
                 "1": {
-                  "color": "green",
                   "index": 1,
                   "text": "Up"
                 }
@@ -229,8 +225,12 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "red",
+                "color": "green",
                 "value": null
+              },
+              {
+                "color": "red",
+                "value": 0
               },
               {
                 "color": "green",
@@ -243,26 +243,22 @@
       },
       "gridPos": {
         "h": 11,
-        "w": 6,
-        "x": 12,
+        "w": 7,
+        "x": 10,
         "y": 1
       },
       "id": 125,
       "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "auto",
+        "minVizHeight": 75,
+        "minVizWidth": 75,
         "orientation": "auto",
         "reduceOptions": {
           "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
-        "text": {
-          "titleSize": 11,
-          "valueSize": 50
-        },
-        "textMode": "auto"
+        "showThresholdLabels": false,
+        "showThresholdMarkers": false
       },
       "pluginVersion": "10.2.0",
       "targets": [
@@ -289,7 +285,7 @@
           }
         }
       ],
-      "type": "stat"
+      "type": "gauge"
     },
     {
       "datasource": {
@@ -299,19 +295,14 @@
       "description": "Current status of WebSocket endpoints. Green = connected, red = disconnected.",
       "fieldConfig": {
         "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
           "mappings": [
             {
               "options": {
                 "0": {
-                  "color": "red",
                   "index": 0,
                   "text": "Down"
                 },
                 "1": {
-                  "color": "green",
                   "index": 1,
                   "text": "Up"
                 }
@@ -323,8 +314,12 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "red",
+                "color": "green",
                 "value": null
+              },
+              {
+                "color": "red",
+                "value": 0
               },
               {
                 "color": "green",
@@ -337,26 +332,22 @@
       },
       "gridPos": {
         "h": 11,
-        "w": 6,
-        "x": 18,
+        "w": 7,
+        "x": 17,
         "y": 1
       },
       "id": 126,
       "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "auto",
+        "minVizHeight": 75,
+        "minVizWidth": 75,
         "orientation": "auto",
         "reduceOptions": {
           "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
-        "text": {
-          "titleSize": 11,
-          "valueSize": 50
-        },
-        "textMode": "auto"
+        "showThresholdLabels": false,
+        "showThresholdMarkers": false
       },
       "pluginVersion": "10.2.0",
       "targets": [
@@ -383,7 +374,7 @@
           }
         }
       ],
-      "type": "stat"
+      "type": "gauge"
     },
     {
       "datasource": {
@@ -420,7 +411,7 @@
       },
       "gridPos": {
         "h": 5,
-        "w": 5,
+        "w": 3,
         "x": 0,
         "y": 7
       },
@@ -449,6 +440,18 @@
           "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"block_time\" and r.chainId == \"50\")\n  |> filter(fn: (r) => r._field == \"value\")\n  |> last()\n  |> keep(columns: [\"_value\"])",
           "range": true,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb"
+          },
+          "editorMode": "code",
+          "expr": "xdc_block_time{chainId=\"50\"}",
+          "hide": false,
+          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"block_time_simple\" and r.chainId == \"50\")\n  |> filter(fn: (r) => r._field == \"seconds\")\n  |> last()\n  |> keep(columns: [\"_value\"])",
+          "range": true,
+          "refId": "B"
         }
       ],
       "title": "Block Time",
@@ -977,7 +980,7 @@
           "format": "table",
           "hide": false,
           "instant": true,
-          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"transactions_per_block\" and r.chainId == \"50\")\n  |> keep(columns: [\"_value\", \"block_number\", \"status\"])\n  |> group()\n  |> pivot(rowKey:[\"block_number\"], columnKey: [\"status\"], valueColumn: \"_value\")\n  |> sort(columns: [\"block_number\"], desc: true)",
+          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"transactions_per_block\" and r.chainId == \"50\")\n  |> keep(columns: [\"_value\", \"block_number\", \"status\"])\n  |> group()\n  |> pivot(rowKey:[\"block_number\"], columnKey: [\"status\"], valueColumn: \"_value\")\n  |> sort(columns: [\"block_number\"], desc: true)\n  |> limit(n: 20)",
           "refId": "A"
         }
       ],
@@ -1241,13 +1244,16 @@
             },
             "insertNulls": false,
             "lineInterpolation": "linear",
+            "lineStyle": {
+              "fill": "solid"
+            },
             "lineWidth": 1,
-            "pointSize": 5,
+            "pointSize": 4,
             "scaleDistribution": {
               "type": "linear"
             },
-            "showPoints": "never",
-            "spanNulls": false,
+            "showPoints": "always",
+            "spanNulls": true,
             "stacking": {
               "group": "A",
               "mode": "none"
@@ -1299,7 +1305,7 @@
           "editorMode": "code",
           "expr": "rate(xdc_block_height{chainId=\"50\"}[5m])",
           "legendFormat": "Blocks/min",
-          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"block_height\" and r.chainId == \"50\")\n  |> group(columns: [\"endpoint\"])\n  |> derivative(unit: 1m, nonNegative: true)\n  |> aggregateWindow(every: v.windowPeriod, fn: mean)",
+          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"block_height\" and r.chainId == \"50\")\n  |> group(columns: [\"endpoint\"])\n  |> sort(columns: [\"_time\"])\n  |> derivative(unit: 1m, nonNegative: true)\n  |> aggregateWindow(every: v.windowPeriod, fn: mean)",
           "range": true,
           "refId": "A"
         }
@@ -1312,7 +1318,7 @@
         "type": "influxdb",
         "uid": "influxdb"
       },
-      "description": "Successful vs failed transactions per 1-minute window.",
+      "description": "Successful vs failed transactions per 5-minute window.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1401,9 +1407,9 @@
           "editorMode": "code",
           "expr": "rate(xdc_transaction_count{status=\"confirmed\", chainId=\"50\"}[1m])",
           "legendFormat": "Successful Transactions (1m)",
-          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"transactions_per_block\" and r.status == \"success\" and r.chainId == \"50\")\n  |> keep(columns: [\"_time\", \"_value\"])\n  |> aggregateWindow(every: 1m, fn: sum, createEmpty: false)",
+          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"transactions_per_block\" and r.chainId == \"50\" and (r.status == \"confirmed\" or r.status == \"success\"))\n  |> keep(columns: [\"_time\", \"_value\"])\n  |> aggregateWindow(every: 5m, fn: sum, createEmpty: false)",
           "range": true,
-          "refId": "A"
+          "refId": "Success"
         },
         {
           "datasource": {
@@ -1413,12 +1419,43 @@
           "editorMode": "code",
           "expr": "rate(xdc_transaction_count{status=\"failed\", chainId=\"50\"}[1m])",
           "legendFormat": "Failed Transactions (1m)",
-          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"transactions_per_block\" and r.status == \"failed\" and r.chainId == \"50\")\n  |> keep(columns: [\"_time\", \"_value\"])\n  |> aggregateWindow(every: 1m, fn: sum, createEmpty: false)",
+          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"transactions_per_block\" and r.chainId == \"50\" and r.status == \"failed\")\n  |> keep(columns: [\"_time\", \"_value\"])\n  |> aggregateWindow(every: 5m, fn: sum, createEmpty: false)",
           "range": true,
-          "refId": "B"
+          "refId": "Failed"
         }
       ],
-      "title": "Transaction Volume (1-minute windows)",
+      "title": "Transaction Volume (5-minute windows)",
+      "transformations": [
+        {
+          "filter": {
+            "id": "byRefId",
+            "options": "Success"
+          },
+          "id": "organize",
+          "options": {
+            "excludeByName": {},
+            "indexByName": {},
+            "renameByName": {
+              "Time": "",
+              "Value": "Success"
+            }
+          }
+        },
+        {
+          "filter": {
+            "id": "byRefId",
+            "options": "Failed"
+          },
+          "id": "organize",
+          "options": {
+            "excludeByName": {},
+            "indexByName": {},
+            "renameByName": {
+              "Value": "Failed"
+            }
+          }
+        }
+      ],
       "type": "timeseries"
     },
     {
@@ -1521,6 +1558,18 @@
         }
       ],
       "title": "Block Time Trend",
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {},
+            "indexByName": {},
+            "renameByName": {
+              "Value": "block_time"
+            }
+          }
+        }
+      ],
       "type": "timeseries"
     },
     {
@@ -1626,26 +1675,379 @@
       "type": "timeseries"
     },
     {
-      "description": "# XDC Network Monitoring\n\n## Monitored Endpoints\n\n**RPC Endpoints:**\n- https://rpc.xinfin.network\n- https://erpc.xinfin.network\n- https://arpc.xinfin.network\n- https://earpc.xinfin.network\n- https://xdc.public-rpc.com\n- https://rpc.primenumbers.xyz\n- https://erpc.xdcrpc.com\n- http://173.212.233.170:8989 (Custom Mainnet RPC)\n\n**WebSocket Endpoints:**\n- wss://ws.xinfin.network\n- ws://173.212.233.170:8888 (Custom Mainnet WebSocket)\n\n**Explorers:**\n- https://explorer.xinfin.network\n- https://xdcscan.io\n- https://blocksscan.io",
+      "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
         "y": 58
       },
-      "id": 117,
-      "options": {
-        "code": {
-          "language": "plaintext",
-          "showLineNumbers": false,
-          "showMiniMap": false
+      "id": 140,
+      "panels": [],
+      "title": "Transaction Monitoring",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb"
+      },
+      "description": "Success rate of test transactions (both regular transfers and contract deployments)",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 70
+              },
+              {
+                "color": "green",
+                "value": 90
+              }
+            ]
+          },
+          "unit": "percent"
         },
-        "content": "# Title\n\nFor markdown syntax help: [commonmark.org/help](https://commonmark.org/help/)",
-        "mode": "markdown"
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 59
+      },
+      "id": 141,
+      "options": {
+        "legend": {
+          "calcs": ["mean"],
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
       },
       "pluginVersion": "10.2.0",
-      "title": "Network Monitoring",
-      "type": "text"
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb"
+          },
+          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"transaction_monitor\" and r.chainId == \"50\")\n  |> group(columns: [\"type\", \"status\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> map(fn: (r) => ({ r with _value: r._value * 100.0 }))",
+          "refId": "A"
+        }
+      ],
+      "title": "Transaction Success Rate (Mainnet)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb"
+      },
+      "description": "Average gas used by test transactions, broken down by type",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 59
+      },
+      "id": 142,
+      "options": {
+        "legend": {
+          "calcs": ["mean", "max"],
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "10.2.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb"
+          },
+          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"transaction_monitor_gas_used\" and r.chainId == \"50\")\n  |> group(columns: [\"type\", \"rpc\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
+          "refId": "A"
+        }
+      ],
+      "title": "Gas Usage by Transaction Type",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb"
+      },
+      "description": "Test transaction confirmation times in milliseconds, broken down by transaction type",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 19,
+        "x": 0,
+        "y": 67
+      },
+      "id": 143,
+      "options": {
+        "legend": {
+          "calcs": ["mean", "max"],
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "10.2.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb"
+          },
+          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"transaction_monitor_confirmation_time\" and r.chainId == \"50\")\n  |> group(columns: [\"type\", \"rpc\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
+          "refId": "A"
+        }
+      ],
+      "title": "Transaction Confirmation Time",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb"
+      },
+      "description": "Wallet balances for transaction monitoring. Sufficient balance is required for automated transaction tests to run.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.05
+              },
+              {
+                "color": "green",
+                "value": 0.2
+              }
+            ]
+          },
+          "unit": "XDC"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 5,
+        "x": 19,
+        "y": 67
+      },
+      "id": 144,
+      "options": {
+        "displayMode": "gradient",
+        "minVizHeight": 10,
+        "minVizWidth": 0,
+        "namePlacement": "auto",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "showUnfilled": true,
+        "text": {
+          "titleSize": 1
+        },
+        "valueMode": "color"
+      },
+      "pluginVersion": "10.2.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb"
+          },
+          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"transaction_wallet_balance\" and r.chainId == \"50\")\n  |> group(columns: [\"network\"])\n  |> last()",
+          "refId": "A"
+        }
+      ],
+      "title": "Wallet Balances",
+      "transformations": [
+        {
+          "id": "renameByRegex",
+          "options": {
+            "regex": ".*",
+            "renamePattern": "$network Wallet"
+          }
+        }
+      ],
+      "type": "bargauge"
     },
     {
       "collapsed": false,
@@ -1653,7 +2055,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 59
+        "y": 73
       },
       "id": 114,
       "panels": [],
@@ -1665,7 +2067,7 @@
         "type": "influxdb",
         "uid": "influxdb"
       },
-      "description": "Recent alert history showing system health issues and their timing.",
+      "description": "Recent alert history showing system health issues, components affected, and timing.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1694,7 +2096,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Severity"
+              "options": "type"
             },
             "properties": [
               {
@@ -1702,7 +2104,7 @@
                 "value": [
                   {
                     "options": {
-                      "critical": {
+                      "error": {
                         "color": "red",
                         "index": 2
                       },
@@ -1724,16 +2126,20 @@
                 "value": {
                   "type": "color-text"
                 }
+              },
+              {
+                "id": "displayName",
+                "value": "Severity"
               }
             ]
           }
         ]
       },
       "gridPos": {
-        "h": 8,
+        "h": 7,
         "w": 24,
         "x": 0,
-        "y": 60
+        "y": 74
       },
       "id": 123,
       "options": {
@@ -1760,12 +2166,7 @@
             "uid": "influxdb"
           },
           "editorMode": "code",
-          "expr": "sort_desc(ALERTS)",
-          "format": "table",
-          "instant": true,
-          "legendFormat": "alert",
-          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart)\n  |> filter(fn: (r) => r._measurement == \"alert_count\")\n  |> group(columns: [\"type\", \"component\", \"chainId\"])\n  |> last(column: \"_value\")",
-          "range": false,
+          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"alert_history\")\n  |> pivot(rowKey:[\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> group()\n  |> sort(columns: [\"_time\"], desc: true)",
           "refId": "A"
         }
       ],
@@ -1775,23 +2176,27 @@
           "id": "organize",
           "options": {
             "excludeByName": {
-              "Value": true
+              "_measurement": true,
+              "_start": true,
+              "_stop": true,
+              "component": false
             },
             "indexByName": {
-              "Time": 0,
-              "alertname": 1,
-              "alertstate": 2,
-              "instance": 3,
-              "job": 4,
-              "severity": 5
+              "_measurement": 8,
+              "_start": 6,
+              "_stop": 7,
+              "_time": 0,
+              "chainId": 4,
+              "component": 5,
+              "title": 1,
+              "type": 3,
+              "value": 2
             },
             "renameByName": {
-              "Time": "Time",
-              "alertname": "Alert",
-              "alertstate": "State",
-              "instance": "Target",
-              "job": "Service",
-              "severity": "Severity"
+              "_time": "Time",
+              "chainId": "Chain ID",
+              "component": "Component",
+              "type": "Alert Type"
             }
           }
         }
@@ -1799,16 +2204,180 @@
       "type": "table"
     },
     {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 81
+      },
+      "id": 150,
+      "panels": [],
+      "title": "Alert Metrics",
+      "type": "row"
+    },
+    {
       "datasource": {
         "type": "influxdb",
         "uid": "influxdb"
       },
+      "description": "Alerts by type over time",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "normal"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green"
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 82
+      },
+      "id": 151,
+      "options": {
+        "legend": {
+          "calcs": ["sum", "mean"],
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "10.2.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb"
+          },
+          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"alert_count\")\n  |> group(columns: [\"type\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: count, createEmpty: false)",
+          "refId": "A"
+        }
+      ],
+      "title": "Alerts by Type",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb"
+      },
+      "description": "Distribution of alerts by component",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 82
+      },
+      "id": 152,
+      "options": {
+        "displayLabels": ["name", "percent"],
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "values": ["value", "percent"]
+        },
+        "pieType": "pie",
+        "reduceOptions": {
+          "calcs": ["sum"],
+          "fields": "",
+          "values": false
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "10.2.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb"
+          },
+          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"alert_count\")\n  |> group(columns: [\"component\"])\n  |> count()",
+          "refId": "A"
+        }
+      ],
+      "title": "Alerts by Component",
+      "type": "piechart"
+    },
+    {
+      "datasource": {
+        "type": "grafana",
+        "uid": "-- Grafana --"
+      },
       "description": "Currently active alerts requiring attention.",
       "gridPos": {
-        "h": 6,
+        "h": 9,
         "w": 24,
         "x": 0,
-        "y": 68
+        "y": 90
       },
       "id": 100,
       "options": {
@@ -1837,92 +2406,74 @@
         "type": "influxdb",
         "uid": "influxdb"
       },
-      "description": "Historical record of past alerts with timing and severity.",
+      "description": "Alert counts by chain ID",
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "thresholds"
+            "mode": "palette-classic"
           },
           "custom": {
-            "align": "auto",
-            "cellOptions": {
-              "type": "auto"
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "bars",
+            "fillOpacity": 40,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
             },
-            "filterable": true,
-            "inspect": false
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "normal"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
           },
           "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               }
             ]
           }
         },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Severity"
-            },
-            "properties": [
-              {
-                "id": "mappings",
-                "value": [
-                  {
-                    "options": {
-                      "critical": {
-                        "color": "red",
-                        "index": 2
-                      },
-                      "info": {
-                        "color": "blue",
-                        "index": 0
-                      },
-                      "warning": {
-                        "color": "orange",
-                        "index": 1
-                      }
-                    },
-                    "type": "value"
-                  }
-                ]
-              },
-              {
-                "id": "custom.cellOptions",
-                "value": {
-                  "type": "color-text"
-                }
-              }
-            ]
-          }
-        ]
+        "overrides": []
       },
       "gridPos": {
-        "h": 8,
+        "h": 9,
         "w": 24,
         "x": 0,
-        "y": 74
+        "y": 99
       },
-      "id": 124,
+      "id": 155,
       "options": {
-        "cellHeight": "sm",
-        "footer": {
-          "countRows": false,
-          "fields": "",
-          "reducer": ["sum"],
-          "show": false
+        "legend": {
+          "calcs": ["sum"],
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true
         },
-        "showHeader": true,
-        "sortBy": [
-          {
-            "desc": true,
-            "displayName": "Time"
-          }
-        ]
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
       },
       "pluginVersion": "10.2.0",
       "targets": [
@@ -1931,44 +2482,12 @@
             "type": "influxdb",
             "uid": "influxdb"
           },
-          "editorMode": "code",
-          "expr": "sort_desc(ALERTS)",
-          "format": "table",
-          "instant": true,
-          "legendFormat": "alert",
-          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart)\n  |> filter(fn: (r) => r._measurement == \"alert_count\")\n  |> group(columns: [\"type\", \"component\", \"chainId\"])\n  |> last(column: \"_value\")",
-          "range": false,
+          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"alert_count\")\n  |> group(columns: [\"chainId\", \"component\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: count, createEmpty: false)",
           "refId": "A"
         }
       ],
-      "title": "Recent Alert History",
-      "transformations": [
-        {
-          "id": "organize",
-          "options": {
-            "excludeByName": {
-              "Value": true
-            },
-            "indexByName": {
-              "Time": 0,
-              "alertname": 1,
-              "alertstate": 2,
-              "instance": 3,
-              "job": 4,
-              "severity": 5
-            },
-            "renameByName": {
-              "Time": "Time",
-              "alertname": "Alert",
-              "alertstate": "State",
-              "instance": "Target",
-              "job": "Service",
-              "severity": "Severity"
-            }
-          }
-        }
-      ],
-      "type": "table"
+      "title": "Alerts by Chain ID",
+      "type": "timeseries"
     }
   ],
   "refresh": "10s",
@@ -1985,6 +2504,6 @@
   "timezone": "",
   "title": "XDC Network Unified Dashboard",
   "uid": "xdc-unified-dashboard",
-  "version": 174,
+  "version": 10,
   "weekStart": ""
 }

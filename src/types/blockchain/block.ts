@@ -5,7 +5,6 @@ export interface BlockInfo {
   transactions: string[];
   gasUsed: bigint;
   gasLimit: bigint;
-  parentHash?: string;
-  miner?: string;
-  propagationTime?: number;
+  parentHash: string;
+  miner: string;
 }

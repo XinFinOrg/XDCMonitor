@@ -1,5 +1,5 @@
+import { MetricsService } from '@metrics/metrics.service';
 import { Controller, Get, Header } from '@nestjs/common';
-import { MetricsService } from './metrics.service';
 
 /**
  * Controller for regular /metrics endpoint (with api prefix applied by NestJS)

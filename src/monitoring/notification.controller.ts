@@ -1,5 +1,5 @@
-import { Controller, Post, Body, Logger, Get, Query } from '@nestjs/common';
-import { AlertsService } from './alerts.service';
+import { Body, Controller, Get, Logger, Post, Query } from '@nestjs/common';
+import { AlertsService } from '@monitoring/alerts.service';
 
 interface GrafanaAlertPayload {
   // Grafana specific fields

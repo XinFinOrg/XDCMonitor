@@ -1,8 +1,7 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@config/config.service';
 import { InfluxDB, Point, WriteApi } from '@influxdata/influxdb-client';
-import { hostname } from 'os';
-import { URL } from 'url';
+import { Alert } from '@monitoring/alerts.service';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 
 /**
  * InfluxDB Metrics Service
@@ -35,8 +34,9 @@ export class MetricsService implements OnModuleInit {
    * Initialize the service when the module is loaded
    */
   onModuleInit() {
+    const influxConfig = this.configService.getInfluxDbConfig();
     this.logger.log('InfluxDB metrics service initialized');
-    this.logger.log(`Using bucket: ${this.configService.influxDbBucket}`);
+    this.logger.log(`Using bucket: ${influxConfig.bucket}`);
     this.logger.log(
       `Metrics will be batched (size: ${this.BATCH_SIZE}) and flushed every ${this.FLUSH_INTERVAL / 1000} seconds`,
     );
@@ -47,33 +47,29 @@ export class MetricsService implements OnModuleInit {
    */
   private initializeInfluxDB() {
     try {
-      this.logger.log(`Connecting to InfluxDB at ${this.configService.influxDbUrl}...`);
-      this.logger.log(`Using token: ${this.configService.influxDbToken ? '[SET]' : '[MISSING]'}`);
-      this.logger.log(`Using org: ${this.configService.influxDbOrg}`);
-      this.logger.log(`Using bucket: ${this.configService.influxDbBucket}`);
+      const influxConfig = this.configService.getInfluxDbConfig();
+      this.logger.log(`Connecting to InfluxDB at ${influxConfig.url}...`);
+      this.logger.log(`Using token: ${influxConfig.token ? '[SET]' : '[MISSING]'}`);
+      this.logger.log(`Using org: ${influxConfig.org}`);
+      this.logger.log(`Using bucket: ${influxConfig.bucket}`);
 
       // Initialize InfluxDB client
       this.influxClient = new InfluxDB({
-        url: this.configService.influxDbUrl,
-        token: this.configService.influxDbToken,
+        url: influxConfig.url,
+        token: influxConfig.token,
         timeout: 30000, // 30 seconds timeout
       });
 
       // Configure WriteApi with batching and retries
-      this.writeApi = this.influxClient.getWriteApi(
-        this.configService.influxDbOrg,
-        this.configService.influxDbBucket,
-        'ns',
-        {
-          batchSize: this.BATCH_SIZE,
-          flushInterval: this.FLUSH_INTERVAL,
-          maxRetries: 5,
-          maxRetryDelay: 15000,
-          minRetryDelay: 1000,
-          retryJitter: 1000,
-          defaultTags: {},
-        },
-      );
+      this.writeApi = this.influxClient.getWriteApi(influxConfig.org, influxConfig.bucket, 'ns', {
+        batchSize: this.BATCH_SIZE,
+        flushInterval: this.FLUSH_INTERVAL,
+        maxRetries: 5,
+        maxRetryDelay: 15000,
+        minRetryDelay: 1000,
+        retryJitter: 1000,
+        defaultTags: {},
+      });
 
       // Set connection state and process queue
       this.connected = true;
@@ -221,10 +217,38 @@ export class MetricsService implements OnModuleInit {
    * Record blockchain block height
    */
   setBlockHeight(height: number, endpoint: string, chainId: string): void {
-    this.writePoint(
-      new Point('block_height').tag('chainId', chainId).tag('endpoint', endpoint).intField('value', height),
-    );
-    this.logger.debug(`Set block height for ${endpoint} (chainId ${chainId}): ${height}`);
+    const point = new Point('block_height')
+      .tag('chainId', chainId)
+      .tag('endpoint', endpoint)
+      .intField('height', height);
+
+    this.writePoint(point);
+  }
+
+  /**
+   * Record block height variance between RPC endpoints for a network
+   * @param network Network identifier (mainnet/testnet)
+   * @param variance The block height variance in number of blocks
+   */
+  setBlockHeightVariance(network: string, variance: number): void {
+    const point = new Point('block_height_variance').tag('network', network).intField('variance', variance);
+
+    this.writePoint(point);
+  }
+
+  /**
+   * Record block response time for an endpoint
+   * @param endpoint RPC endpoint
+   * @param responseTimeMs Response time in milliseconds
+   * @param chainId Chain ID
+   */
+  setBlockResponseTime(endpoint: string, responseTimeMs: number, chainId: number): void {
+    const point = new Point('block_response_time')
+      .tag('endpoint', endpoint)
+      .tag('chainId', chainId.toString())
+      .intField('ms', responseTimeMs);
+
+    this.writePoint(point);
   }
 
   /**
@@ -246,29 +270,34 @@ export class MetricsService implements OnModuleInit {
     totalTxs: number = 0,
     success: number = 0,
     failed: number = 0,
-    chainId: string = '50',
+    chainId: number = 50,
   ): void {
     const blockNumberStr = blockNumber.toString();
+
+    this.logger.debug(
+      `Writing transaction metrics for block #${blockNumber} (chain ${chainId}): ` +
+        `${totalTxs} total, ${success} success, ${failed} failed`,
+    );
 
     this.writePoint(
       new Point('transactions_per_block')
         .tag('block_number', blockNumberStr)
         .tag('status', 'success')
-        .tag('chainId', chainId)
+        .tag('chainId', chainId.toString())
         .intField('value', success),
     );
     this.writePoint(
       new Point('transactions_per_block')
         .tag('block_number', blockNumberStr)
         .tag('status', 'failed')
-        .tag('chainId', chainId)
+        .tag('chainId', chainId.toString())
         .intField('value', failed),
     );
     this.writePoint(
       new Point('transactions_per_block')
         .tag('block_number', blockNumberStr)
         .tag('status', 'total')
-        .tag('chainId', chainId)
+        .tag('chainId', chainId.toString())
         .intField('value', totalTxs),
     );
 
@@ -339,15 +368,110 @@ export class MetricsService implements OnModuleInit {
   }
 
   /**
-   * Increment alert count
+   * Save alert history
+   *
+   * @param alert Alert object
+   * @param chainId Chain ID
    */
-  incrementAlertCount(type: string, component: string, chainId: number = 50): void {
+  saveAlert(alert: Alert, chainId?: number): void {
     this.writePoint(
-      new Point('alert_count')
-        .tag('type', type)
-        .tag('component', component)
-        .tag('chainId', chainId.toString())
-        .intField('value', 1),
+      new Point('alert_history')
+        .tag('type', alert.type)
+        .tag('title', alert.title)
+        .tag('component', alert.component)
+        .tag('chainId', chainId?.toString() || 'null')
+        .stringField('value', alert.message),
     );
+  }
+
+  /**
+   * Record transaction results
+   *
+   * Records the success/failure of test transactions, including:
+   * - Type of transaction (normal or contract deployment)
+   * - Success or failure
+   * - Confirmation duration (ms)
+   * - Gas used
+   * - Chain ID
+   * - RPC endpoint name
+   */
+  setTransactionMonitorResult(
+    type: 'normal_transaction' | 'contract_deployment',
+    success: boolean,
+    duration: number,
+    gasUsed: number,
+    chainId: number,
+    rpcName: string,
+  ): void {
+    // Record success/failure status
+    this.writePoint(
+      new Point('transaction_monitor')
+        .tag('type', type)
+        .tag('chainId', chainId.toString())
+        .tag('rpc', rpcName)
+        .booleanField('success', success),
+    );
+
+    // Record confirmation duration
+    this.writePoint(
+      new Point('transaction_monitor_confirmation_time')
+        .tag('type', type)
+        .tag('chainId', chainId.toString())
+        .tag('rpc', rpcName)
+        .intField('duration_ms', duration),
+    );
+
+    // Record gas used (if transaction was successful)
+    if (success && gasUsed > 0) {
+      this.writePoint(
+        new Point('transaction_monitor_gas_used')
+          .tag('type', type)
+          .tag('chainId', chainId.toString())
+          .tag('rpc', rpcName)
+          .intField('gas', gasUsed),
+      );
+    }
+
+    this.logger.debug(
+      `Recorded transaction test: type=${type}, chainId=${chainId}, rpc=${rpcName}, ` +
+        `success=${success}, duration=${duration}ms, gas=${gasUsed}`,
+    );
+  }
+
+  /**
+   * Record wallet balance information
+   *
+   * @param chainId The chain ID (50 for Mainnet, 51 for Testnet)
+   * @param balance The wallet balance in XDC
+   * @param sufficient Whether the balance is sufficient for testing
+   */
+  setWalletBalance(chainId: number, balance: string, sufficient: boolean): void {
+    const chainName = chainId === 50 ? 'Mainnet' : 'Testnet';
+
+    this.writePoint(
+      new Point('transaction_wallet_balance')
+        .tag('chainId', chainId.toString())
+        .tag('network', chainName)
+        .tag('sufficient', sufficient ? 'true' : 'false')
+        .floatField('balance', parseFloat(balance)),
+    );
+
+    // Also record a separate boolean field for "sufficient" to make it easier to query
+    this.writePoint(
+      new Point('transaction_wallet_status')
+        .tag('chainId', chainId.toString())
+        .tag('network', chainName)
+        .booleanField('sufficient_balance', sufficient),
+    );
+  }
+
+  /**
+   * Record transactions per minute
+   */
+  setTransactionsPerMinute(txPerMinute: number, chainId: number = 50): void {
+    this.writePoint(
+      new Point('transactions_per_minute').tag('chainId', chainId.toString()).floatField('value', txPerMinute),
+    );
+    this.logger.debug(`Set transactions per minute for chainId ${chainId}: ${txPerMinute.toFixed(2)}`);
   }
 }

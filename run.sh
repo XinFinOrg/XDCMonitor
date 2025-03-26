@@ -13,6 +13,8 @@ function show_usage {
   echo "  rebuild           Rebuild and restart the application container"
   echo "  clean             Stop and remove all containers, volumes and networks"
   echo "  restart [name]    Restart a specific container (e.g., grafana, influxdb, xdc-monitor)"
+  echo "  start [name]      Start a specific container (e.g., grafana, influxdb, xdc-monitor)"
+  echo "  stop [name]       Stop a specific container (e.g., grafana, influxdb, xdc-monitor)"
   echo "  xdc-monitor-logs  View logs from the app service only"
   echo "  grafana-logs      View logs from the grafana service only"
   echo "  influxdb-logs     View logs from the influxdb service only"
@@ -183,6 +185,97 @@ case "$1" in
     echo "Permissions fixed."
     ;;
 
+  start)
+    if [ -z "$2" ]; then
+      echo "Error: Missing container name"
+      echo "Usage: ./run.sh start [container-name]"
+      echo "Available containers: xdc-monitor, influxdb, grafana"
+      exit 1
+    fi
+
+    container_name="$2"
+    echo "Starting $container_name container..."
+
+    # Special handling for services that need proper initialization
+    case "$container_name" in
+      influxdb)
+        # Ensure directories and permissions
+        ./run.sh fix-permissions
+
+        echo "Starting InfluxDB..."
+        if docker-compose up -d influxdb; then
+          echo "Waiting for InfluxDB to initialize (10 seconds)..."
+          sleep 10
+          echo "InfluxDB started successfully."
+        else
+          echo "Error: Failed to start InfluxDB container."
+          exit 1
+        fi
+        ;;
+
+      grafana)
+        # Ensure directories and permissions
+        ./run.sh fix-permissions
+
+        echo "Starting Grafana..."
+        if docker-compose up -d grafana; then
+          echo "Grafana started successfully."
+          echo "Dashboard available at: http://localhost:3001"
+        else
+          echo "Error: Failed to start Grafana container."
+          exit 1
+        fi
+        ;;
+
+      xdc-monitor)
+        # Check if InfluxDB is running
+        if ! docker ps | grep -q influxdb; then
+          echo "Warning: InfluxDB is not running. Starting InfluxDB first..."
+          ./run.sh start influxdb
+        fi
+
+        echo "Starting XDC Monitor..."
+        if docker-compose up -d xdc-monitor; then
+          echo "XDC Monitor started successfully."
+          echo "API available at: http://localhost:3000"
+        else
+          echo "Error: Failed to start XDC Monitor container."
+          exit 1
+        fi
+        ;;
+
+      *)
+        echo "Starting generic container: $container_name..."
+        if docker-compose up -d "$container_name"; then
+          echo "$container_name started successfully."
+        else
+          echo "Error: Failed to start $container_name container. Does the service exist?"
+          exit 1
+        fi
+        ;;
+    esac
+    ;;
+
+  stop)
+    if [ -z "$2" ]; then
+      echo "Error: Missing container name"
+      echo "Usage: ./run.sh stop [container-name]"
+      echo "Available containers: xdc-monitor, influxdb, grafana"
+      exit 1
+    fi
+
+    container_name="$2"
+    echo "Stopping $container_name container..."
+
+    # Stop the specific container
+    if docker-compose stop "$container_name"; then
+      echo "$container_name container stopped successfully."
+    else
+      echo "Error: Failed to stop $container_name container. Does the service exist?"
+      exit 1
+    fi
+    ;;
+
   restart)
     if [ -z "$2" ]; then
       echo "Error: Missing container name"
@@ -196,19 +289,32 @@ case "$1" in
 
     # Special handling for grafana to ensure datasources are properly configured
     if [ "$container_name" = "grafana" ]; then
-      docker-compose stop grafana
-      docker rm -f grafana 2>/dev/null || true
-      docker-compose up -d grafana
+      if docker-compose stop grafana && \
+         (docker rm -f grafana 2>/dev/null || true) && \
+         docker-compose up -d grafana; then
+        echo "$container_name container restarted successfully."
+      else
+        echo "Error: Failed to restart $container_name container."
+        exit 1
+      fi
     # Special handling for influxdb to ensure proper initialization
     elif [ "$container_name" = "influxdb" ]; then
-      docker-compose stop influxdb
-      docker rm -f influxdb 2>/dev/null || true
-      docker-compose up -d influxdb
+      if docker-compose stop influxdb && \
+         (docker rm -f influxdb 2>/dev/null || true) && \
+         docker-compose up -d influxdb; then
+        echo "$container_name container restarted successfully."
+      else
+        echo "Error: Failed to restart $container_name container."
+        exit 1
+      fi
     else
-      docker-compose restart "$container_name"
+      if docker-compose restart "$container_name"; then
+        echo "$container_name container restarted successfully."
+      else
+        echo "Error: Failed to restart $container_name container. Does the service exist?"
+        exit 1
+      fi
     fi
-
-    echo "$container_name container restarted successfully."
     ;;
 
   grafana-export)
@@ -304,7 +410,11 @@ case "$1" in
       for file in grafana_config/config/*; do
         if [ -f "$file" ]; then
           filename=$(basename "$file")
-          cp -f "$file" "grafana_data/config/" 2>/dev/null || true
+          # Remove destination if it's a directory
+          if [ -d "grafana_data/config/$filename" ]; then
+            rm -rf "grafana_data/config/$filename"
+          fi
+          cp -f "$file" "grafana_data/config/$filename" 2>/dev/null || true
           echo "  ✓ $filename"
         fi
       done
@@ -325,8 +435,13 @@ case "$1" in
         mkdir -p grafana_data/provisioning/datasources
         for file in grafana_config/provisioning/datasources/*.yaml; do
           if [ -f "$file" ]; then
+            filename=$(basename "$file")
+            # Remove destination if it's a directory
+            if [ -d "grafana_data/provisioning/datasources/$filename" ]; then
+              rm -rf "grafana_data/provisioning/datasources/$filename"
+            fi
             # Copy file first as a base
-            cp -f "$file" "grafana_data/provisioning/datasources/$(basename "$file")"
+            cp -f "$file" "grafana_data/provisioning/datasources/$filename"
 
             # Get the InfluxDB token from .env
             if [ -f ".env" ]; then
@@ -334,13 +449,13 @@ case "$1" in
               INFLUXDB_TOKEN=$(grep "^INFLUXDB_TOKEN=" .env | sed 's/^INFLUXDB_TOKEN=//' | tr -d '"' | tr -d ' ')
               if [ ! -z "$INFLUXDB_TOKEN" ]; then
                 # Use perl for more robust replacement that handles special characters like =
-                perl -i -pe 's|__INFLUXDB_TOKEN__|"'"$INFLUXDB_TOKEN"'"|g' "grafana_data/provisioning/datasources/$(basename "$file")"
-                echo "✓ Imported datasource: $(basename "$file") with token from .env"
+                perl -i -pe 's|__INFLUXDB_TOKEN__|"'"$INFLUXDB_TOKEN"'"|g' "grafana_data/provisioning/datasources/$filename"
+                echo "✓ Imported datasource: $filename with token from .env"
               else
-                echo "⚠️ Imported datasource: $(basename "$file") - no token found in .env"
+                echo "⚠️ Imported datasource: $filename - no token found in .env"
               fi
             else
-              echo "⚠️ Imported datasource: $(basename "$file") - .env file not found"
+              echo "⚠️ Imported datasource: $filename - .env file not found"
             fi
           fi
         done

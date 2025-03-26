@@ -1,18 +1,22 @@
-import { NestFactory } from '@nestjs/core';
 import { AppModule } from '@/app.module';
 import { Logger } from '@nestjs/common';
-import { ConfigService } from '@config/config.service';
-import { MetricsService } from '@metrics/metrics.service';
-import { Request, Response } from 'express';
+import { NestFactory } from '@nestjs/core';
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  // Don't exit the process
+});
+
+process.on('uncaughtException', error => {
+  console.error('Uncaught Exception:', error);
+  // Don't exit the process
+});
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
   const app = await NestFactory.create(AppModule);
 
   app.setGlobalPrefix('api');
-
-  const configService = app.get(ConfigService);
-  const metricsService = app.get(MetricsService);
 
   const port = process.env.PORT || 3000;
   await app.listen(port, '0.0.0.0');
