@@ -4,30 +4,46 @@ import { RpcRetryClient } from '@common/utils/rpc-retry-client';
 import { ConfigService } from '@config/config.service';
 import { MetricsService } from '@metrics/metrics.service';
 import { AlertsService } from '@monitoring/alerts.service';
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { RpcEndpoint } from '@types';
+import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { RpcEndpoint, RpcStatus, ServiceStatus, WsStatus, RpcMonitorConfig, EndpointStatus, MonitorType } from '@types';
 import axios from 'axios';
+import WebSocket from 'ws';
 
-let WebSocket;
-try {
-  WebSocket = require('ws');
-} catch (error) {
-  console.error('WebSocket library (ws) is not installed. WebSocket monitoring will be disabled.');
-}
+// Downtime threshold for external notifications (1 hour in milliseconds)
+const DOWNTIME_NOTIFICATION_THRESHOLD_MS = 60 * 60 * 1000;
 
+// Default configuration
+const DEFAULT_CONFIG: RpcMonitorConfig = {
+  rpcInterval: 30000,
+  portInterval: 30000,
+  serviceInterval: 60000,
+  wsInterval: 30000,
+  syncInterval: 60000,
+  rpcBatchSize: 3,
+  wsBatchSize: 2,
+  batchDelay: 500,
+  adaptive: false,
+  maxInterval: 120000, // 2 minutes
+  minInterval: 15000, // 15 seconds
+};
+
+/**
+ * Service for monitoring RPC endpoints, WebSockets, and related services
+ */
 @Injectable()
-export class RpcMonitorService implements OnModuleInit {
+export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(RpcMonitorService.name);
-  private rpcStatuses: Map<string, { status: 'up' | 'down'; latency: number }> = new Map();
-  private wsStatuses: Map<string, { status: 'up' | 'down' }> = new Map();
-  private explorerStatuses: Map<string, { status: 'up' | 'down' }> = new Map();
-  private faucetStatuses: Map<string, { status: 'up' | 'down' }> = new Map();
-  private rpcInterval: NodeJS.Timeout;
-  private portInterval: NodeJS.Timeout;
-  private servicesInterval: NodeJS.Timeout;
 
-  // Map of RPC clients by endpoint URL
-  private rpcClients: Map<string, RpcRetryClient> = new Map();
+  // Status tracking
+  private rpcStatuses = new Map<string, EndpointStatus>();
+  private wsStatuses = new Map<string, EndpointStatus>();
+  private explorerStatuses = new Map<string, ServiceStatus>();
+  private faucetStatuses = new Map<string, ServiceStatus>();
+  private rpcClients = new Map<string, RpcRetryClient>();
+  private intervals: Record<MonitorType, NodeJS.Timeout> = {} as any;
+
+  // Configuration
+  private config: RpcMonitorConfig = DEFAULT_CONFIG;
 
   constructor(
     private readonly blockchainService: BlockchainService,
@@ -36,59 +52,178 @@ export class RpcMonitorService implements OnModuleInit {
     private readonly alertsService: AlertsService,
   ) {}
 
-  onModuleInit() {
-    this.startMonitoring();
+  // #region Lifecycle Methods
+
+  /**
+   * Initialize on module load
+   */
+  async onModuleInit() {
+    await this.blockchainService.initializeProviders();
+    if (this.configService.enableRpcMonitoring) {
+      this.startMonitoring();
+    } else {
+      this.logger.log('RPC monitoring is disabled in configuration');
+    }
   }
 
+  /**
+   * Stop monitoring when module is destroyed
+   */
+  onModuleDestroy() {
+    this.stopMonitoring();
+  }
+
+  /**
+   * Start monitoring all configured endpoints
+   */
   startMonitoring() {
     this.initializeStatusMaps();
     this.initializeRpcClients();
+    this.loadConfigSettings();
 
-    const rpcCheckInterval = 30 * 1000; // Check every 30 seconds
-    this.logger.log(`Starting RPC monitoring with interval of ${rpcCheckInterval / 1000} seconds`);
+    this.logger.log(
+      `Starting RPC monitoring with interval of ${this.config.rpcInterval / 1000}s${
+        this.config.adaptive ? ' (adaptive)' : ''
+      }`,
+    );
 
-    this.rpcInterval = setInterval(() => {
-      this.monitorAllRpcEndpoints();
-    }, rpcCheckInterval);
+    // Staggered monitoring initialization to prevent resource spikes
+    this.scheduleMonitor('rpc', 0, () => this.monitorAllRpcEndpoints());
+    this.scheduleMonitor('port', 5000, () => this.monitorAllRpcPorts());
+    this.scheduleMonitor('service', 10000, () => this.monitorAllServices());
+    this.scheduleMonitor('ws', 15000, () => this.monitorAllWsEndpoints());
+    this.scheduleMonitor('sync', 20000, () => this.syncWithBlockchainService());
+  }
 
-    this.portInterval = setInterval(() => {
-      this.monitorAllRpcPorts();
-    }, 30 * 1000);
+  /**
+   * Stop all monitoring activities
+   */
+  stopMonitoring() {
+    this.logger.log('Stopping RPC monitoring');
 
-    this.servicesInterval = setInterval(() => {
-      this.monitorAllServices();
-    }, 60 * 1000);
+    // Clear all intervals
+    Object.values(this.intervals).forEach(interval => {
+      if (interval) {
+        clearInterval(interval);
+        clearTimeout(interval);
+      }
+    });
 
-    // Sync with blockchain service periodically to keep provider statuses consistent
-    setInterval(() => {
-      this.syncWithBlockchainService();
-    }, 60 * 1000); // Every minute
+    // Reset interval references
+    this.intervals = {} as any;
+  }
 
-    // Run initial checks
-    this.monitorAllRpcEndpoints();
-    this.monitorAllRpcPorts();
-    this.monitorAllServices();
-    this.syncWithBlockchainService();
+  /**
+   * Load configuration settings from environment variables
+   */
+  private loadConfigSettings() {
+    this.config = {
+      rpcInterval: parseInt(this.configService.get('RPC_CHECK_INTERVAL_MS', '30000')),
+      portInterval: parseInt(this.configService.get('PORT_CHECK_INTERVAL_MS', '30000')),
+      serviceInterval: parseInt(this.configService.get('SERVICE_CHECK_INTERVAL_MS', '60000')),
+      wsInterval: parseInt(this.configService.get('WS_CHECK_INTERVAL_MS', '30000')),
+      syncInterval: parseInt(this.configService.get('SYNC_INTERVAL_MS', '60000')),
+      rpcBatchSize: parseInt(this.configService.get('RPC_CHECK_BATCH_SIZE', '3')),
+      wsBatchSize: parseInt(this.configService.get('WS_CHECK_BATCH_SIZE', '2')),
+      batchDelay: parseInt(this.configService.get('BATCH_DELAY_MS', '500')),
+      adaptive: this.configService.get('ENABLE_ADAPTIVE_MONITORING', 'false').toLowerCase() === 'true',
+      maxInterval: parseInt(this.configService.get('MAX_CHECK_INTERVAL_MS', '120000')),
+      minInterval: parseInt(this.configService.get('MIN_CHECK_INTERVAL_MS', '15000')),
+    };
+  }
+  // #endregion
+
+  // #region Initialization
+
+  /**
+   * Initialize status tracking maps
+   */
+  private initializeStatusMaps() {
+    // Initialize RPC status map
+    for (const endpoint of this.configService.getRpcEndpoints()) {
+      this.initializeRpcStatus(endpoint);
+    }
+
+    // Initialize WebSocket status map
+    if (WebSocket) {
+      for (const endpoint of this.configService.getWsEndpoints()) {
+        this.initializeWsStatus(endpoint);
+      }
+    }
+
+    // Initialize explorer and faucet status maps
+    this.initializeServiceStatuses();
+  }
+
+  /**
+   * Initialize RPC endpoint status
+   */
+  private initializeRpcStatus(endpoint: RpcEndpoint): void {
+    const provider = this.blockchainService.getProviderByUrl(endpoint.url);
+    const status = provider ? 'up' : 'down';
+
+    if (!this.rpcStatuses.has(endpoint.url)) {
+      this.rpcStatuses.set(endpoint.url, {
+        status,
+        latency: 0,
+        downSince: status === 'down' ? Date.now() : undefined,
+        alerted: false,
+      });
+    } else {
+      const currentStatus = this.rpcStatuses.get(endpoint.url);
+      this.updateStatus(endpoint, this.rpcStatuses, status === 'up', {
+        latency: currentStatus.latency,
+      });
+    }
+  }
+
+  /**
+   * Initialize WebSocket endpoint status
+   */
+  private initializeWsStatus(endpoint: RpcEndpoint): void {
+    const wsProvider = this.blockchainService.getWsProviderByUrl(endpoint.url);
+    const status = wsProvider ? 'up' : 'down';
+
+    if (!this.wsStatuses.has(endpoint.url)) {
+      this.wsStatuses.set(endpoint.url, {
+        status,
+        downSince: status === 'down' ? Date.now() : undefined,
+        alerted: false,
+      });
+    } else {
+      this.updateStatus(endpoint, this.wsStatuses, status === 'up');
+    }
+  }
+
+  /**
+   * Initialize service statuses (explorers, faucets)
+   */
+  private initializeServiceStatuses(): void {
+    // Initialize explorer statuses
+    for (const endpoint of this.configService.explorerEndpoints) {
+      this.explorerStatuses.set(endpoint.url, {
+        status: 'down',
+        downSince: Date.now(),
+        alerted: false,
+      });
+    }
+
+    // Initialize faucet statuses
+    for (const endpoint of this.configService.faucetEndpoints) {
+      this.faucetStatuses.set(endpoint.url, {
+        status: 'down',
+        downSince: Date.now(),
+        alerted: false,
+      });
+    }
   }
 
   /**
    * Initialize RPC clients for all endpoints
    */
   private initializeRpcClients() {
-    const rpcEndpoints = this.configService.getRpcEndpoints();
-
-    for (const endpoint of rpcEndpoints) {
-      if (!this.rpcClients.has(endpoint.url)) {
-        this.logger.debug(`Initializing RPC client for ${endpoint.name} (${endpoint.url})`);
-
-        const client = new RpcRetryClient(endpoint.url, {
-          maxRetries: PERFORMANCE.RPC_CLIENT.MAX_RETRY_ATTEMPTS,
-          retryDelayMs: PERFORMANCE.RPC_CLIENT.RETRY_DELAY_MS,
-          timeoutMs: PERFORMANCE.RPC_CLIENT.DEFAULT_TIMEOUT_MS,
-        });
-
-        this.rpcClients.set(endpoint.url, client);
-      }
+    for (const endpoint of this.configService.getRpcEndpoints()) {
+      this.getRpcClient(endpoint);
     }
   }
 
@@ -97,7 +232,7 @@ export class RpcMonitorService implements OnModuleInit {
    */
   private getRpcClient(endpoint: RpcEndpoint): RpcRetryClient {
     if (!this.rpcClients.has(endpoint.url)) {
-      this.logger.debug(`Creating new RPC client for ${endpoint.name} (${endpoint.url})`);
+      this.logger.debug(`Creating RPC client for ${endpoint.name} (${endpoint.url})`);
 
       const client = new RpcRetryClient(endpoint.url, {
         maxRetries: PERFORMANCE.RPC_CLIENT.MAX_RETRY_ATTEMPTS,
@@ -106,133 +241,196 @@ export class RpcMonitorService implements OnModuleInit {
       });
 
       this.rpcClients.set(endpoint.url, client);
-      return client;
     }
 
     return this.rpcClients.get(endpoint.url);
   }
+  // #endregion
 
-  private initializeStatusMaps() {
-    const rpcEndpoints = this.configService.getRpcEndpoints();
-    const wsEndpoints = this.configService.getWsEndpoints();
-    const explorerEndpoints = this.configService.explorerEndpoints;
-    const faucetEndpoints = this.configService.faucetEndpoints;
+  // #region Scheduling and Monitoring
 
-    // Initialize or update RPC status map
-    // First check if BlockchainService has already initialized these providers
-    for (const endpoint of rpcEndpoints) {
-      const provider = this.blockchainService.getProviderByUrl(endpoint.url);
-      const providerStatus = provider ? 'up' : 'down';
+  /**
+   * Schedule a monitor function with initial delay
+   */
+  private scheduleMonitor(type: MonitorType, initialDelay: number, monitorFn: () => Promise<void> | void) {
+    setTimeout(() => {
+      // Initial check
+      monitorFn();
 
-      if (!this.rpcStatuses.has(endpoint.url)) {
-        this.rpcStatuses.set(endpoint.url, { status: providerStatus, latency: 0 });
+      // Configure recurring check
+      const interval = this.config[`${type}Interval`];
+
+      if (this.config.adaptive && (type === 'rpc' || type === 'ws')) {
+        this.scheduleAdaptiveCheck(type, interval, monitorFn);
       } else {
-        // Update existing status based on blockchain service provider
-        const currentStatus = this.rpcStatuses.get(endpoint.url);
-        currentStatus.status = providerStatus;
+        this.intervals[type] = setInterval(monitorFn, interval);
       }
-    }
-
-    // Initialize or update WebSocket status map
-    if (WebSocket) {
-      for (const endpoint of wsEndpoints) {
-        const wsProvider = this.blockchainService.getWsProviderByUrl(endpoint.url);
-        const wsStatus = wsProvider ? 'up' : 'down';
-
-        if (!this.wsStatuses.has(endpoint.url)) {
-          this.wsStatuses.set(endpoint.url, { status: wsStatus });
-        } else {
-          // Update existing status based on blockchain service ws provider
-          const currentStatus = this.wsStatuses.get(endpoint.url);
-          currentStatus.status = wsStatus;
-        }
-      }
-    }
-
-    for (const endpoint of explorerEndpoints) {
-      this.explorerStatuses.set(endpoint.url, { status: 'down' });
-    }
-
-    for (const endpoint of faucetEndpoints) {
-      this.faucetStatuses.set(endpoint.url, { status: 'down' });
-    }
+    }, initialDelay);
   }
 
+  /**
+   * Schedule adaptive monitoring based on endpoint health
+   */
+  private scheduleAdaptiveCheck(type: MonitorType, baseInterval: number, monitorFn: () => Promise<void> | void) {
+    if (this.intervals[type]) {
+      clearTimeout(this.intervals[type]);
+    }
+
+    // Calculate health factor and adjust interval
+    const healthFactor = type === 'rpc' ? this.calculateRpcHealthFactor() : this.calculateWsHealthFactor();
+    let nextInterval = baseInterval;
+
+    if (healthFactor === 1) {
+      // All endpoints healthy - check less frequently
+      nextInterval = Math.min(baseInterval * 2, this.config.maxInterval);
+    } else if (healthFactor < 0.8) {
+      // Some endpoints unhealthy - check more frequently
+      nextInterval = Math.max(baseInterval * 0.5, this.config.minInterval);
+    }
+
+    this.logger.debug(
+      `Scheduled next ${type.toUpperCase()} check in ${nextInterval / 1000}s (health: ${healthFactor})`,
+    );
+
+    // Schedule next check
+    this.intervals[type] = setTimeout(async () => {
+      await monitorFn();
+      this.scheduleAdaptiveCheck(type, baseInterval, monitorFn);
+    }, nextInterval);
+  }
+
+  /**
+   * Monitor all RPC endpoints
+   */
   async monitorAllRpcEndpoints() {
     if (this.configService.enableRpcMonitoring !== true) {
-      this.logger.debug('RPC monitoring is disabled via configuration. Skipping RPC check.');
       return;
     }
 
-    this.logger.debug('Checking all RPC endpoints...');
-    const endpoints = this.configService.getRpcEndpoints();
-
-    const checkPromises = endpoints.map(async endpoint => {
-      try {
-        const isUp = await this.monitorRpcEndpoint(endpoint);
-
-        if (isUp) {
-          this.logger.debug(`RPC endpoint ${endpoint.name} (${endpoint.url}) is UP`);
-        } else {
-          this.logger.warn(`RPC endpoint ${endpoint.name} (${endpoint.url}) is DOWN`);
-        }
-
-        return { endpoint, isUp };
-      } catch (error) {
-        this.logger.error(`Error checking RPC endpoint ${endpoint.name}: ${error.message}`);
-        return { endpoint, isUp: false };
-      }
-    });
-
-    await Promise.all(checkPromises);
+    this.logger.debug('Checking RPC endpoints...');
+    await this.monitorEndpoints(
+      this.configService.getRpcEndpoints(),
+      this.rpcStatuses,
+      this.config.rpcBatchSize,
+      this.monitorRpcEndpoint.bind(this),
+      (endpoint, isUp) =>
+        !isUp && this.checkDowntimeNotification(endpoint, this.rpcStatuses, ALERTS.TYPES.RPC_ENDPOINT_DOWN, 'rpc'),
+    );
   }
 
-  async monitorRpcEndpoint(endpoint: RpcEndpoint): Promise<boolean> {
-    this.logger.debug(`Checking RPC endpoint: ${endpoint.name} (${endpoint.url})`);
+  /**
+   * Monitor all WebSocket endpoints
+   */
+  async monitorAllWsEndpoints() {
+    if (this.configService.get('ENABLE_WEBSOCKET_MONITORING', 'true') !== 'true' || !WebSocket) {
+      return;
+    }
 
-    try {
-      const startTime = Date.now();
-      let blockNumber: number;
-      let isUp = false;
+    this.logger.debug('Checking WebSocket endpoints...');
+    await this.monitorEndpoints(
+      this.configService.getWsEndpoints(),
+      this.wsStatuses,
+      this.config.wsBatchSize,
+      this.monitorWsEndpoint.bind(this),
+      (endpoint, isUp) =>
+        !isUp && this.checkDowntimeNotification(endpoint, this.wsStatuses, ALERTS.TYPES.RPC_ENDPOINT_DOWN, 'websocket'),
+    );
+  }
 
-      // First try using the BlockchainService's provider if available
-      const provider = this.blockchainService.getProviderByUrl(endpoint.url);
-      if (provider) {
-        try {
-          blockNumber = await provider.getBlockNumber();
-          isUp = !isNaN(blockNumber);
-        } catch (error) {
-          this.logger.debug(`Provider from BlockchainService failed, trying direct RPC call: ${error.message}`);
-          isUp = false;
+  /**
+   * Generic endpoint monitoring with batching and prioritization
+   */
+  private async monitorEndpoints<T>(
+    endpoints: RpcEndpoint[],
+    statusMap: Map<string, T>,
+    batchSize: number,
+    checkFn: (endpoint: RpcEndpoint) => Promise<boolean>,
+    postCheckFn?: (endpoint: RpcEndpoint, isUp: boolean) => void,
+  ) {
+    // Prioritize endpoints - down endpoints first, then conditional ones
+    const prioritized = this.prioritizeEndpoints(endpoints, statusMap);
+
+    // Process in batches
+    for (let i = 0; i < prioritized.length; i += batchSize) {
+      const batch = prioritized.slice(i, i + batchSize);
+      const batchNumber = Math.floor(i / batchSize) + 1;
+      const totalBatches = Math.ceil(prioritized.length / batchSize);
+
+      this.logger.debug(`Processing endpoint batch ${batchNumber}/${totalBatches}`);
+
+      // Process batch in parallel
+      await Promise.all(
+        batch.map(async endpoint => {
+          try {
+            const isUp = await checkFn(endpoint);
+
+            this.logger.debug(`Endpoint ${endpoint.name} (${endpoint.url}) is ${isUp ? 'UP' : 'DOWN'}`);
+            if (!isUp && postCheckFn) postCheckFn(endpoint, isUp);
+
+            return { endpoint, isUp };
+          } catch (error) {
+            this.logger.error(`Error checking endpoint ${endpoint.name}: ${error.message}`);
+            if (postCheckFn) postCheckFn(endpoint, false);
+            return { endpoint, isUp: false };
+          }
+        }),
+      );
+
+      // Small delay between batches to avoid overwhelming the network
+      if (i + batchSize < prioritized.length) {
+        await new Promise(resolve => setTimeout(resolve, this.config.batchDelay));
+      }
+    }
+  }
+
+  /**
+   * Prioritize endpoints for checking (down first, then conditional)
+   */
+  private prioritizeEndpoints(endpoints: RpcEndpoint[], statusMap: Map<string, any>): RpcEndpoint[] {
+    return [...endpoints].sort((a, b) => {
+      // First prioritize by status (down first)
+      const statusA = statusMap.get(a.url)?.['status'] || 'unknown';
+      const statusB = statusMap.get(b.url)?.['status'] || 'unknown';
+
+      if (statusA === 'down' && statusB !== 'down') return -1;
+      if (statusA !== 'down' && statusB === 'down') return 1;
+
+      // Then by conditional flag if applicable
+      if ('conditional' in a && 'conditional' in b) {
+        if (a.conditional !== b.conditional) {
+          return a.conditional ? 1 : -1;
         }
       }
 
-      // If the provider is not available or failed, use RpcRetryClient as fallback
-      if (!isUp) {
-        const client = this.getRpcClient(endpoint);
-        const blockNumberHex = await client.call<string>(
-          BLOCKCHAIN.RPC.METHODS.GET_BLOCK_NUMBER,
-          [],
-          { timeoutMs: 5000 }, // Short timeout for monitoring
-        );
-        blockNumber = parseInt(blockNumberHex, 16);
-        isUp = !isNaN(blockNumber);
+      return 0;
+    });
+  }
+  // #endregion
+
+  // #region RPC Endpoint Monitoring
+
+  /**
+   * Monitor a specific RPC endpoint
+   */
+  async monitorRpcEndpoint(endpoint: RpcEndpoint): Promise<boolean> {
+    try {
+      const startTime = Date.now();
+      let isUp = false;
+
+      // First try using BlockchainService's provider
+      if (await this.tryBlockchainServiceProvider(endpoint)) {
+        isUp = true;
+      } else {
+        // If provider failed, use RpcRetryClient
+        isUp = await this.tryDirectRpcCall(endpoint);
       }
 
-      const endTime = Date.now();
-      const latency = endTime - startTime;
+      const latency = Date.now() - startTime;
 
-      // Update status and latency
-      this.rpcStatuses.set(endpoint.url, { status: isUp ? 'up' : 'down', latency });
+      // Update status and metrics
+      this.updateRpcEndpointStatus(endpoint, isUp, latency);
 
-      // Inform BlockchainService about the provider status
-      this.blockchainService.updateProviderStatus(endpoint.url, isUp);
-
-      // Report metrics
-      this.metricsService.setRpcStatus(endpoint.url, isUp, endpoint.chainId);
-      this.metricsService.recordRpcLatency(endpoint.url, latency, endpoint.chainId);
-
-      // Check for high latency - only error level alerts
+      // Check for high latency
       if (isUp && latency > ALERTS.THRESHOLDS.RPC_LATENCY_ERROR_MS) {
         this.alertsService.error(
           ALERTS.TYPES.RPC_HIGH_LATENCY,
@@ -245,45 +443,188 @@ export class RpcMonitorService implements OnModuleInit {
       return isUp;
     } catch (error) {
       this.logger.warn(`RPC endpoint ${endpoint.name} is down: ${error.message}`);
-
-      // Update status
-      this.rpcStatuses.set(endpoint.url, { status: 'down', latency: 0 });
-
-      // Inform BlockchainService about the provider failure
-      this.blockchainService.updateProviderStatus(endpoint.url, false);
-
-      // Report metrics
-      this.metricsService.setRpcStatus(endpoint.url, false, endpoint.chainId);
-
-      // Alert on RPC endpoint down
-      this.alertsService.error(
-        ALERTS.TYPES.RPC_ENDPOINT_DOWN,
-        'rpc',
-        `RPC chain ${endpoint.chainId} endpoint ${endpoint.name} - ${endpoint.url} is not responding: ${error.message}`,
-        endpoint.chainId,
-      );
-
+      this.updateRpcEndpointStatus(endpoint, false, 0);
       return false;
     }
   }
 
+  /**
+   * Try checking RPC using BlockchainService provider
+   */
+  private async tryBlockchainServiceProvider(endpoint: RpcEndpoint): Promise<boolean> {
+    const provider = this.blockchainService.getProviderByUrl(endpoint.url);
+    if (!provider) return false;
+
+    try {
+      const blockNumber = await provider.getBlockNumber();
+      return !isNaN(blockNumber);
+    } catch (error) {
+      this.logger.debug(`Provider failed, trying direct RPC: ${error.message}`);
+      return false;
+    }
+  }
+
+  /**
+   * Try making a direct RPC call
+   */
+  private async tryDirectRpcCall(endpoint: RpcEndpoint): Promise<boolean> {
+    try {
+      const client = this.getRpcClient(endpoint);
+      const blockNumberHex = await client.call<string>(BLOCKCHAIN.RPC.METHODS.GET_BLOCK_NUMBER, [], {
+        timeoutMs: 5000,
+      });
+      const blockNumber = parseInt(blockNumberHex, 16);
+      return !isNaN(blockNumber);
+    } catch (error) {
+      return false;
+    }
+  }
+
+  /**
+   * Update RPC endpoint status and metrics
+   */
+  private updateRpcEndpointStatus(endpoint: RpcEndpoint, isUp: boolean, latency: number): void {
+    // Update status
+    const current = this.updateStatus(endpoint, this.rpcStatuses, isUp, { latency });
+
+    // Update provider status and metrics
+    this.blockchainService.updateProviderStatus(endpoint.url, isUp);
+    this.metricsService.setRpcStatus(endpoint.url, isUp, endpoint.chainId);
+    this.metricsService.recordRpcLatency(endpoint.url, latency, endpoint.chainId);
+
+    // Check for downtime alerts
+    if (!isUp) {
+      this.checkDowntimeNotification(endpoint, this.rpcStatuses, ALERTS.TYPES.RPC_ENDPOINT_DOWN, 'rpc');
+    }
+  }
+  // #endregion
+
+  // #region WebSocket Monitoring
+
+  /**
+   * Monitor a WebSocket endpoint
+   */
+  async monitorWsEndpoint(endpoint: RpcEndpoint): Promise<boolean> {
+    try {
+      // First check if already active in BlockchainService
+      const wsProvider = this.blockchainService.getWsProviderByUrl(endpoint.url);
+
+      if (wsProvider) {
+        // Update status
+        this.updateStatus(endpoint, this.wsStatuses, true);
+        this.metricsService.setWebsocketStatus(endpoint.url, true, endpoint.chainId);
+        return true;
+      }
+
+      // Attempt direct WebSocket connection
+      return await this.testWebSocketConnection(endpoint);
+    } catch (error) {
+      this.logger.error(`Error monitoring WebSocket endpoint ${endpoint.name}: ${error.message}`);
+      this.updateStatus(endpoint, this.wsStatuses, false);
+      this.metricsService.setWebsocketStatus(endpoint.url, false, endpoint.chainId);
+      return false;
+    }
+  }
+
+  /**
+   * Test a WebSocket connection
+   */
+  private testWebSocketConnection(endpoint: RpcEndpoint): Promise<boolean> {
+    return new Promise(resolve => {
+      try {
+        // Validate URL
+        if (!endpoint.url.startsWith('ws://') && !endpoint.url.startsWith('wss://')) {
+          this.logger.warn(`Invalid WebSocket URL: ${endpoint.url}`);
+          this.updateStatus(endpoint, this.wsStatuses, false);
+          this.metricsService.setWebsocketStatus(endpoint.url, false, endpoint.chainId);
+          resolve(false);
+          return;
+        }
+
+        // Create connection
+        const socket = new WebSocket(endpoint.url, {
+          handshakeTimeout: 5000,
+          followRedirects: true,
+        });
+
+        let connectionSuccessful = false;
+
+        // Set timeout for connection
+        const timeout = setTimeout(() => {
+          if (!connectionSuccessful) {
+            this.handleWsConnectionFailure(endpoint, socket, 'Connection timed out');
+            resolve(false);
+          }
+        }, 5000);
+
+        // Handle successful connection
+        socket.on('open', () => {
+          connectionSuccessful = true;
+          clearTimeout(timeout);
+
+          this.logger.debug(`WebSocket connection to ${endpoint.name} successful`);
+          this.updateStatus(endpoint, this.wsStatuses, true);
+          this.metricsService.setWebsocketStatus(endpoint.url, true, endpoint.chainId);
+          this.blockchainService.updateWsProviderStatus(endpoint.url, true);
+
+          socket.close();
+          resolve(true);
+        });
+
+        // Handle connection errors
+        socket.on('error', error => {
+          this.logger.warn(`WebSocket connection error for ${endpoint.name}: ${error.message}`);
+          this.handleWsConnectionFailure(endpoint, socket, error.message);
+          clearTimeout(timeout);
+          resolve(false);
+        });
+      } catch (error) {
+        this.logger.error(`Error setting up WebSocket connection for ${endpoint.name}: ${error.message}`);
+        this.updateStatus(endpoint, this.wsStatuses, false);
+        this.metricsService.setWebsocketStatus(endpoint.url, false, endpoint.chainId);
+        resolve(false);
+      }
+    });
+  }
+
+  /**
+   * Handle WebSocket connection failure
+   */
+  private handleWsConnectionFailure(endpoint: RpcEndpoint, socket: WebSocket, reason: string) {
+    this.updateStatus(endpoint, this.wsStatuses, false);
+    this.metricsService.setWebsocketStatus(endpoint.url, false, endpoint.chainId);
+    this.blockchainService.updateWsProviderStatus(endpoint.url, false);
+
+    try {
+      socket.terminate();
+    } catch (e) {
+      // Ignore termination errors
+    }
+  }
+  // #endregion
+
+  // #region Port and Service Monitoring
+
+  /**
+   * Monitor all RPC and WebSocket ports
+   */
   async monitorAllRpcPorts() {
     if (!this.configService.enablePortMonitoring) {
       return;
     }
 
-    this.logger.debug('Checking all RPC ports...');
+    this.logger.debug('Checking ports...');
 
-    // Monitor all RPC endpoints regardless of enableMultiRpc setting
-    for (const endpoint of this.configService.getRpcEndpoints()) {
-      await this.monitorRpcPort(endpoint);
-    }
-
-    for (const endpoint of this.configService.getWsEndpoints()) {
-      await this.monitorWsPort(endpoint);
-    }
+    // Process in parallel
+    await Promise.all([
+      Promise.all(this.configService.getRpcEndpoints().map(e => this.monitorRpcPort(e))),
+      Promise.all(this.configService.getWsEndpoints().map(e => this.monitorWsPort(e))),
+    ]);
   }
 
+  /**
+   * Monitor an RPC port
+   */
   async monitorRpcPort(endpoint: RpcEndpoint) {
     try {
       const rpcUrl = new URL(endpoint.url);
@@ -291,15 +632,13 @@ export class RpcMonitorService implements OnModuleInit {
       const port = rpcUrl.port || (rpcUrl.protocol === 'https:' ? '443' : '80');
 
       try {
-        await axios.get(`${rpcUrl.protocol}//${domain}:${port}`, {
-          timeout: 5000,
-        });
+        await axios.get(`${rpcUrl.protocol}//${domain}:${port}`, { timeout: 5000 });
         this.logger.debug(`RPC port ${port} is open for ${endpoint.name}`);
       } catch (error) {
         if (error.code === 'ECONNREFUSED') {
           this.logger.warn(`RPC port ${port} is closed for ${endpoint.name}`);
         } else {
-          this.logger.debug(`RPC port ${port} check for ${endpoint.name} returned: ${error.message}`);
+          this.logger.debug(`RPC port check for ${endpoint.name}: ${error.message}`);
         }
       }
     } catch (error) {
@@ -307,119 +646,62 @@ export class RpcMonitorService implements OnModuleInit {
     }
   }
 
+  /**
+   * Monitor a WebSocket port
+   */
   async monitorWsPort(endpoint: RpcEndpoint) {
     try {
-      // First check if the BlockchainService already has a working connection
-      const wsProvider = this.blockchainService.getWsProviderByUrl(endpoint.url);
-      if (wsProvider) {
-        // If the provider exists, update the status
-        this.wsStatuses.set(endpoint.url, { status: 'up' });
-        this.metricsService.setWebsocketStatus(endpoint.url, true, endpoint.chainId);
-        this.logger.debug(`WebSocket connection to ${endpoint.name} is active in BlockchainService`);
-        return;
+      const wsUrl = new URL(endpoint.url);
+      const domain = wsUrl.hostname;
+      const port = wsUrl.port || (wsUrl.protocol === 'wss:' ? '443' : '80');
+
+      this.logger.debug(`Checking WebSocket port ${port} for ${endpoint.name}`);
+
+      // For WebSockets, we rely on the WebSocket connection test
+      const isUp = await this.testWebSocketConnection(endpoint);
+      if (isUp) {
+        this.logger.debug(`WebSocket port ${port} is open for ${endpoint.name}`);
+      } else {
+        this.logger.warn(`WebSocket port ${port} is closed or unreachable for ${endpoint.name}`);
       }
-
-      if (!WebSocket) {
-        this.logger.warn('WebSocket library not available. Skipping WebSocket monitoring.');
-        return;
-      }
-
-      const wsUrl = endpoint.url;
-
-      if (!wsUrl.startsWith('wss://') && !wsUrl.startsWith('ws://')) {
-        this.logger.warn(`Invalid WebSocket URL for ${endpoint.name}: ${wsUrl} - Must start with ws:// or wss://`);
-        this.wsStatuses.set(endpoint.url, { status: 'down' });
-        this.metricsService.setWebsocketStatus(endpoint.url, false, endpoint.chainId);
-        this.blockchainService.updateWsProviderStatus(endpoint.url, false);
-        return;
-      }
-
-      this.logger.debug(`Testing WebSocket connection to ${endpoint.name} (${wsUrl})`);
-
-      const socket = new WebSocket(wsUrl, {
-        handshakeTimeout: 5000, // Set handshake timeout to 5 seconds
-        followRedirects: true, // Follow redirects if needed
-      });
-
-      let connectionSuccessful = false;
-
-      const timeout = setTimeout(() => {
-        if (!connectionSuccessful) {
-          this.logger.warn(`WebSocket connection to ${endpoint.name} timed out`);
-          this.wsStatuses.set(endpoint.url, { status: 'down' });
-          this.metricsService.setWebsocketStatus(endpoint.url, false, endpoint.chainId);
-          this.blockchainService.updateWsProviderStatus(endpoint.url, false);
-          socket.terminate();
-        }
-      }, 5000);
-
-      socket.on('open', () => {
-        connectionSuccessful = true;
-        this.logger.debug(`WebSocket connection to ${endpoint.name} successful`);
-        this.wsStatuses.set(endpoint.url, { status: 'up' });
-        this.metricsService.setWebsocketStatus(endpoint.url, true, endpoint.chainId);
-        this.blockchainService.updateWsProviderStatus(endpoint.url, true);
-        clearTimeout(timeout);
-        socket.close();
-      });
-
-      socket.on('error', error => {
-        this.logger.warn(`WebSocket connection error for ${endpoint.name}: ${error.message}`);
-        this.wsStatuses.set(endpoint.url, { status: 'down' });
-        this.metricsService.setWebsocketStatus(endpoint.url, false, endpoint.chainId);
-        this.blockchainService.updateWsProviderStatus(endpoint.url, false);
-        clearTimeout(timeout);
-
-        if (!socket.terminated) {
-          socket.terminate();
-        }
-      });
     } catch (error) {
-      this.logger.error(`Error setting up WebSocket connection for ${endpoint.name}: ${error.message}`);
-      this.wsStatuses.set(endpoint.url, { status: 'down' });
-      this.metricsService.setWebsocketStatus(endpoint.url, false, endpoint.chainId);
-      this.blockchainService.updateWsProviderStatus(endpoint.url, false);
+      this.logger.error(`Error monitoring WebSocket port for ${endpoint.name}: ${error.message}`);
     }
   }
 
+  /**
+   * Monitor all services (explorers, faucets)
+   */
   async monitorAllServices() {
     if (!this.configService.enableRpcMonitoring) {
       return;
     }
 
-    this.logger.debug('Checking all services status...');
+    this.logger.debug('Checking services...');
 
-    if (this.configService.explorerEndpoints) {
-      let explorerChecked = 0;
-      let explorerUp = 0;
-
-      for (const endpoint of this.configService.explorerEndpoints) {
-        const status = await this.monitorService(endpoint);
-        explorerChecked++;
-        if (status) explorerUp++;
-
-        this.metricsService.setExplorerStatus(endpoint.url, status, endpoint.chainId);
-      }
-
-      this.logger.debug(`Explorer status check completed: ${explorerUp}/${explorerChecked} explorers available`);
+    // Monitor explorers
+    if (this.configService.explorerEndpoints?.length) {
+      await this.monitorServiceGroup(this.configService.explorerEndpoints, 'explorer');
     }
 
-    if (this.configService.faucetEndpoints) {
-      let faucetChecked = 0;
-      let faucetUp = 0;
-
-      for (const endpoint of this.configService.faucetEndpoints) {
-        const status = await this.monitorService(endpoint);
-        faucetChecked++;
-        if (status) faucetUp++;
-
-        this.metricsService.setFaucetStatus(endpoint.url, status, endpoint.chainId);
-      }
-
-      this.logger.debug(`Faucet status check completed: ${faucetUp}/${faucetChecked} faucets available`);
+    // Monitor faucets
+    if (this.configService.faucetEndpoints?.length) {
+      await this.monitorServiceGroup(this.configService.faucetEndpoints, 'faucet');
     }
   }
 
+  /**
+   * Monitor a group of services
+   */
+  private async monitorServiceGroup(endpoints: RpcEndpoint[], serviceType: string) {
+    const results = await Promise.all(endpoints.map(endpoint => this.monitorService(endpoint)));
+    const upCount = results.filter(Boolean).length;
+    this.logger.debug(`${serviceType} check: ${upCount}/${results.length} ${serviceType}s available`);
+  }
+
+  /**
+   * Monitor a service endpoint
+   */
   async monitorService(endpoint: RpcEndpoint): Promise<boolean> {
     try {
       this.logger.debug(`Checking service: ${endpoint.name} (${endpoint.url})`);
@@ -430,131 +712,217 @@ export class RpcMonitorService implements OnModuleInit {
       });
 
       const isUp = response.status >= 200 && response.status < 500;
-
-      if (endpoint.url.includes('explorer') || endpoint.url.includes('scan')) {
-        this.explorerStatuses.set(endpoint.url, { status: isUp ? 'up' : 'down' });
-        this.metricsService.setExplorerStatus(endpoint.url, isUp, endpoint.chainId);
-      } else if (endpoint.url.includes('faucet')) {
-        this.faucetStatuses.set(endpoint.url, { status: isUp ? 'up' : 'down' });
-        this.metricsService.setFaucetStatus(endpoint.url, isUp, endpoint.chainId);
-      }
+      this.updateServiceStatus(endpoint, isUp);
 
       this.logger.debug(`Service ${endpoint.name} is ${isUp ? 'UP' : 'DOWN'}`);
       return isUp;
     } catch (error) {
       this.logger.debug(`Service ${endpoint.name} check failed: ${error.message}`);
-
-      if (endpoint.url.includes('explorer') || endpoint.url.includes('scan')) {
-        this.explorerStatuses.set(endpoint.url, { status: 'down' });
-        this.metricsService.setExplorerStatus(endpoint.url, false, endpoint.chainId);
-      } else if (endpoint.url.includes('faucet')) {
-        this.faucetStatuses.set(endpoint.url, { status: 'down' });
-        this.metricsService.setFaucetStatus(endpoint.url, false, endpoint.chainId);
-      }
-
+      this.updateServiceStatus(endpoint, false);
       return false;
     }
   }
 
-  async testContractDeployment() {
-    this.logger.debug('Testing contract deployment...');
+  /**
+   * Update service status and metrics
+   */
+  private updateServiceStatus(endpoint: RpcEndpoint, isUp: boolean): void {
+    if (endpoint.url.includes('explorer') || endpoint.url.includes('scan')) {
+      this.explorerStatuses.set(endpoint.url, { status: isUp ? 'up' : 'down' });
+      this.metricsService.setExplorerStatus(endpoint.url, isUp, endpoint.chainId);
+    } else if (endpoint.url.includes('faucet')) {
+      this.faucetStatuses.set(endpoint.url, { status: isUp ? 'up' : 'down' });
+      this.metricsService.setFaucetStatus(endpoint.url, isUp, endpoint.chainId);
+    }
+  }
+  // #endregion
+
+  // #region Status Management
+
+  /**
+   * Sync with blockchain service to ensure consistency
+   */
+  private syncWithBlockchainService(): void {
+    this.logger.debug('Syncing provider status with BlockchainService');
+
+    // Sync HTTP RPC providers
+    for (const { endpoint } of this.blockchainService.getAllProviders()) {
+      const { url, status } = endpoint;
+      const currentStatus = this.rpcStatuses.get(url);
+
+      if (currentStatus) {
+        currentStatus.status = status === 'up' ? 'up' : 'down';
+      } else {
+        this.rpcStatuses.set(url, { status: status === 'up' ? 'up' : 'down', latency: 0, alerted: false });
+      }
+    }
+
+    // Sync WebSocket providers
+    for (const { endpoint } of this.blockchainService.getAllWsProviders()) {
+      const { url, status, chainId } = endpoint;
+      const currentStatus = this.wsStatuses.get(url);
+
+      if (currentStatus) {
+        currentStatus.status = status === 'up' ? 'up' : 'down';
+      } else {
+        this.wsStatuses.set(url, { status: status === 'up' ? 'up' : 'down', alerted: false });
+      }
+
+      this.metricsService.setWebsocketStatus(url, status === 'up', chainId);
+    }
   }
 
-  getAllRpcStatuses() {
-    const statuses = [];
+  /**
+   * Update status for any endpoint type
+   */
+  private updateStatus(endpoint: RpcEndpoint, statusMap: Map<string, any>, isUp: boolean, extraFields = {}) {
+    // Get current status
+    const current = statusMap.get(endpoint.url) || {
+      status: 'unknown',
+      downSince: undefined,
+      alerted: false,
+      ...extraFields,
+    };
 
-    for (const endpoint of this.configService.getRpcEndpoints()) {
+    // Handle status transitions
+    if (!isUp && current.status !== 'down') {
+      // Status changed to down - record when it happened
+      current.downSince = Date.now();
+      current.alerted = false;
+    } else if (isUp && current.status === 'down') {
+      // Status changed to up - clear downtime tracking
+      current.downSince = undefined;
+      current.alerted = false;
+    }
+
+    // Update status
+    statusMap.set(endpoint.url, {
+      ...current,
+      status: isUp ? 'up' : 'down',
+      ...extraFields,
+    });
+
+    return current;
+  }
+
+  /**
+   * Check if we should send a notification for extended downtime
+   */
+  private checkDowntimeNotification(
+    endpoint: RpcEndpoint,
+    statusMap: Map<string, any>,
+    alertType: string,
+    endpointType: string,
+  ): boolean {
+    const status = statusMap.get(endpoint.url);
+    if (!status?.downSince || status.alerted) return false;
+
+    const currentTime = Date.now();
+    const isDownLongEnough = currentTime - status.downSince >= DOWNTIME_NOTIFICATION_THRESHOLD_MS;
+
+    if (isDownLongEnough) {
+      // Calculate downtime for message
+      const downtimeMs = currentTime - status.downSince;
+      const hours = Math.floor(downtimeMs / (60 * 60 * 1000));
+      const minutes = Math.floor((downtimeMs % (60 * 60 * 1000)) / (60 * 1000));
+
+      // Send alert
+      this.alertsService.error(
+        alertType,
+        endpointType,
+        `${endpointType.charAt(0).toUpperCase() + endpointType.slice(1)} endpoint ${endpoint.name} - ${endpoint.url} has been down for ${hours}h ${minutes}m`,
+        endpoint.chainId,
+      );
+
+      // Mark as alerted
+      status.alerted = true;
+      return true;
+    }
+
+    return false;
+  }
+  // #endregion
+
+  // #region Health Calculation
+
+  /**
+   * Calculate health factor for a status map (0-1)
+   */
+  private calculateHealthFactor(statusMap: Map<string, any>, endpoints: RpcEndpoint[]): number {
+    if (!endpoints.length) return 1;
+    const healthyCount = endpoints.filter(e => statusMap.get(e.url)?.status === 'up').length;
+    return healthyCount / endpoints.length;
+  }
+
+  /**
+   * Calculate health factor for RPC endpoints
+   */
+  private calculateRpcHealthFactor(): number {
+    return this.calculateHealthFactor(this.rpcStatuses, this.configService.getRpcEndpoints());
+  }
+
+  /**
+   * Calculate health factor for WebSocket endpoints
+   */
+  private calculateWsHealthFactor(): number {
+    return this.calculateHealthFactor(this.wsStatuses, this.configService.getWsEndpoints());
+  }
+  // #endregion
+
+  // #region Public Status Methods
+
+  /**
+   * Get all RPC endpoint statuses
+   */
+  getAllRpcStatuses() {
+    return this.configService.getRpcEndpoints().map(endpoint => {
       const status = this.rpcStatuses.get(endpoint.url) || { status: 'unknown', latency: 0 };
-      statuses.push({
+      return {
         name: endpoint.name,
         url: endpoint.url,
         type: endpoint.type,
         status: status.status,
         latency: status.latency,
         chainId: endpoint.chainId,
-      });
-    }
-
-    return statuses;
+      };
+    });
   }
 
+  /**
+   * Get all WebSocket endpoint statuses
+   */
   getAllWsStatuses() {
-    const statuses = [];
-
-    for (const endpoint of this.configService.getWsEndpoints()) {
+    return this.configService.getWsEndpoints().map(endpoint => {
       const status = this.wsStatuses.get(endpoint.url) || { status: 'unknown' };
-      statuses.push({
+      return {
         name: endpoint.name,
         url: endpoint.url,
         type: endpoint.type,
         status: status.status,
         chainId: endpoint.chainId,
-      });
-    }
-
-    return statuses;
-  }
-
-  getAllExplorerStatuses() {
-    const result = {};
-    for (const [url, status] of this.explorerStatuses.entries()) {
-      result[url] = status.status;
-    }
-    return result;
-  }
-
-  getAllFaucetStatuses() {
-    const result = {};
-    for (const [url, status] of this.faucetStatuses.entries()) {
-      result[url] = status.status;
-    }
-    return result;
-  }
-
-  getAnyWsStatus(): 'up' | 'down' {
-    for (const [, status] of this.wsStatuses) {
-      if (status.status === 'up') {
-        return 'up';
-      }
-    }
-    return 'down';
+      };
+    });
   }
 
   /**
-   * Sync status maps with the BlockchainService to ensure consistency
-   * This helps avoid duplicate network calls and keeps monitoring aligned
+   * Get all explorer statuses
    */
-  private syncWithBlockchainService(): void {
-    this.logger.debug('Syncing provider status with BlockchainService');
-
-    // Sync HTTP RPC providers
-    const allProviders = this.blockchainService.getAllProviders();
-    for (const providerData of allProviders) {
-      const { url, status } = providerData.endpoint;
-      const currentStatus = this.rpcStatuses.get(url);
-
-      if (currentStatus) {
-        // Only update status, preserve latency
-        currentStatus.status = status === 'up' ? 'up' : 'down';
-      } else {
-        this.rpcStatuses.set(url, { status: status === 'up' ? 'up' : 'down', latency: 0 });
-      }
-    }
-
-    // Sync WebSocket providers
-    const allWsProviders = this.blockchainService.getAllWsProviders();
-    for (const wsProviderData of allWsProviders) {
-      const { url, status } = wsProviderData.endpoint;
-      const currentStatus = this.wsStatuses.get(url);
-
-      if (currentStatus) {
-        currentStatus.status = status === 'up' ? 'up' : 'down';
-      } else {
-        this.wsStatuses.set(url, { status: status === 'up' ? 'up' : 'down' });
-      }
-
-      // Update metrics
-      this.metricsService.setWebsocketStatus(url, status === 'up', wsProviderData.endpoint.chainId);
-    }
+  getAllExplorerStatuses() {
+    return Object.fromEntries([...this.explorerStatuses.entries()].map(([url, status]) => [url, status.status]));
   }
+
+  /**
+   * Get all faucet statuses
+   */
+  getAllFaucetStatuses() {
+    return Object.fromEntries([...this.faucetStatuses.entries()].map(([url, status]) => [url, status.status]));
+  }
+
+  /**
+   * Get the overall WebSocket status
+   */
+  getAnyWsStatus(): 'up' | 'down' {
+    return [...this.wsStatuses.values()].some(status => status.status === 'up') ? 'up' : 'down';
+  }
+  // #endregion
 }

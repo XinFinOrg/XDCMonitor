@@ -35,7 +35,7 @@ export class MonitoringController {
         endpoints: blockInfo.monitoredEndpoints,
         blockTimeThreshold: blockInfo.blockTimeThreshold,
         totalEndpoints: rpcStatus.length,
-        activeEndpoints: rpcStatus.filter(endpoint => endpoint.isUp).length,
+        activeEndpoints: rpcStatus.filter(endpoint => endpoint.status === 'up').length,
         blockDifferences: this.calculateBlockDifferences(blockInfo.monitoredEndpoints),
         primaryEndpoint: blockInfo.primaryEndpoint,
       },

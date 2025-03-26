@@ -324,13 +324,26 @@ export class ConfigService {
   }
 
   /**
-   * Get test receiver address for a chain
+   * Get a test receiver address for transaction tests
+   * @param chainId The chain ID (50 for mainnet, 51 for testnet)
+   * @returns A valid receiver address for test transactions
    */
-  getTestReceiverAddress(chainId: string): string {
-    return (
-      this.get(`TEST_RECEIVER_ADDRESS_${chainId}`, undefined) ||
-      this.get('TEST_RECEIVER_ADDRESS', '0x0000000000000000000000000000000000000000')
-    );
+  getTestReceiverAddress(chainId: number): string {
+    // Default to a burn address if no specific test receiver is configured
+    const defaultAddress = 'xdc0000000000000000000000000000000000000000';
+
+    // For mainnet (chainId 50), return mainnet test receiver or default
+    if (chainId === 50) {
+      return this.get('TEST_MAINNET_RECEIVER_ADDRESS', defaultAddress);
+    }
+
+    // For testnet (chainId 51), return testnet test receiver or default
+    if (chainId === 51) {
+      return this.get('TEST_TESTNET_RECEIVER_ADDRESS', defaultAddress);
+    }
+
+    // For any other chainId, return default
+    return defaultAddress;
   }
 
   /**

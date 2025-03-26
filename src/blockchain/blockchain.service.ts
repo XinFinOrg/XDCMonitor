@@ -36,7 +36,7 @@ export class BlockchainService implements OnModuleInit {
     this.logger.log('Initializing all RPC and WebSocket providers...');
     await this.initializeProviders();
 
-    // Set the active provider to the Mainnet primary one initially
+    // Set the active provider to the Mainnet primary one initially (for backward compatibility)
     const mainnetPrimaryUrl = this.configService.getPrimaryRpcUrl(50);
     const providerData = this.providers.get(mainnetPrimaryUrl);
 
@@ -349,12 +349,28 @@ export class BlockchainService implements OnModuleInit {
     return false;
   }
 
-  async getLatestBlock(): Promise<BlockInfo> {
-    const blockNumber = await this.activeProvider.provider.getBlockNumber();
-    return this.getBlockByNumber(blockNumber);
+  /**
+   * Get the latest block from a specific chain
+   * @param chainId The chain ID to get the block from
+   * @returns The latest block information
+   */
+  async getLatestBlock(chainId: number): Promise<BlockInfo> {
+    const providerData = this.getProviderForChainId(chainId);
+    if (!providerData || !providerData.provider) {
+      throw new Error(`No provider available for chain ${chainId}`);
+    }
+
+    const blockNumber = await providerData.provider.getBlockNumber();
+    return this.getBlockByNumberForChain(blockNumber, chainId);
   }
 
-  async getLatestBlockNumber(url?: string): Promise<number> {
+  /**
+   * Get the latest block number from a specific chain
+   * @param chainId The chain ID to get the block number from
+   * @param url Optional specific endpoint URL to use
+   * @returns The latest block number
+   */
+  async getLatestBlockNumber(chainId: number, url?: string): Promise<number> {
     try {
       let provider: ethers.JsonRpcProvider;
 
@@ -365,32 +381,43 @@ export class BlockchainService implements OnModuleInit {
           throw new Error(`No provider found for URL: ${url}`);
         }
       } else {
-        // Otherwise use the active provider
-        provider = this.activeProvider.provider;
+        // Use chain-specific provider
+        const providerData = this.getProviderForChainId(chainId);
+        if (!providerData || !providerData.provider) {
+          throw new Error(`No provider available for chain ${chainId}`);
+        }
+        provider = providerData.provider;
       }
 
       const blockNumber = await provider.getBlockNumber();
       return blockNumber;
     } catch (error) {
-      this.logger.error(`Error getting latest block number: ${error.message}`);
+      this.logger.error(`Error getting latest block number for chain ${chainId}: ${error.message}`);
       throw error;
     }
   }
 
-  async getBlockByNumber(blockNumber: number): Promise<BlockInfo> {
-    const chainId = this.activeProvider.endpoint.chainId;
-    return this.getBlockByNumberForChain(blockNumber, chainId);
-  }
-
-  async getBalance(address: string, failedCount: number = 0): Promise<AccountBalance> {
+  /**
+   * Get account balance from a specific chain
+   * @param address The address to get the balance for
+   * @param chainId The chain ID to get the balance from
+   * @param failedCount Tracking retry attempts
+   * @returns The account balance information
+   */
+  async getBalance(address: string, chainId: number, failedCount: number = 0): Promise<AccountBalance> {
     if (failedCount >= this.MAX_FAILURES) {
       this.logger.warn(`Maximum failure count (${this.MAX_FAILURES}) reached for getBalance. Stopping attempts.`);
-      throw new Error(`Failed to get balance for ${address} after ${failedCount} attempts`);
+      throw new Error(`Failed to get balance for ${address} on chain ${chainId} after ${failedCount} attempts`);
     }
 
     try {
-      const balance = await this.activeProvider.provider.getBalance(address);
-      const blockNumber = await this.activeProvider.provider.getBlockNumber();
+      const providerData = this.getProviderForChainId(chainId);
+      if (!providerData || !providerData.provider) {
+        throw new Error(`No provider available for chain ${chainId}`);
+      }
+
+      const balance = await providerData.provider.getBalance(address);
+      const blockNumber = await providerData.provider.getBlockNumber();
 
       return {
         address,
@@ -398,30 +425,48 @@ export class BlockchainService implements OnModuleInit {
         blockNumber,
       };
     } catch (error) {
-      this.logger.error(`Error getting balance for ${address}: ${error.message}`);
+      this.logger.error(`Error getting balance for ${address} on chain ${chainId}: ${error.message}`);
 
-      if (this.isConnectionError(error) && (await this.fallbackToNextAvailableProvider())) {
-        return this.getBalance(address, failedCount + 1);
+      if (this.isConnectionError(error)) {
+        // Try to find another provider for this chain
+        const nextProvider = this.getNextAvailableProviderForChain(chainId);
+        if (nextProvider) {
+          this.logger.log(`Trying next provider for chain ${chainId}: ${nextProvider.endpoint.name}`);
+          return this.getBalance(address, chainId, failedCount + 1);
+        }
       }
 
       throw error;
     }
   }
 
-  async getTransaction(hash: string, failedCount: number = 0): Promise<TransactionInfo> {
+  /**
+   * Get transaction details from a specific chain
+   * @param hash The transaction hash
+   * @param chainId The chain ID to get the transaction from
+   * @param failedCount Tracking retry attempts
+   * @returns The transaction information
+   */
+  async getTransaction(hash: string, chainId: number, failedCount: number = 0): Promise<TransactionInfo> {
     if (failedCount >= this.MAX_FAILURES) {
       this.logger.warn(`Maximum failure count (${this.MAX_FAILURES}) reached for getTransaction. Stopping attempts.`);
-      throw new Error(`Failed to get transaction ${hash} after ${failedCount} attempts`);
+      throw new Error(`Failed to get transaction ${hash} on chain ${chainId} after ${failedCount} attempts`);
     }
 
     try {
-      const tx = await this.activeProvider.provider.getTransaction(hash);
-
-      if (!tx) {
-        throw new Error(`Chain ${this.activeProvider.endpoint.chainId} transaction ${hash} not found`);
+      const providerData = this.getProviderForChainId(chainId);
+      if (!providerData || !providerData.provider) {
+        throw new Error(`No provider available for chain ${chainId}`);
       }
 
-      const receipt = await this.activeProvider.provider.getTransactionReceipt(hash);
+      const provider = providerData.provider;
+      const tx = await provider.getTransaction(hash);
+
+      if (!tx) {
+        throw new Error(`Chain ${chainId} transaction ${hash} not found`);
+      }
+
+      const receipt = await provider.getTransactionReceipt(hash);
 
       let status: TransactionStatus;
       if (!receipt) {
@@ -446,35 +491,79 @@ export class BlockchainService implements OnModuleInit {
         transactionIndex: tx.index,
       };
     } catch (error) {
-      this.logger.error(
-        `Error getting chainId ${this.activeProvider.endpoint.chainId} transaction ${hash}: ${error.message}`,
-      );
+      this.logger.error(`Error getting transaction ${hash} on chain ${chainId}: ${error.message}`);
 
-      if (!error.message.includes('not found') && (await this.fallbackToNextAvailableProvider())) {
-        return this.getTransaction(hash, failedCount + 1);
+      if (!error.message.includes('not found') && this.isConnectionError(error)) {
+        // Try to find another provider for this chain
+        const nextProvider = this.getNextAvailableProviderForChain(chainId);
+        if (nextProvider) {
+          this.logger.log(`Trying next provider for chain ${chainId}: ${nextProvider.endpoint.name}`);
+          return this.getTransaction(hash, chainId, failedCount + 1);
+        }
       }
 
       throw error;
     }
   }
 
-  async getTransactionCount(address: string, failedCount: number = 0): Promise<number> {
+  /**
+   * Find another available provider for a specific chain
+   * @param chainId The chain ID to find a provider for
+   * @returns The next available provider for the chain, or null if none found
+   */
+  private getNextAvailableProviderForChain(chainId: number): ProviderWithMetadata | null {
+    const chainsProviders = Array.from(this.providers.values()).filter(
+      p => p.endpoint.chainId === chainId && p.endpoint.status === 'up' && p.provider,
+    );
+
+    // Shuffle the providers to avoid always trying them in the same order
+    const shuffled = chainsProviders.sort(() => 0.5 - Math.random());
+
+    return shuffled[0] || null;
+  }
+
+  /**
+   * @deprecated Use getTransaction with chainId parameter instead
+   * Kept for backward compatibility
+   */
+  async getTransactionForChain(hash: string, chainId: number): Promise<TransactionInfo> {
+    return this.getTransaction(hash, chainId);
+  }
+
+  /**
+   * Get transaction count for an address on a specific chain
+   * @param address The address to get the transaction count for
+   * @param chainId The chain ID to get the transaction count from
+   * @param failedCount Tracking retry attempts
+   * @returns The transaction count
+   */
+  async getTransactionCount(address: string, chainId: number, failedCount: number = 0): Promise<number> {
     if (failedCount >= this.MAX_FAILURES) {
       this.logger.warn(
         `Maximum failure count (${this.MAX_FAILURES}) reached for getTransactionCount. Stopping attempts.`,
       );
-      throw new Error(`Failed to get transaction count for ${address} after ${failedCount} attempts`);
+      throw new Error(
+        `Failed to get transaction count for ${address} on chain ${chainId} after ${failedCount} attempts`,
+      );
     }
 
     try {
-      return await this.activeProvider.provider.getTransactionCount(address);
-    } catch (error) {
-      this.logger.error(
-        `Error getting chainId ${this.activeProvider.endpoint.chainId} transaction count ${address}: ${error.message}`,
-      );
+      const providerData = this.getProviderForChainId(chainId);
+      if (!providerData || !providerData.provider) {
+        throw new Error(`No provider available for chain ${chainId}`);
+      }
 
-      if (this.isConnectionError(error) && (await this.fallbackToNextAvailableProvider())) {
-        return this.getTransactionCount(address, failedCount + 1);
+      return await providerData.provider.getTransactionCount(address);
+    } catch (error) {
+      this.logger.error(`Error getting transaction count for ${address} on chain ${chainId}: ${error.message}`);
+
+      if (this.isConnectionError(error)) {
+        // Try to find another provider for this chain
+        const nextProvider = this.getNextAvailableProviderForChain(chainId);
+        if (nextProvider) {
+          this.logger.log(`Trying next provider for chain ${chainId}: ${nextProvider.endpoint.name}`);
+          return this.getTransactionCount(address, chainId, failedCount + 1);
+        }
       }
 
       throw error;
@@ -577,7 +666,7 @@ export class BlockchainService implements OnModuleInit {
   }
 
   /**
-   * Get a provider for a specific chainId
+   * Get a provider for a specific chain
    * @param chainId The chain ID (50 for Mainnet, 51 for Testnet)
    * @returns A provider for the specified chain
    */
@@ -635,10 +724,19 @@ export class BlockchainService implements OnModuleInit {
       // Ensure number is properly set
       const parsedBlockNumber = block.number ? parseInt(block.number, 16) : blockNumber;
 
-      // Extract transaction hashes
+      // Extract transaction hashes and data
       const transactions = Array.isArray(block.transactions)
-        ? block.transactions.map(tx => (typeof tx === 'string' ? tx : tx.hash || ''))
+        ? block.transactions.map(tx => {
+            if (typeof tx === 'string') {
+              return tx;
+            }
+            // If we have a full transaction object, extract the hash
+            return tx.hash || '';
+          })
         : [];
+
+      // Log transaction count for debugging
+      this.logger.debug(`Block #${parsedBlockNumber} has ${transactions.length} transactions on chain ${chainId}`);
 
       // Convert gas values from hex to BigInt
       const gasUsed = block.gasUsed ? BigInt(block.gasUsed) : BigInt(0);
@@ -669,7 +767,7 @@ export class BlockchainService implements OnModuleInit {
    * @param rpcUrl Optional specific RPC URL to use for this transaction
    * @returns The transaction receipt
    */
-  async sendTransaction(privateKey: string, to: string, value: string, chainId: string = '50', rpcUrl?: string) {
+  async sendTransaction(privateKey: string, to: string, value: string, chainId: number = 50, rpcUrl?: string) {
     this.logger.debug(`Preparing to send ${value} XDC to ${to} on chain ${chainId}${rpcUrl ? ` via ${rpcUrl}` : ''}`);
 
     // Use ethers.js to create and send a transaction
@@ -715,7 +813,7 @@ export class BlockchainService implements OnModuleInit {
     privateKey: string,
     bytecode: string,
     constructorArgs: any[] = [],
-    chainId: string = '50',
+    chainId: number = 50,
     rpcUrl?: string,
   ) {
     this.logger.debug(`Preparing to deploy contract on chain ${chainId}${rpcUrl ? ` via ${rpcUrl}` : ''}`);
@@ -758,9 +856,8 @@ export class BlockchainService implements OnModuleInit {
    * @param chainId The chain ID (50 for mainnet, 51 for testnet)
    * @returns A provider for the specified chain
    */
-  getProviderForChain(chainId: string): ethers.JsonRpcProvider {
-    const chainIdNum = parseInt(chainId, 10);
-    const providerData = this.getProviderForChainId(chainIdNum);
+  getProviderForChain(chainId: number): ethers.JsonRpcProvider {
+    const providerData = this.getProviderForChainId(chainId);
 
     if (!providerData || !providerData.provider) {
       throw new Error(`No active provider found for chainId ${chainId}`);

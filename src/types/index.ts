@@ -9,12 +9,14 @@ export * from './blockchain/processor';
 // RPC types
 export * from './rpc/endpoint';
 export * from './rpc/providers';
+export * from './rpc/status';
 
 // Monitoring types
 export * from './monitoring/alerts';
 export * from './monitoring/metrics';
 export * from './monitoring/status';
 export * from './monitoring/services';
+export * from './monitoring/endpoint-monitoring';
 
 // Block monitoring types
 export * from './monitoring/block-monitoring';

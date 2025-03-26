@@ -12,7 +12,7 @@ export interface RpcBlockInfo {
  * Complete block data with additional metadata
  */
 export interface BlockData {
-  chainId: string;
+  chainId: number;
   blockNumber: number;
   timestamp: number;
   parentHash: string;

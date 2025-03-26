@@ -35,12 +35,12 @@ export class TransactionMonitorService implements OnModuleInit {
     // Initialize test wallets with private keys from config for different networks
     // These should be test accounts with some XDC balance
     this.testWallets = {
-      '50': {
+      50: {
         privateKey: this.configService.mainnetTestPrivateKey,
         address: this.getAddressFromPrivateKey(this.configService.mainnetTestPrivateKey),
         hasBalance: false,
       },
-      '51': {
+      51: {
         privateKey: this.configService.testnetTestPrivateKey,
         address: this.getAddressFromPrivateKey(this.configService.testnetTestPrivateKey),
         hasBalance: false,
@@ -84,27 +84,27 @@ export class TransactionMonitorService implements OnModuleInit {
     this.logger.debug('Checking test wallet balances');
 
     // Check mainnet wallet balance
-    await this.checkWalletBalance('50');
+    await this.checkWalletBalance(50);
 
     // Check testnet wallet balance
-    await this.checkWalletBalance('51');
+    await this.checkWalletBalance(51);
   }
 
   /**
    * Check balance of a specific wallet
    */
-  private async checkWalletBalance(chainId: string) {
+  private async checkWalletBalance(chainId: number) {
     const wallet = this.testWallets[chainId];
     if (!wallet || !wallet.address) {
       this.logger.warn(`No valid test wallet found for chainId ${chainId}`);
       return;
     }
 
-    const chainName = chainId === '50' ? 'Mainnet' : 'Testnet';
+    const chainName = chainId === 50 ? 'Mainnet' : 'Testnet';
 
     try {
       // Get a provider for this chain
-      const providerData = this.blockchainService.getProviderForChainId(parseInt(chainId, 10));
+      const providerData = this.blockchainService.getProviderForChainId(chainId);
       if (!providerData || !providerData.provider) {
         this.logger.warn(`No provider available for ${chainName}`);
         wallet.hasBalance = false;
@@ -169,12 +169,12 @@ export class TransactionMonitorService implements OnModuleInit {
       );
 
     // Test each active mainnet RPC with both transaction types if wallet has enough balance
-    if (this.testWallets['50'].hasBalance) {
+    if (this.testWallets[50].hasBalance) {
       for (const providerData of mainnetProviders) {
         // Run normal transaction test
-        await this.runTransactionTest('50', false, providerData.endpoint.url);
+        await this.runTransactionTest(50, false, providerData.endpoint.url);
         // Run contract deployment test
-        await this.runTransactionTest('50', true, providerData.endpoint.url);
+        await this.runTransactionTest(50, true, providerData.endpoint.url);
       }
     } else {
       this.logger.warn('Skipping Mainnet transaction tests due to insufficient wallet balance');
@@ -182,12 +182,12 @@ export class TransactionMonitorService implements OnModuleInit {
     }
 
     // Test each active testnet RPC with both transaction types if wallet has enough balance
-    if (this.testWallets['51'].hasBalance) {
+    if (this.testWallets[51].hasBalance) {
       for (const providerData of testnetProviders) {
         // Run normal transaction test
-        await this.runTransactionTest('51', false, providerData.endpoint.url);
+        await this.runTransactionTest(51, false, providerData.endpoint.url);
         // Run contract deployment test
-        await this.runTransactionTest('51', true, providerData.endpoint.url);
+        await this.runTransactionTest(51, true, providerData.endpoint.url);
       }
     } else {
       this.logger.warn('Skipping Testnet transaction tests due to insufficient wallet balance');
@@ -195,8 +195,8 @@ export class TransactionMonitorService implements OnModuleInit {
     }
   }
 
-  private async runTransactionTest(chainId: string, deployContract: boolean, rpcUrl?: string) {
-    const chainName = chainId === '50' ? 'Mainnet' : 'Testnet';
+  private async runTransactionTest(chainId: number, deployContract: boolean, rpcUrl?: string) {
+    const chainName = chainId === 50 ? 'Mainnet' : 'Testnet';
     const startTime = Date.now();
     let success = false;
     let txHash = '';
@@ -256,7 +256,7 @@ export class TransactionMonitorService implements OnModuleInit {
       const maxAttempts = 10;
 
       while (!txConfirmed && attempts < maxAttempts) {
-        const tx = await this.blockchainService.getTransaction(txHash);
+        const tx = await this.blockchainService.getTransaction(txHash, chainId, attempts);
         if (tx && tx.status === TransactionStatus.CONFIRMED) {
           txConfirmed = true;
         } else {

@@ -270,29 +270,34 @@ export class MetricsService implements OnModuleInit {
     totalTxs: number = 0,
     success: number = 0,
     failed: number = 0,
-    chainId: string = '50',
+    chainId: number = 50,
   ): void {
     const blockNumberStr = blockNumber.toString();
+
+    this.logger.debug(
+      `Writing transaction metrics for block #${blockNumber} (chain ${chainId}): ` +
+        `${totalTxs} total, ${success} success, ${failed} failed`,
+    );
 
     this.writePoint(
       new Point('transactions_per_block')
         .tag('block_number', blockNumberStr)
         .tag('status', 'success')
-        .tag('chainId', chainId)
+        .tag('chainId', chainId.toString())
         .intField('value', success),
     );
     this.writePoint(
       new Point('transactions_per_block')
         .tag('block_number', blockNumberStr)
         .tag('status', 'failed')
-        .tag('chainId', chainId)
+        .tag('chainId', chainId.toString())
         .intField('value', failed),
     );
     this.writePoint(
       new Point('transactions_per_block')
         .tag('block_number', blockNumberStr)
         .tag('status', 'total')
-        .tag('chainId', chainId)
+        .tag('chainId', chainId.toString())
         .intField('value', totalTxs),
     );
 
@@ -395,14 +400,14 @@ export class MetricsService implements OnModuleInit {
     success: boolean,
     duration: number,
     gasUsed: number,
-    chainId: string,
+    chainId: number,
     rpcName: string,
   ): void {
     // Record success/failure status
     this.writePoint(
       new Point('transaction_monitor')
         .tag('type', type)
-        .tag('chainId', chainId)
+        .tag('chainId', chainId.toString())
         .tag('rpc', rpcName)
         .booleanField('success', success),
     );
@@ -411,7 +416,7 @@ export class MetricsService implements OnModuleInit {
     this.writePoint(
       new Point('transaction_monitor_confirmation_time')
         .tag('type', type)
-        .tag('chainId', chainId)
+        .tag('chainId', chainId.toString())
         .tag('rpc', rpcName)
         .intField('duration_ms', duration),
     );
@@ -421,7 +426,7 @@ export class MetricsService implements OnModuleInit {
       this.writePoint(
         new Point('transaction_monitor_gas_used')
           .tag('type', type)
-          .tag('chainId', chainId)
+          .tag('chainId', chainId.toString())
           .tag('rpc', rpcName)
           .intField('gas', gasUsed),
       );
@@ -436,16 +441,16 @@ export class MetricsService implements OnModuleInit {
   /**
    * Record wallet balance information
    *
-   * @param chainId The chain ID ('50' for Mainnet, '51' for Testnet)
+   * @param chainId The chain ID (50 for Mainnet, 51 for Testnet)
    * @param balance The wallet balance in XDC
    * @param sufficient Whether the balance is sufficient for testing
    */
-  setWalletBalance(chainId: string, balance: string, sufficient: boolean): void {
-    const chainName = chainId === '50' ? 'Mainnet' : 'Testnet';
+  setWalletBalance(chainId: number, balance: string, sufficient: boolean): void {
+    const chainName = chainId === 50 ? 'Mainnet' : 'Testnet';
 
     this.writePoint(
       new Point('transaction_wallet_balance')
-        .tag('chainId', chainId)
+        .tag('chainId', chainId.toString())
         .tag('network', chainName)
         .tag('sufficient', sufficient ? 'true' : 'false')
         .floatField('balance', parseFloat(balance)),
@@ -454,7 +459,7 @@ export class MetricsService implements OnModuleInit {
     // Also record a separate boolean field for "sufficient" to make it easier to query
     this.writePoint(
       new Point('transaction_wallet_status')
-        .tag('chainId', chainId)
+        .tag('chainId', chainId.toString())
         .tag('network', chainName)
         .booleanField('sufficient_balance', sufficient),
     );
