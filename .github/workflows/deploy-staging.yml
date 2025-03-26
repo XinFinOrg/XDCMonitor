@@ -183,7 +183,6 @@ jobs:
           TESTNET_TEST_PRIVATE_KEY="${TESTNET_TEST_PRIVATE_KEY}"
           TEST_RECEIVER_ADDRESS_50="${TEST_RECEIVER_ADDRESS_50}"
           TEST_RECEIVER_ADDRESS_51="${TEST_RECEIVER_ADDRESS_51}"
-
           EOF
 
           echo "Copying the generated .env file to staging server..."
