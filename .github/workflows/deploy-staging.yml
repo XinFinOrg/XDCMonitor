@@ -128,6 +128,11 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.STAGING_TELEGRAM_CHAT_ID }}
           GRAFANA_ADMIN_USER: ${{ secrets.STAGING_GRAFANA_ADMIN_USER }}
           GRAFANA_ADMIN_PASSWORD: ${{ secrets.STAGING_GRAFANA_ADMIN_PASSWORD }}
+          MNEMONIC_WALLET: ${{ secrets.STAGING_MNEMONIC_WALLET }}
+          MAINNET_TEST_PRIVATE_KEY: ${{ secrets.STAGING_MAINNET_TEST_PRIVATE_KEY }}
+          TESTNET_TEST_PRIVATE_KEY: ${{ secrets.STAGING_TESTNET_TEST_PRIVATE_KEY }}
+          TEST_RECEIVER_ADDRESS_50: ${{ secrets.STAGING_TEST_RECEIVER_ADDRESS_50 }}
+          TEST_RECEIVER_ADDRESS_51: ${{ secrets.STAGING_TEST_RECEIVER_ADDRESS_51 }}
         run: |
           echo "Connecting to staging server..."
           # Using SSH config for simplicity - all options are defined there
@@ -170,6 +175,15 @@ jobs:
           # Grafana Admin Credentials
           GRAFANA_ADMIN_USER="${GRAFANA_ADMIN_USER}"
           GRAFANA_ADMIN_PASSWORD="${GRAFANA_ADMIN_PASSWORD}"
+
+          # Transaction monitoring configuration
+          ENABLE_TRANSACTION_MONITORING=true
+          MNEMONIC_WALLET="${MNEMONIC_WALLET}"
+          MAINNET_TEST_PRIVATE_KEY="${MAINNET_TEST_PRIVATE_KEY}"
+          TESTNET_TEST_PRIVATE_KEY="${TESTNET_TEST_PRIVATE_KEY}"
+          TEST_RECEIVER_ADDRESS_50="${TEST_RECEIVER_ADDRESS_50}"
+          TEST_RECEIVER_ADDRESS_51="${TEST_RECEIVER_ADDRESS_51}"
+
           EOF
 
           echo "Copying the generated .env file to staging server..."
