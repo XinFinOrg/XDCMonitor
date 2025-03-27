@@ -131,9 +131,6 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
       minInterval: parseInt(this.configService.get('MIN_CHECK_INTERVAL_MS', '15000')),
     };
   }
-  // #endregion
-
-  // #region Initialization
 
   /**
    * Initialize status tracking maps
@@ -245,9 +242,6 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
 
     return this.rpcClients.get(endpoint.url);
   }
-  // #endregion
-
-  // #region Scheduling and Monitoring
 
   /**
    * Schedule a monitor function with initial delay
@@ -405,9 +399,6 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
       return 0;
     });
   }
-  // #endregion
-
-  // #region RPC Endpoint Monitoring
 
   /**
    * Monitor a specific RPC endpoint
@@ -497,9 +488,6 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
       this.checkDowntimeNotification(endpoint, this.rpcStatuses, ALERTS.TYPES.RPC_ENDPOINT_DOWN, 'rpc');
     }
   }
-  // #endregion
-
-  // #region WebSocket Monitoring
 
   /**
    * Monitor a WebSocket endpoint
@@ -601,9 +589,6 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
       // Ignore termination errors
     }
   }
-  // #endregion
-
-  // #region Port and Service Monitoring
 
   /**
    * Monitor all RPC and WebSocket ports
@@ -735,9 +720,6 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
       this.metricsService.setFaucetStatus(endpoint.url, isUp, endpoint.chainId);
     }
   }
-  // #endregion
-
-  // #region Status Management
 
   /**
    * Sync with blockchain service to ensure consistency
@@ -841,9 +823,6 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
 
     return false;
   }
-  // #endregion
-
-  // #region Health Calculation
 
   /**
    * Calculate health factor for a status map (0-1)
@@ -867,9 +846,6 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
   private calculateWsHealthFactor(): number {
     return this.calculateHealthFactor(this.wsStatuses, this.configService.getWsEndpoints());
   }
-  // #endregion
-
-  // #region Public Status Methods
 
   /**
    * Get all RPC endpoint statuses
@@ -924,5 +900,4 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
   getAnyWsStatus(): 'up' | 'down' {
     return [...this.wsStatuses.values()].some(status => status.status === 'up') ? 'up' : 'down';
   }
-  // #endregion
 }

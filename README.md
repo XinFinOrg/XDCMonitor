@@ -8,6 +8,7 @@ A comprehensive Node.js-based monitoring system for the XDC Network. This applic
 - **Multi-RPC Monitoring**: Monitor multiple endpoints simultaneously, compare response times
 - **RPC Port Monitoring**: HTTP/HTTPS port checks, WebSocket port checks
 - **Block Propagation Monitoring**: Block time tracking, slow block detection
+- **Transaction Monitoring**: Automated transaction testing, smart contract deployment testing
 - **Alert System**: Dashboard alerts, Telegram notifications, webhook notifications
 - **Metrics Collection**: InfluxDB time-series database, Grafana dashboards
 
@@ -66,10 +67,24 @@ The system monitors the following conditions:
    - Threshold: 2000 transactions per 5 minutes
 
 4. **RPC Response Time**
+
    - Alerts when an RPC endpoint takes more than 30 seconds to respond
    - Severity: Critical
    - Component: rpc
    - Threshold: 30 seconds (30,000 ms)
+
+5. **Transaction Test Failures**
+
+   - Alerts when test transactions (normal or contract deployment) consistently fail
+   - Severity: Warning
+   - Component: transactions
+   - Threshold: 3 consecutive failures
+
+6. **Test Wallet Balance**
+   - Alerts when test wallet balance falls below the required minimum (0.01 XDC)
+   - Severity: Warning
+   - Component: wallet
+   - Threshold: 0.01 XDC
 
 ### Alert Delivery
 
@@ -205,6 +220,7 @@ SCAN_INTERVAL=15
 ENABLE_RPC_MONITORING=true
 ENABLE_PORT_MONITORING=true
 ENABLE_BLOCK_MONITORING=true
+ENABLE_TRANSACTION_MONITORING=true
 BLOCK_TIME_THRESHOLD=3.0
 
 # Alert configuration
@@ -233,7 +249,6 @@ GRAFANA_ADMIN_PASSWORD=secure-password
 
 # Transaction monitoring configuration
 ENABLE_TRANSACTION_MONITORING=true
-MNEMONIC_WALLET="your mnemonic wallet seed phrase here"
 MAINNET_TEST_PRIVATE_KEY=your-test-wallet-private-key-for-mainnet
 TESTNET_TEST_PRIVATE_KEY=your-test-wallet-private-key-for-testnet
 TEST_RECEIVER_ADDRESS_50=0xReceiverAddressForMainnet
@@ -328,6 +343,7 @@ chmod +x run.sh
 - **Block Comparison**: `/api/monitoring/block-comparison` - Comparison of block heights across RPCs
 - **RPC Status**: `/api/monitoring/rpc-status` - Status of all RPC endpoints
 - **WebSocket Status**: `/api/monitoring/websocket-status` - Status of WebSocket connections
+- **Transaction Status**: `/api/monitoring/transaction-status` - Status of transaction monitoring
 - **Overall Status**: `/api/monitoring/status` - Combined status of all monitoring systems
 - **Notifications Test**: `/api/notifications/test` - Test the notification system
 - **Telegram Webhook**: `/api/notifications/telegram` - Endpoint for Grafana to send alerts
@@ -338,6 +354,7 @@ chmod +x run.sh
 - **Simulate Slow Block Time**: `/api/testing/simulate-slow-blocktime?seconds=4` - Simulate a slow block time
 - **Simulate RPC Down**: `/api/testing/simulate-rpc-down?endpoint=URL` - Simulate an RPC endpoint being down
 - **Simulate RPC Latency**: `/api/testing/simulate-rpc-latency?endpoint=URL&latency=500` - Simulate high RPC latency
+- **Run Transaction Test**: `/api/testing/run-transaction-test?chainId=50&type=normal` - Manually trigger a transaction test
 
 ## Metrics Collected
 
@@ -353,6 +370,31 @@ The application stores the following metrics in InfluxDB:
 - `faucet_status` - Status of faucet endpoints (1=up, 0=down), tagged with `endpoint` and `chainId`
 - `block_time` - Time between blocks in seconds, tagged with `chainId`
 - `alert_count` - Count of alerts by type and component, tagged with `type`, `component`, and `chainId`
+- `transaction_monitor` - Transaction test results, tagged with `type`, `chainId`, and `rpc`
+- `transaction_monitor_confirmation_time` - Transaction confirmation time in ms, tagged with `type`, `chainId`, and `rpc`
+- `wallet_balance` - Test wallet balances, tagged with `chainId`, with a field for sufficient balance
+
+## Transaction Monitoring
+
+The system includes comprehensive transaction monitoring capabilities:
+
+### Features
+
+- **Automated Testing**: Regularly runs test transactions on all active RPC endpoints
+- **Test Types**: Includes both normal value transfers and smart contract deployments
+- **Multi-Chain Support**: Tests both Mainnet (chainId 50) and Testnet (chainId 51)
+- **Wallet Management**: Continuously monitors test wallet balances
+- **Performance Metrics**: Tracks transaction confirmation times and success rates
+
+### Requirements
+
+To use transaction monitoring, you need:
+
+1. **Test wallets** with private keys specified in the configuration
+2. **Sufficient balance** in each test wallet (minimum 0.01 XDC)
+3. **Receiver addresses** for test transactions
+
+Test transactions are executed every 5 minutes by default, with metrics being recorded in InfluxDB and visualized in Grafana.
 
 ## InfluxDB and Grafana Integration
 
@@ -384,6 +426,7 @@ This project uses several pieces of sensitive information that should **never** 
 2. **Telegram Chat ID**: Identifies where alerts are sent
 3. **API Keys and Tokens**: Any other authentication tokens
 4. **Database Credentials**: If using external databases
+5. **Private Keys**: Never commit wallet private keys to the repository
 
 ### Safe Practices
 

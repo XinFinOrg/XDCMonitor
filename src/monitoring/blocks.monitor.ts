@@ -290,9 +290,6 @@ export class BlocksMonitorService implements OnModuleInit {
     // Reinitialize RPC clients with the best endpoints
     await this.initRpcClients();
   }
-  // #endregion
-
-  // #region Monitoring Control
 
   public startMonitoring(): void {
     this.monitoringEnabled = true;
@@ -677,10 +674,6 @@ export class BlocksMonitorService implements OnModuleInit {
     this.metricsService.setTransactionsPerMinute(txSum / minutes, chainId);
   }
 
-  // #endregion
-
-  // #region Status and Reporting
-
   getBlockMonitoringInfo(): BlockMonitoringInfo {
     try {
       const rpcStatuses = this.rpcMonitorService.getAllRpcStatuses();
@@ -791,5 +784,4 @@ export class BlocksMonitorService implements OnModuleInit {
       CHAIN_ID_TO_NETWORK[parsedChainId] || (parsedChainId === MAINNET_CHAIN_ID ? NETWORK_MAINNET : NETWORK_TESTNET)
     );
   }
-  // #endregion
 }

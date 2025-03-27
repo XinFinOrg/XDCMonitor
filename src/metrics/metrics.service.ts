@@ -391,7 +391,6 @@ export class MetricsService implements OnModuleInit {
    * - Type of transaction (normal or contract deployment)
    * - Success or failure
    * - Confirmation duration (ms)
-   * - Gas used
    * - Chain ID
    * - RPC endpoint name
    */
@@ -399,42 +398,28 @@ export class MetricsService implements OnModuleInit {
     type: 'normal_transaction' | 'contract_deployment',
     success: boolean,
     duration: number,
-    gasUsed: number,
     chainId: number,
-    rpcName: string,
+    rpcUrl: string,
   ): void {
-    // Record success/failure status
     this.writePoint(
       new Point('transaction_monitor')
         .tag('type', type)
         .tag('chainId', chainId.toString())
-        .tag('rpc', rpcName)
+        .tag('rpc', rpcUrl)
         .booleanField('success', success),
     );
 
-    // Record confirmation duration
     this.writePoint(
       new Point('transaction_monitor_confirmation_time')
         .tag('type', type)
         .tag('chainId', chainId.toString())
-        .tag('rpc', rpcName)
+        .tag('rpc', rpcUrl)
         .intField('duration_ms', duration),
     );
 
-    // Record gas used (if transaction was successful)
-    if (success && gasUsed > 0) {
-      this.writePoint(
-        new Point('transaction_monitor_gas_used')
-          .tag('type', type)
-          .tag('chainId', chainId.toString())
-          .tag('rpc', rpcName)
-          .intField('gas', gasUsed),
-      );
-    }
-
     this.logger.debug(
-      `Recorded transaction test: type=${type}, chainId=${chainId}, rpc=${rpcName}, ` +
-        `success=${success}, duration=${duration}ms, gas=${gasUsed}`,
+      `Recorded transaction test: type=${type}, chainId=${chainId}, rpc=${rpcUrl}, ` +
+        `success=${success}, duration=${duration}ms`,
     );
   }
 
