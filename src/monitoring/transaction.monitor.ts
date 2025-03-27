@@ -197,20 +197,10 @@ export class TransactionMonitorService implements OnModuleInit {
 
   private async runTransactionTest(chainId: number, deployContract: boolean, rpcUrl?: string) {
     const chainName = chainId === 50 ? 'Mainnet' : 'Testnet';
-    const startTime = Date.now();
     let success = false;
     let txHash = '';
-    let gasUsed = 0;
 
-    // Get the RPC name for metrics and logs
-    let rpcName = 'Primary';
-    if (rpcUrl) {
-      const provider = this.blockchainService.getAllProviders().find(p => p.endpoint.url === rpcUrl);
-      if (provider) {
-        rpcName = provider.endpoint.name;
-      }
-    }
-
+    let startTime = Date.now();
     try {
       // Double check wallet has balance (in case it was drained during testing)
       if (!this.testWallets[chainId].hasBalance) {
@@ -219,8 +209,8 @@ export class TransactionMonitorService implements OnModuleInit {
 
       if (deployContract) {
         // Deploy test contract
-        this.logger.debug(`Deploying test contract on ${chainName} ${rpcName} (chainId: ${chainId})`);
-
+        this.logger.debug(`Deploying test contract on ${chainName} ${rpcUrl} (chainId: ${chainId})`);
+        startTime = Date.now();
         const result = await this.blockchainService.deployContract(
           this.testWallets[chainId].privateKey,
           this.TEST_CONTRACT_BYTECODE,
@@ -230,14 +220,14 @@ export class TransactionMonitorService implements OnModuleInit {
         );
 
         txHash = result.transactionHash;
-        gasUsed = result.gasUsed;
       } else {
         // Send normal test transaction
-        this.logger.debug(`Sending normal test transaction on ${chainName} ${rpcName} (chainId: ${chainId})`);
+        this.logger.debug(`Sending normal test transaction on ${chainName} ${rpcUrl} (chainId: ${chainId})`);
 
         // Get a receiving address (could be another test wallet)
         const receiverAddress = this.configService.getTestReceiverAddress(chainId);
 
+        startTime = Date.now();
         const result = await this.blockchainService.sendTransaction(
           this.testWallets[chainId].privateKey,
           receiverAddress,
@@ -247,7 +237,6 @@ export class TransactionMonitorService implements OnModuleInit {
         );
 
         txHash = result.transactionHash;
-        gasUsed = result.gasUsed;
       }
 
       // Wait for transaction confirmation
@@ -273,31 +262,28 @@ export class TransactionMonitorService implements OnModuleInit {
         deployContract ? 'contract_deployment' : 'normal_transaction',
         success,
         duration,
-        gasUsed,
         chainId,
-        rpcName,
+        rpcUrl,
       );
 
       this.logger.log(
-        `Transaction test ${success ? 'successful' : 'failed'} on ${chainName} ${rpcName}: ` +
+        `Transaction test ${success ? 'successful' : 'failed'} on ${chainName} ${rpcUrl}: ` +
           `Type: ${deployContract ? 'Contract Deployment' : 'Normal Transaction'}, ` +
-          `Duration: ${duration}ms, Gas Used: ${gasUsed}`,
+          `Duration: ${duration}ms`,
       );
     } catch (error) {
       this.logger.error(
-        `Transaction test failed on ${chainName} ${rpcName}: ` +
+        `Transaction test failed on ${chainName} ${rpcUrl}: ` +
           `Type: ${deployContract ? 'Contract Deployment' : 'Normal Transaction'}, ` +
           `Error: ${error.message}`,
       );
 
-      // Record failure metric
       this.metricsService.setTransactionMonitorResult(
         deployContract ? 'contract_deployment' : 'normal_transaction',
         false,
         Date.now() - startTime,
-        0,
         chainId,
-        rpcName,
+        rpcUrl,
       );
     }
   }

@@ -330,17 +330,13 @@ export class ConfigService {
    */
   getTestReceiverAddress(chainId: number): string {
     // Default to a burn address if no specific test receiver is configured
-    const defaultAddress = 'xdc0000000000000000000000000000000000000000';
+    const defaultAddress = '0x0000000000000000000000000000000000000000';
 
     // For mainnet (chainId 50), return mainnet test receiver or default
-    if (chainId === 50) {
-      return this.get('TEST_MAINNET_RECEIVER_ADDRESS', defaultAddress);
-    }
+    if (chainId === 50) return this.get('TEST_MAINNET_RECEIVER_ADDRESS', defaultAddress);
 
     // For testnet (chainId 51), return testnet test receiver or default
-    if (chainId === 51) {
-      return this.get('TEST_TESTNET_RECEIVER_ADDRESS', defaultAddress);
-    }
+    if (chainId === 51) return this.get('TEST_TESTNET_RECEIVER_ADDRESS', defaultAddress);
 
     // For any other chainId, return default
     return defaultAddress;
