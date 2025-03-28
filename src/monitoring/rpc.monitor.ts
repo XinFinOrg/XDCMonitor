@@ -10,7 +10,7 @@ import axios from 'axios';
 import WebSocket from 'ws';
 
 // Downtime threshold for external notifications (1 hour in milliseconds)
-const DOWNTIME_NOTIFICATION_THRESHOLD_MS = 60 * 60 * 1000;
+const DOWNTIME_NOTIFICATION_THRESHOLD_MS = 60 * 60 * 1000; // 1 hour
 
 // Default configuration
 const DEFAULT_CONFIG: RpcMonitorConfig = {
@@ -356,10 +356,54 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
       await Promise.all(
         batch.map(async endpoint => {
           try {
-            const isUp = await checkFn(endpoint);
+            // Determine the type of endpoint we're checking (RPC or WebSocket)
+            const isWebSocket = endpoint.url.startsWith('ws://') || endpoint.url.startsWith('wss://');
+            const endpointTypeStr = isWebSocket ? 'WebSocket' : 'RPC';
 
-            this.logger.debug(`Endpoint ${endpoint.name} (${endpoint.url}) is ${isUp ? 'UP' : 'DOWN'}`);
+            let isUp = false;
+            let latency = 0;
+
+            // Use the appropriate checking method based on endpoint type
+            if (isWebSocket) {
+              // For WebSocket endpoints
+              isUp = await this.testWebSocketConnection(endpoint);
+            } else {
+              // For HTTP RPC endpoints
+              const startTime = Date.now();
+
+              // Try provider first, then direct RPC call
+              if (await this.tryBlockchainServiceProvider(endpoint)) {
+                isUp = true;
+              } else {
+                isUp = await this.tryDirectRpcCall(endpoint);
+              }
+
+              latency = Date.now() - startTime;
+
+              // Update RPC metrics including latency
+              this.updateRpcEndpointStatus(endpoint, isUp, latency);
+
+              // Check for latency thresholds (error and warning) for RPC only
+              if (isUp && latency > ALERTS.THRESHOLDS.RPC_LATENCY_WARNING_MS) {
+                const isError = latency > ALERTS.THRESHOLDS.RPC_LATENCY_ERROR_MS;
+                this.alertsService[isError ? 'error' : 'warning'](
+                  ALERTS.TYPES.RPC_HIGH_LATENCY,
+                  'rpc',
+                  `${isError ? 'High' : 'Elevated'} RPC latency on ${endpoint.name}: ${latency}ms`,
+                  endpoint.chainId,
+                );
+              }
+            }
+
+            this.logger.debug(`${endpointTypeStr} endpoint ${endpoint.name} is ${isUp ? 'UP' : 'DOWN'}`);
             if (!isUp && postCheckFn) postCheckFn(endpoint, isUp);
+
+            // For WebSocket endpoints, update the WebSocket specific status
+            if (isWebSocket) {
+              this.updateStatus(endpoint, this.wsStatuses, isUp);
+              this.metricsService.setWebsocketStatus(endpoint.url, isUp, endpoint.chainId);
+              this.blockchainService.updateWsProviderStatus(endpoint.url, isUp);
+            }
 
             return { endpoint, isUp };
           } catch (error) {
@@ -401,9 +445,15 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Monitor a specific RPC endpoint
+   * Monitor a specific RPC endpoint (HTTP only, not WebSocket)
    */
   async monitorRpcEndpoint(endpoint: RpcEndpoint): Promise<boolean> {
+    // Verify this is a HTTP endpoint, not a WebSocket
+    if (endpoint.url.startsWith('ws://') || endpoint.url.startsWith('wss://')) {
+      this.logger.warn(`Attempted to monitor WebSocket endpoint ${endpoint.name} with RPC monitor`);
+      return false;
+    }
+
     try {
       const startTime = Date.now();
       let isUp = false;
@@ -418,17 +468,26 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
 
       const latency = Date.now() - startTime;
 
-      // Update status and metrics
+      // Update status and metrics for RPC (HTTP) endpoint
       this.updateRpcEndpointStatus(endpoint, isUp, latency);
 
-      // Check for high latency
-      if (isUp && latency > ALERTS.THRESHOLDS.RPC_LATENCY_ERROR_MS) {
-        this.alertsService.error(
-          ALERTS.TYPES.RPC_HIGH_LATENCY,
-          'rpc',
-          `High RPC latency on ${endpoint.name}: ${latency}ms`,
-          endpoint.chainId,
-        );
+      // Check for latency thresholds
+      if (isUp) {
+        if (latency > ALERTS.THRESHOLDS.RPC_LATENCY_ERROR_MS) {
+          this.alertsService.error(
+            ALERTS.TYPES.RPC_HIGH_LATENCY,
+            'rpc',
+            `High RPC latency on ${endpoint.name}: ${latency}ms`,
+            endpoint.chainId,
+          );
+        } else if (latency > ALERTS.THRESHOLDS.RPC_LATENCY_WARNING_MS) {
+          this.alertsService.warning(
+            ALERTS.TYPES.RPC_HIGH_LATENCY,
+            'rpc',
+            `Elevated RPC latency on ${endpoint.name}: ${latency}ms`,
+            endpoint.chainId,
+          );
+        }
       }
 
       return isUp;
@@ -472,13 +531,19 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Update RPC endpoint status and metrics
+   * Update RPC endpoint status and metrics (for HTTP RPC endpoints only)
    */
   private updateRpcEndpointStatus(endpoint: RpcEndpoint, isUp: boolean, latency: number): void {
-    // Update status
+    // Verify this is an HTTP endpoint
+    if (endpoint.url.startsWith('ws://') || endpoint.url.startsWith('wss://')) {
+      this.logger.warn(`Attempted to update WebSocket endpoint ${endpoint.name} status using RPC status method`);
+      return;
+    }
+
+    // Update status in RPC statuses map only (not WebSocket statuses)
     const current = this.updateStatus(endpoint, this.rpcStatuses, isUp, { latency });
 
-    // Update provider status and metrics
+    // Update provider status and metrics for HTTP RPC
     this.blockchainService.updateProviderStatus(endpoint.url, isUp);
     this.metricsService.setRpcStatus(endpoint.url, isUp, endpoint.chainId);
     this.metricsService.recordRpcLatency(endpoint.url, latency, endpoint.chainId);
@@ -493,12 +558,18 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
    * Monitor a WebSocket endpoint
    */
   async monitorWsEndpoint(endpoint: RpcEndpoint): Promise<boolean> {
+    // Verify this is a WebSocket endpoint
+    if (!endpoint.url.startsWith('ws://') && !endpoint.url.startsWith('wss://')) {
+      this.logger.warn(`Attempted to monitor HTTP endpoint ${endpoint.name} with WebSocket monitor`);
+      return false;
+    }
+
     try {
       // First check if already active in BlockchainService
       const wsProvider = this.blockchainService.getWsProviderByUrl(endpoint.url);
 
       if (wsProvider) {
-        // Update status
+        // Update WebSocket status only
         this.updateStatus(endpoint, this.wsStatuses, true);
         this.metricsService.setWebsocketStatus(endpoint.url, true, endpoint.chainId);
         return true;
@@ -508,6 +579,7 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
       return await this.testWebSocketConnection(endpoint);
     } catch (error) {
       this.logger.error(`Error monitoring WebSocket endpoint ${endpoint.name}: ${error.message}`);
+      // Update WebSocket status only
       this.updateStatus(endpoint, this.wsStatuses, false);
       this.metricsService.setWebsocketStatus(endpoint.url, false, endpoint.chainId);
       return false;
@@ -742,12 +814,24 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
     // Sync WebSocket providers
     for (const { endpoint } of this.blockchainService.getAllWsProviders()) {
       const { url, status, chainId } = endpoint;
-      const currentStatus = this.wsStatuses.get(url);
 
-      if (currentStatus) {
-        currentStatus.status = status === 'up' ? 'up' : 'down';
+      // Use updateStatus method to properly maintain downSince and alerted properties
+      const wsEndpoint = this.configService.getWsEndpoints().find(e => e.url === url);
+      if (wsEndpoint) {
+        const isUp = status === 'up';
+        this.updateStatus(wsEndpoint, this.wsStatuses, isUp);
+
+        // Check for downtime notifications for WebSocket endpoints
+        if (!isUp) {
+          this.checkDowntimeNotification(wsEndpoint, this.wsStatuses, ALERTS.TYPES.RPC_ENDPOINT_DOWN, 'websocket');
+        }
       } else {
-        this.wsStatuses.set(url, { status: status === 'up' ? 'up' : 'down', alerted: false });
+        const currentStatus = this.wsStatuses.get(url);
+        if (currentStatus) {
+          currentStatus.status = status === 'up' ? 'up' : 'down';
+        } else {
+          this.wsStatuses.set(url, { status: status === 'up' ? 'up' : 'down', alerted: false });
+        }
       }
 
       this.metricsService.setWebsocketStatus(url, status === 'up', chainId);

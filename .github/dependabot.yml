@@ -4,7 +4,7 @@ updates:
   - package-ecosystem: 'npm'
     directory: '/'
     schedule:
-      interval: 'weekly'
+      interval: 'daily'
     open-pull-requests-limit: 10
     versioning-strategy: 'auto'
     labels:
@@ -26,6 +26,9 @@ updates:
     # Set high priority for known vulnerabilities
     vulnerability-alerts:
       enabled: true
+    allow:
+      # Explicitly allow updates for @nestjs packages to catch the fix when available
+      - dependency-name: '@nestjs/*'
 
   # Keep actions up-to-date
   - package-ecosystem: 'github-actions'
