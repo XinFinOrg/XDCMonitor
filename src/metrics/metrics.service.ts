@@ -459,4 +459,12 @@ export class MetricsService implements OnModuleInit {
     );
     this.logger.debug(`Set transactions per minute for chainId ${chainId}: ${txPerMinute.toFixed(2)}`);
   }
+
+  /**
+   * Get the InfluxDB client instance for other services to use
+   * NOTE: This should be used carefully to prevent bypassing error handling and queue mechanisms
+   */
+  getInfluxClient(): InfluxDB | null {
+    return this.connected ? this.influxClient : null;
+  }
 }
