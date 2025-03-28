@@ -1,9 +1,10 @@
 import { BlockchainService } from '@blockchain/blockchain.service';
 import { ConfigService } from '@config/config.service';
 import { MetricsService } from '@metrics/metrics.service';
-import { TransactionStatus } from '@types';
+import { AlertsService } from '@monitoring/alerts.service';
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
+import { TransactionStatus } from '@types';
 import { ethers } from 'ethers';
 
 @Injectable()
@@ -22,6 +23,7 @@ export class TransactionMonitorService implements OnModuleInit {
     private readonly blockchainService: BlockchainService,
     private readonly configService: ConfigService,
     private readonly metricsService: MetricsService,
+    private readonly alertsService: AlertsService,
   ) {}
 
   async onModuleInit() {
@@ -178,7 +180,12 @@ export class TransactionMonitorService implements OnModuleInit {
       }
     } else {
       this.logger.warn('Skipping Mainnet transaction tests due to insufficient wallet balance');
-      // TODO: Send alert and notification
+      this.alertsService.warning(
+        'INSUFFICIENT_WALLET_BALANCE',
+        'transaction',
+        `Mainnet test wallet (${this.testWallets[50].address}) has insufficient balance for transaction tests`,
+        50,
+      );
     }
 
     // Test each active testnet RPC with both transaction types if wallet has enough balance
@@ -191,7 +198,12 @@ export class TransactionMonitorService implements OnModuleInit {
       }
     } else {
       this.logger.warn('Skipping Testnet transaction tests due to insufficient wallet balance');
-      // TODO: Send alert and notification
+      this.alertsService.warning(
+        'INSUFFICIENT_WALLET_BALANCE',
+        'transaction',
+        `Testnet test wallet (${this.testWallets[51].address}) has insufficient balance for transaction tests`,
+        51,
+      );
     }
   }
 

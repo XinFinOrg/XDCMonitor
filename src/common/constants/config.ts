@@ -265,6 +265,7 @@ export const ALERTS = {
   THRESHOLDS: {
     // RPC
     RPC_LATENCY_ERROR_MS: 30000, // 30 seconds
+    RPC_LATENCY_WARNING_MS: 15000, // 15 seconds
 
     // Sync
     SYNC_LAG_ERROR_BLOCKS: 10, // 10 blocks
