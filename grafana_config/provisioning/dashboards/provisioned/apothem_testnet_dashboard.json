@@ -12,22 +12,6 @@
         "iconColor": "rgba(0, 211, 255, 1)",
         "name": "Annotations & Alerts",
         "type": "dashboard"
-      },
-      {
-        "datasource": {
-          "type": "grafana",
-          "uid": "-- Grafana --"
-        },
-        "enable": true,
-        "iconColor": "red",
-        "name": "manual_test_alert",
-        "target": {
-          "limit": 100,
-          "matchAny": false,
-          "tags": [],
-          "type": "dashboard"
-        },
-        "type": "dashboard"
       }
     ]
   },
@@ -2363,7 +2347,7 @@
         "x": 0,
         "y": 72
       },
-      "id": 104,
+      "id": 135,
       "panels": [],
       "title": "Alert Details",
       "type": "row"
@@ -2373,34 +2357,141 @@
         "type": "influxdb",
         "uid": "influxdb"
       },
-      "description": "Currently active alerts requiring attention.",
+      "description": "Recent alert history showing system health issues, components affected, and timing.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": true,
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "type"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "error": {
+                        "color": "red",
+                        "index": 2
+                      },
+                      "info": {
+                        "color": "blue",
+                        "index": 0
+                      },
+                      "warning": {
+                        "color": "orange",
+                        "index": 1
+                      }
+                    },
+                    "type": "value"
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "displayName",
+                "value": "Severity"
+              }
+            ]
+          }
+        ]
+      },
       "gridPos": {
-        "h": 8,
+        "h": 7,
         "w": 24,
         "x": 0,
         "y": 73
       },
-      "id": 100,
+      "id": 136,
       "options": {
-        "alertInstanceLabelFilter": "",
-        "alertName": "",
-        "dashboardAlerts": true,
-        "groupBy": [],
-        "groupMode": "default",
-        "maxItems": 5,
-        "showInstances": true,
-        "sortOrder": 1,
-        "stateFilter": {
-          "error": true,
-          "firing": true,
-          "noData": false,
-          "normal": false,
-          "pending": true
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": ["sum"],
+          "show": false
         },
-        "viewMode": "list"
+        "showHeader": true,
+        "sortBy": [
+          {
+            "desc": true,
+            "displayName": "Time"
+          }
+        ]
       },
-      "title": "Active Alerts",
-      "type": "alertlist"
+      "pluginVersion": "10.2.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb"
+          },
+          "editorMode": "code",
+          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"alert_history\" and r.chainId == \"51\")\n  |> pivot(rowKey:[\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> group()\n  |> sort(columns: [\"_time\"], desc: true)",
+          "refId": "A"
+        }
+      ],
+      "title": "Recent Alert History",
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "_measurement": true,
+              "_start": true,
+              "_stop": true,
+              "component": false
+            },
+            "indexByName": {
+              "_measurement": 8,
+              "_start": 6,
+              "_stop": 7,
+              "_time": 0,
+              "chainId": 4,
+              "component": 5,
+              "title": 1,
+              "type": 3,
+              "value": 2
+            },
+            "renameByName": {
+              "_time": "Time",
+              "chainId": "Chain ID",
+              "component": "Component",
+              "type": "Alert Type"
+            }
+          }
+        }
+      ],
+      "type": "table"
     }
   ],
   "refresh": "10s",
@@ -2417,6 +2508,6 @@
   "timezone": "",
   "title": "XDC Apothem Testnet Monitoring",
   "uid": "apothem-testnet",
-  "version": 29,
+  "version": 33,
   "weekStart": ""
 }
