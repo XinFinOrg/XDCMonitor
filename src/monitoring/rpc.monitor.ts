@@ -326,8 +326,17 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
       this.wsStatuses,
       this.config.wsBatchSize,
       this.monitorWsEndpoint.bind(this),
-      (endpoint, isUp) =>
-        !isUp && this.checkDowntimeNotification(endpoint, this.wsStatuses, ALERTS.TYPES.RPC_ENDPOINT_DOWN, 'websocket'),
+      (endpoint, isUp) => {
+        if (!isUp) {
+          // Ensure downtime is properly tracked before attempting notification
+          const status = this.wsStatuses.get(endpoint.url);
+          if (!status?.downSince) {
+            this.updateStatus(endpoint, this.wsStatuses, false);
+          }
+          return this.checkDowntimeNotification(endpoint, this.wsStatuses, ALERTS.TYPES.RPC_ENDPOINT_DOWN, 'websocket');
+        }
+        return false;
+      },
     );
   }
 
@@ -576,12 +585,29 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
       }
 
       // Attempt direct WebSocket connection
-      return await this.testWebSocketConnection(endpoint);
+      const isUp = await this.testWebSocketConnection(endpoint);
+
+      // Update status whether it's up or down
+      this.updateStatus(endpoint, this.wsStatuses, isUp);
+      this.metricsService.setWebsocketStatus(endpoint.url, isUp, endpoint.chainId);
+      this.blockchainService.updateWsProviderStatus(endpoint.url, isUp);
+
+      // Check for downtime notifications if down
+      if (!isUp) {
+        this.checkDowntimeNotification(endpoint, this.wsStatuses, ALERTS.TYPES.RPC_ENDPOINT_DOWN, 'websocket');
+      }
+
+      return isUp;
     } catch (error) {
       this.logger.error(`Error monitoring WebSocket endpoint ${endpoint.name}: ${error.message}`);
-      // Update WebSocket status only
+      // Update WebSocket status to down
       this.updateStatus(endpoint, this.wsStatuses, false);
       this.metricsService.setWebsocketStatus(endpoint.url, false, endpoint.chainId);
+      this.blockchainService.updateWsProviderStatus(endpoint.url, false);
+
+      // Check for downtime notification
+      this.checkDowntimeNotification(endpoint, this.wsStatuses, ALERTS.TYPES.RPC_ENDPOINT_DOWN, 'websocket');
+
       return false;
     }
   }
@@ -815,8 +841,11 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
     for (const { endpoint } of this.blockchainService.getAllWsProviders()) {
       const { url, status, chainId } = endpoint;
 
-      // Use updateStatus method to properly maintain downSince and alerted properties
-      const wsEndpoint = this.configService.getWsEndpoints().find(e => e.url === url);
+      // Find matching WebSocket endpoint - doing a normalized URL comparison
+      // to handle slight URL format differences (trailing slashes, etc.)
+      const normalizedWsUrl = this.normalizeWsUrl(url);
+      const wsEndpoint = this.configService.getWsEndpoints().find(e => this.normalizeWsUrl(e.url) === normalizedWsUrl);
+
       if (wsEndpoint) {
         const isUp = status === 'up';
         this.updateStatus(wsEndpoint, this.wsStatuses, isUp);
@@ -826,16 +855,63 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
           this.checkDowntimeNotification(wsEndpoint, this.wsStatuses, ALERTS.TYPES.RPC_ENDPOINT_DOWN, 'websocket');
         }
       } else {
+        // Handle WebSocket endpoints not found in configuration
         const currentStatus = this.wsStatuses.get(url);
+        const isUp = status === 'up';
+
         if (currentStatus) {
-          currentStatus.status = status === 'up' ? 'up' : 'down';
+          // Properly handle status transitions for better downtime tracking
+          if (!isUp && currentStatus.status === 'up') {
+            // Status changed to down - record when it happened
+            currentStatus.status = 'down';
+            currentStatus.downSince = Date.now();
+            currentStatus.alerted = false;
+          } else if (isUp && currentStatus.status === 'down') {
+            // Status changed to up - clear downtime tracking
+            currentStatus.status = 'up';
+            currentStatus.downSince = undefined;
+            currentStatus.alerted = false;
+          } else {
+            // No status change, just update the current status
+            currentStatus.status = isUp ? 'up' : 'down';
+          }
         } else {
-          this.wsStatuses.set(url, { status: status === 'up' ? 'up' : 'down', alerted: false });
+          // New status entry - set downSince if it's down
+          this.wsStatuses.set(url, {
+            status: isUp ? 'up' : 'down',
+            downSince: isUp ? undefined : Date.now(),
+            alerted: false,
+          });
+        }
+
+        // If it's not in the config but we have status information and it's down,
+        // create a temporary endpoint object to check for downtime notification
+        if (!isUp && this.wsStatuses.get(url)?.downSince) {
+          const tempEndpoint = {
+            url,
+            name: url.split('/').pop() || 'Unknown WebSocket',
+            type: 'websocket' as const,
+            chainId,
+          };
+          this.checkDowntimeNotification(tempEndpoint, this.wsStatuses, ALERTS.TYPES.RPC_ENDPOINT_DOWN, 'websocket');
         }
       }
 
       this.metricsService.setWebsocketStatus(url, status === 'up', chainId);
     }
+  }
+
+  /**
+   * Normalize WebSocket URL to handle slight format differences
+   */
+  private normalizeWsUrl(url: string): string {
+    // Remove trailing slashes
+    let normalized = url.replace(/\/+$/, '');
+
+    // Remove /ws suffix if present (we'll ignore this distinction for matching)
+    normalized = normalized.replace(/\/ws$/, '');
+
+    return normalized.toLowerCase();
   }
 
   /**
