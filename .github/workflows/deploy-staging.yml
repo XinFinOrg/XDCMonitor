@@ -144,6 +144,7 @@ jobs:
 
           echo "Generating .env file with secrets..."
           cat > env_staging << EOF
+          BLOCKS_TO_SCAN=10
           SCAN_INTERVAL=15
 
           # Monitoring configuration
