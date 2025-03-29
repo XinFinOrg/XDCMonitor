@@ -369,7 +369,6 @@ The application stores the following metrics in InfluxDB:
 - `explorer_status` - Status of explorer endpoints (1=up, 0=down), tagged with `endpoint` and `chainId`
 - `faucet_status` - Status of faucet endpoints (1=up, 0=down), tagged with `endpoint` and `chainId`
 - `block_time` - Time between blocks in seconds, tagged with `chainId`
-- `alert_count` - Count of alerts by type and component, tagged with `type`, `component`, and `chainId`
 - `transaction_monitor` - Transaction test results, tagged with `type`, `chainId`, and `rpc`
 - `transaction_monitor_confirmation_time` - Transaction confirmation time in ms, tagged with `type`, `chainId`, and `rpc`
 - `wallet_balance` - Test wallet balances, tagged with `chainId`, with a field for sufficient balance
