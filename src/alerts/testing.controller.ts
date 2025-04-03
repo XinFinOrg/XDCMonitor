@@ -1,6 +1,6 @@
 import { MetricsService } from '@metrics/metrics.service';
 import { Controller, Get, Logger, Param, Post, Query } from '@nestjs/common';
-import { AlertsService } from '@monitoring/alerts.service';
+import { AlertService } from './alert.service';
 import { RpcMonitorService } from '@monitoring/rpc.monitor';
 
 @Controller('testing')
@@ -9,7 +9,7 @@ export class TestingController {
 
   constructor(
     private readonly metricsService: MetricsService,
-    private readonly alertsService: AlertsService,
+    private readonly alertService: AlertService,
     private readonly rpcMonitorService: RpcMonitorService,
   ) {}
 
@@ -64,7 +64,7 @@ export class TestingController {
 
     this.logger.log(`Manually triggering ${alertType} alert: ${title}`);
 
-    await this.alertsService.addAlert({
+    await this.alertService.addAlert({
       type: alertType as 'error' | 'warning' | 'info',
       title,
       message,
@@ -83,7 +83,7 @@ export class TestingController {
     this.logger.log('Triggering all alert types for testing');
 
     // 1. Average Block Time Alert
-    await this.alertsService.createThresholdAlert(
+    await this.alertService.createThresholdAlert(
       'warning',
       'blockchain',
       'Average Block Time Exceeded Threshold',
@@ -93,7 +93,7 @@ export class TestingController {
     );
 
     // 2. Transaction Error Alert
-    await this.alertsService.createThresholdAlert(
+    await this.alertService.createThresholdAlert(
       'warning',
       'transactions',
       'High Transaction Error Rate',
@@ -103,7 +103,7 @@ export class TestingController {
     );
 
     // 3. High Transaction Volume Alert
-    await this.alertsService.createThresholdAlert(
+    await this.alertService.createThresholdAlert(
       'info',
       'transactions',
       'High Transaction Volume',
@@ -113,7 +113,7 @@ export class TestingController {
     );
 
     // 4. RPC Response Time Alert
-    await this.alertsService.createThresholdAlert('error', 'rpc', 'RPC Response Time Excessive', 32000, 30000, 'ms');
+    await this.alertService.createThresholdAlert('error', 'rpc', 'RPC Response Time Excessive', 32000, 30000, 'ms');
 
     return {
       success: true,
@@ -136,7 +136,7 @@ export class TestingController {
 
     switch (alertType) {
       case 'block-time':
-        await this.alertsService.createThresholdAlert(
+        await this.alertService.createThresholdAlert(
           'warning',
           'blockchain',
           'Average Block Time Exceeded Threshold',
@@ -147,7 +147,7 @@ export class TestingController {
         return { success: true, message: 'Block time alert triggered' };
 
       case 'tx-errors':
-        await this.alertsService.createThresholdAlert(
+        await this.alertService.createThresholdAlert(
           'warning',
           'transactions',
           'High Transaction Error Rate',
@@ -158,7 +158,7 @@ export class TestingController {
         return { success: true, message: 'Transaction errors alert triggered' };
 
       case 'tx-volume':
-        await this.alertsService.createThresholdAlert(
+        await this.alertService.createThresholdAlert(
           'info',
           'transactions',
           'High Transaction Volume',
@@ -169,14 +169,7 @@ export class TestingController {
         return { success: true, message: 'Transaction volume alert triggered' };
 
       case 'rpc-time':
-        await this.alertsService.createThresholdAlert(
-          'error',
-          'rpc',
-          'RPC Response Time Excessive',
-          32000,
-          30000,
-          'ms',
-        );
+        await this.alertService.createThresholdAlert('error', 'rpc', 'RPC Response Time Excessive', 32000, 30000, 'ms');
         return { success: true, message: 'RPC response time alert triggered' };
 
       default:

@@ -492,20 +492,24 @@ src/
 │   │   ├── config.ts        # Core configuration constants
 │   │   ├── endpoints.ts     # Network endpoints definitions
 │   │   └── monitoring.ts    # Monitoring thresholds and settings
-│   ├── interfaces/          # Shared TypeScript interfaces
-│   │   ├── monitoring.ts    # Monitoring configuration interfaces
-│   │   ├── rpc.interface.ts # RPC endpoints and configuration
-│   │   └── blockchain.ts    # Blockchain data structures
 │   └── utils/               # Utility classes and helper functions
+├── types/                   # TypeScript type definitions
+│   ├── blockchain/          # Blockchain data structures
+│   ├── monitoring/          # Monitoring configuration interfaces
+│   └── rpc/                 # RPC endpoints and configuration
 ├── config/                  # Configuration module and service
 │   ├── config.module.ts     # Configuration module definition
 │   └── config.service.ts    # Service for accessing configuration
 ├── blockchain/              # Blockchain interaction services
 ├── monitoring/              # Core monitoring services
 │   ├── alerts.service.ts    # Alert configuration and delivery
-│   └── transaction.monitor.ts # Transaction monitoring implementation
-├── metrics/                 # Metrics collection and reporting
-└── models/                  # Data models and interfaces
+│   ├── blocks.monitor.ts    # Block monitoring implementation
+│   ├── rpc.monitor.ts       # RPC endpoint monitoring
+│   ├── transaction.monitor.ts # Transaction monitoring implementation
+│   ├── monitoring.controller.ts # API endpoints for monitoring data
+│   ├── notification.controller.ts # Notification endpoints
+│   └── testing.controller.ts # Testing endpoints
+└── metrics/                 # Metrics collection and reporting
 ```
 
 ### Key Configuration Components

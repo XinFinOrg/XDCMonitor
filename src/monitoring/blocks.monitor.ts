@@ -12,7 +12,7 @@ import { RpcRetryClient } from '@common/utils/rpc-retry-client';
 import { TimeWindowData } from '@common/utils/time-window-data';
 import { ConfigService } from '@config/config.service';
 import { MetricsService } from '@metrics/metrics.service';
-import { AlertsService } from '@monitoring/alerts.service';
+import { AlertService } from '@alerts/alert.service';
 import { RpcMonitorService } from '@monitoring/rpc.monitor';
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { SchedulerRegistry } from '@nestjs/schedule';
@@ -59,7 +59,7 @@ export class BlocksMonitorService implements OnModuleInit {
     private readonly configService: ConfigService,
     private readonly rpcMonitorService: RpcMonitorService,
     private readonly metricsService: MetricsService,
-    private readonly alertsService: AlertsService,
+    private readonly alertService: AlertService,
     private readonly schedulerRegistry: SchedulerRegistry,
   ) {
     this.initializeService();
@@ -529,7 +529,7 @@ export class BlocksMonitorService implements OnModuleInit {
     const downtimeMinutes = Math.floor((downtimeMs % (60 * 60 * 1000)) / (60 * 1000));
 
     // Send notification
-    this.alertsService.error(
+    this.alertService.error(
       ALERTS.TYPES.RPC_ENDPOINT_DOWN,
       'rpc',
       `Primary RPC endpoint for chain ${chainId} has been down for ${downtimeHours}h ${downtimeMinutes}m: ${error.message}`,

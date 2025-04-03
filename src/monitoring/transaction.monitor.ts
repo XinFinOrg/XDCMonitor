@@ -1,7 +1,7 @@
 import { BlockchainService } from '@blockchain/blockchain.service';
 import { ConfigService } from '@config/config.service';
 import { MetricsService } from '@metrics/metrics.service';
-import { AlertsService } from '@monitoring/alerts.service';
+import { AlertService } from '@alerts/alert.service';
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { TransactionStatus } from '@types';
@@ -23,7 +23,7 @@ export class TransactionMonitorService implements OnModuleInit {
     private readonly blockchainService: BlockchainService,
     private readonly configService: ConfigService,
     private readonly metricsService: MetricsService,
-    private readonly alertsService: AlertsService,
+    private readonly alertService: AlertService,
   ) {}
 
   async onModuleInit() {
@@ -180,7 +180,7 @@ export class TransactionMonitorService implements OnModuleInit {
       }
     } else {
       this.logger.warn('Skipping Mainnet transaction tests due to insufficient wallet balance');
-      this.alertsService.warning(
+      this.alertService.warning(
         'INSUFFICIENT_WALLET_BALANCE',
         'transaction',
         `Mainnet test wallet (${this.testWallets[50].address}) has insufficient balance for transaction tests`,
@@ -198,7 +198,7 @@ export class TransactionMonitorService implements OnModuleInit {
       }
     } else {
       this.logger.warn('Skipping Testnet transaction tests due to insufficient wallet balance');
-      this.alertsService.warning(
+      this.alertService.warning(
         'INSUFFICIENT_WALLET_BALANCE',
         'transaction',
         `Testnet test wallet (${this.testWallets[51].address}) has insufficient balance for transaction tests`,
