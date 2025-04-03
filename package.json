@@ -22,7 +22,7 @@
   },
   "dependencies": {
     "@influxdata/influxdb-client": "^1.35.0",
-    "@nestjs/common": "~11.0.12",
+    "@nestjs/common": "~11.0.13",
     "@nestjs/config": "^4.0.2",
     "@nestjs/core": "~10.0.0",
     "@nestjs/platform-express": "~10.0.0",
