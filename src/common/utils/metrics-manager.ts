@@ -1,6 +1,6 @@
 import { Point } from '@influxdata/influxdb-client';
 import { MetricsService } from '@metrics/metrics.service';
-import { AlertsService } from '@monitoring/alerts.service';
+import { AlertService } from '@alerts/alert.service';
 import { Injectable, Logger } from '@nestjs/common';
 import { TimeWindowData } from '@common/utils/time-window-data';
 
@@ -64,7 +64,7 @@ export class MetricsManager {
 
   constructor(
     private readonly metricsService: MetricsService,
-    private readonly alertsService: AlertsService,
+    private readonly alertService: AlertService,
   ) {}
 
   /**
@@ -236,7 +236,7 @@ export class MetricsManager {
     const message = `Metric "${metricName}" ${operatorText} threshold: ${formattedValue} (threshold: ${formattedThreshold})`;
 
     try {
-      await this.alertsService.createThresholdAlert(
+      await this.alertService.createThresholdAlert(
         threshold.alertSeverity,
         threshold.component,
         threshold.alertTitle,

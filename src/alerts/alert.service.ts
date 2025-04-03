@@ -38,8 +38,8 @@ export interface WeeklyAlertReport {
 }
 
 @Injectable()
-export class AlertsService implements OnModuleInit {
-  private readonly logger = new Logger(AlertsService.name);
+export class AlertService implements OnModuleInit {
+  private readonly logger = new Logger(AlertService.name);
   private alerts: Alert[] = [];
   private alertThrottling: Record<string, number> = {};
   private weeklyReports: WeeklyAlertReport[] = [];
