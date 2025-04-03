@@ -3,7 +3,7 @@ import { ALERTS, BLOCKCHAIN, PERFORMANCE } from '@common/constants/config';
 import { RpcRetryClient } from '@common/utils/rpc-retry-client';
 import { ConfigService } from '@config/config.service';
 import { MetricsService } from '@metrics/metrics.service';
-import { AlertsService } from '@monitoring/alerts.service';
+import { AlertService } from '@alerts/alert.service';
 import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { RpcEndpoint, RpcStatus, ServiceStatus, WsStatus, RpcMonitorConfig, EndpointStatus, MonitorType } from '@types';
 import axios from 'axios';
@@ -49,7 +49,7 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
     private readonly blockchainService: BlockchainService,
     private readonly configService: ConfigService,
     private readonly metricsService: MetricsService,
-    private readonly alertsService: AlertsService,
+    private readonly alertService: AlertService,
   ) {}
 
   // #region Lifecycle Methods
@@ -395,7 +395,7 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
               // Check for latency thresholds (error and warning) for RPC only
               if (isUp && latency > ALERTS.THRESHOLDS.RPC_LATENCY_WARNING_MS) {
                 const isError = latency > ALERTS.THRESHOLDS.RPC_LATENCY_ERROR_MS;
-                this.alertsService[isError ? 'error' : 'warning'](
+                this.alertService[isError ? 'error' : 'warning'](
                   ALERTS.TYPES.RPC_HIGH_LATENCY,
                   'rpc',
                   `${isError ? 'High' : 'Elevated'} RPC latency on ${endpoint.name}: ${latency}ms`,
@@ -483,14 +483,14 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
       // Check for latency thresholds
       if (isUp) {
         if (latency > ALERTS.THRESHOLDS.RPC_LATENCY_ERROR_MS) {
-          this.alertsService.error(
+          this.alertService.error(
             ALERTS.TYPES.RPC_HIGH_LATENCY,
             'rpc',
             `High RPC latency on ${endpoint.name}: ${latency}ms`,
             endpoint.chainId,
           );
         } else if (latency > ALERTS.THRESHOLDS.RPC_LATENCY_WARNING_MS) {
-          this.alertsService.warning(
+          this.alertService.warning(
             ALERTS.TYPES.RPC_HIGH_LATENCY,
             'rpc',
             `Elevated RPC latency on ${endpoint.name}: ${latency}ms`,
@@ -969,7 +969,7 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
       const minutes = Math.floor((downtimeMs % (60 * 60 * 1000)) / (60 * 1000));
 
       // Send alert
-      this.alertsService.error(
+      this.alertService.error(
         alertType,
         endpointType,
         `${endpointType.charAt(0).toUpperCase() + endpointType.slice(1)} endpoint ${endpoint.name} - ${endpoint.url} has been down for ${hours}h ${minutes}m`,
