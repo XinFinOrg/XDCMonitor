@@ -1,6 +1,6 @@
 import { ConfigService } from '@config/config.service';
 import { InfluxDB, Point, WriteApi } from '@influxdata/influxdb-client';
-import { Alert } from '@monitoring/alerts.service';
+import { Alert } from '@alerts/alert.service';
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 
 /**
@@ -458,6 +458,64 @@ export class MetricsService implements OnModuleInit {
       new Point('transactions_per_minute').tag('chainId', chainId.toString()).floatField('value', txPerMinute),
     );
     this.logger.debug(`Set transactions per minute for chainId ${chainId}: ${txPerMinute.toFixed(2)}`);
+  }
+
+  /**
+   * Record validator nodes summary data
+   *
+   * @param chainId The chain ID
+   * @param epoch Current epoch number
+   * @param masternodeCount Number of active masternodes
+   * @param standbyCount Number of standby nodes
+   * @param penaltyCount Number of nodes in penalty
+   * @param blockNumber Current block number
+   * @param round Current consensus round
+   */
+  recordValidatorSummary(
+    chainId: number,
+    epoch: number,
+    masternodeCount: number,
+    standbyCount: number,
+    penaltyCount: number,
+    blockNumber: number,
+    round: number,
+  ): void {
+    this.writePoint(
+      new Point('validator_summary')
+        .tag('chainId', chainId.toString())
+        .tag('epoch', epoch.toString())
+        .intField('masternode_count', masternodeCount)
+        .intField('standbynode_count', standbyCount)
+        .intField('penalty_count', penaltyCount)
+        .intField('block_number', blockNumber)
+        .intField('round', round),
+    );
+  }
+
+  /**
+   * Record validator node details
+   *
+   * @param chainId The chain ID
+   * @param epoch Current epoch number
+   * @param address Node address
+   * @param status Node status (masternode, standby, penalty)
+   * @param index Node index in the list (optional)
+   */
+  recordValidatorDetail(
+    chainId: number,
+    epoch: number,
+    address: string,
+    status: 'masternode' | 'standby' | 'penalty',
+    index?: number,
+  ): void {
+    this.writePoint(
+      new Point('validator_nodes')
+        .tag('chainId', chainId.toString())
+        .tag('epoch', epoch.toString())
+        .tag('address', address.toLowerCase())
+        .tag('status', status)
+        .intField('index', index ?? 0),
+    );
   }
 
   /**

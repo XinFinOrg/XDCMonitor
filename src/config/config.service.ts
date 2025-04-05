@@ -115,6 +115,25 @@ export class ConfigService {
   }
 
   /**
+   * Get an array of numbers from environment variables (comma-separated string)
+   */
+  getNumberArray(key: string, defaultValue?: number[]): number[] {
+    return this.get<number[]>(key, defaultValue, value =>
+      value
+        .split(',')
+        .map(item => item.trim())
+        .filter(Boolean)
+        .map(item => {
+          const num = Number(item);
+          if (isNaN(num)) {
+            throw new Error(`Cannot convert "${item}" to a number`);
+          }
+          return num;
+        }),
+    );
+  }
+
+  /**
    * Get feature flag status
    */
   isFeatureEnabled(featureFlag: string, defaultValue = false): boolean {
