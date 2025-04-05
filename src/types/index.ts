@@ -20,3 +20,6 @@ export * from './monitoring/endpoint-monitoring';
 
 // Block monitoring types
 export * from './monitoring/block-monitoring';
+
+// Consensus monitoring types
+export * from './monitoring/consensus';

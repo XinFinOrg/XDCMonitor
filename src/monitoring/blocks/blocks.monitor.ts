@@ -13,7 +13,7 @@ import { TimeWindowData } from '@common/utils/time-window-data';
 import { ConfigService } from '@config/config.service';
 import { MetricsService } from '@metrics/metrics.service';
 import { AlertService } from '@alerts/alert.service';
-import { RpcMonitorService } from '@monitoring/rpc.monitor';
+import { RpcMonitorService } from '@monitoring/rpc/rpc.monitor';
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { SchedulerRegistry } from '@nestjs/schedule';
 import { BlockInfo, BlockMonitoringInfo, NetworkConfig, PrimaryEndpointStatus } from '@types';
