@@ -115,3 +115,82 @@ export async function getNextEpochBlock(currentBlock: number, rpcClient: RpcRetr
     return currentBlock + 900; // Fallback to approximate
   }
 }
+
+/**
+ * Gets missed rounds information for the current epoch
+ * @param rpcClient RPC client to use for API calls
+ * @param blockNumber Optional block number to query (defaults to 'latest')
+ * @returns Promise<any> The missed rounds data or null if error
+ */
+export async function getMissedRoundsForEpoch(
+  rpcClient: RpcRetryClient,
+  blockNumber: string | number = 'latest',
+): Promise<{
+  EpochRound: number;
+  EpochBlockNumber: number;
+  MissedRounds: Array<{
+    Round: number;
+    Miner: string;
+    CurrentBlockHash: string;
+    CurrentBlockNum: number;
+    ParentBlockHash: string;
+    ParentBlockNum: number;
+  }>;
+} | null> {
+  try {
+    const response = await rpcClient.call('XDPoS_getMissedRoundsInEpochByBlockNum', [blockNumber]);
+    if (response && response.result) return response.result;
+    return null;
+  } catch (error) {
+    console.error(`Error getting missed rounds: ${error.message}`);
+    return null;
+  }
+}
+
+/**
+ * Fetches a batch of blocks efficiently to allow checking multiple blocks
+ * @param rpcClient RPC client to use for API calls
+ * @param startBlock Start block number
+ * @param endBlock End block number
+ * @param batchSize Size of each batch request (default: 20)
+ * @param includeTxs Whether to include full transaction data (default: false)
+ * @returns Promise<Array<any>> Array of block objects
+ */
+export async function fetchBlockBatch(
+  rpcClient: RpcRetryClient,
+  startBlock: number,
+  endBlock: number,
+  batchSize: number = 20,
+  includeTxs: boolean = false,
+): Promise<Array<any>> {
+  try {
+    const results: any[] = [];
+
+    // Process in batches to avoid overwhelming the RPC node
+    for (let i = startBlock; i <= endBlock; i += batchSize) {
+      const batchEnd = Math.min(i + batchSize - 1, endBlock);
+      const batchPromises = [];
+
+      // Create a batch of promises for parallel processing
+      for (let blockNum = i; blockNum <= batchEnd; blockNum++) {
+        const blockHex = `0x${blockNum.toString(16)}`;
+        batchPromises.push(rpcClient.call('eth_getBlockByNumber', [blockHex, includeTxs]));
+      }
+
+      // Wait for all promises in this batch to resolve
+      const batchResponses = await Promise.all(batchPromises);
+
+      // Process responses
+      for (const response of batchResponses) {
+        if (response && response.result) {
+          results.push(response.result);
+        }
+      }
+    }
+
+    return results;
+  } catch (error) {
+    console.error(`Error fetching block batch: ${error.message}`);
+    return [];
+  }
+}
