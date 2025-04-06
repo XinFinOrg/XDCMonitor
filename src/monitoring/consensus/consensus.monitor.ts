@@ -25,8 +25,8 @@ interface ChainValidatorData {
  * - RewardMonitor: Tracks reward distribution at epoch boundaries
  */
 @Injectable()
-export class ConsensusMonitorService implements OnModuleInit, OnModuleDestroy {
-  private readonly logger = new Logger(ConsensusMonitorService.name);
+export class ConsensusMonitor implements OnModuleInit, OnModuleDestroy {
+  private readonly logger = new Logger(ConsensusMonitor.name);
   private intervalRegistry: Record<string, string> = {};
   private supportedChains: number[] = [50, 51]; // Default: mainnet and testnet
 
@@ -85,7 +85,7 @@ export class ConsensusMonitorService implements OnModuleInit, OnModuleDestroy {
   private async refreshValidatorData(chainId: number): Promise<void> {
     try {
       const rpcClient = createRpcClient(this.configService, chainId);
-      const result = await this.fetchMasternodeList(`ConsensusMonitorService-${chainId}`, rpcClient);
+      const result = await this.fetchMasternodeList(`ConsensusMonitor-${chainId}`, rpcClient);
 
       if (result) {
         // Update the in-memory cache

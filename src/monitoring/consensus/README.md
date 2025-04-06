@@ -15,7 +15,7 @@ The system follows a modular design with a central coordinator and specialized m
 
 ### Specialized Monitors
 
-1. **[Miner Monitor](./miner/README.md)** - Tracks the round-robin mining pattern and timeout detection ✅
+1. **[Miner Monitor](./miner/README.md)** - Tracks the round-robin mining pattern and timeout detection with complete block coverage ✅
 2. **[Epoch Monitor](./epoch/README.md)** - Monitors epoch transitions and masternode list updates 🚧
 3. **[Reward Monitor](./reward/README.md)** - Validates reward distribution at epoch boundaries 🚧
 
@@ -41,6 +41,32 @@ Each chain maintains its own independent state, including:
 - Mining performance metrics
 - Consensus violations
 
+## Advanced Monitoring Features
+
+### Complete Block Coverage
+
+The monitoring system processes all blocks in each chain, not just the latest ones:
+
+1. Tracks the last checked block number for each chain
+2. Fetches all new blocks since the last check in efficient batches
+3. Processes each block for consensus rule compliance
+
+This approach ensures:
+
+- No blocks are missed between monitoring cycles
+- All consensus violations are detected
+- Complete historical record of mining activity
+
+### Blockchain Native APIs
+
+The system leverages specialized XDC blockchain APIs for accurate monitoring:
+
+- `XDPoS_getEpochNumbersBetween`: Precisely identifies epoch boundaries
+- `XDPoS_getMasternodesByNumber`: Gets the canonical masternode list
+- `XDPoS_getMissedRoundsInEpochByBlockNum`: Gets authoritative data about missed rounds
+
+By using these native APIs instead of relying solely on our calculations, the monitoring system achieves higher accuracy and reliability.
+
 ## XDPoS 2.0 Consensus Details
 
 ### Masternode System
@@ -61,73 +87,21 @@ Each chain maintains its own independent state, including:
   - Masternodes receive approximately 10% APY
   - Standbynodes receive approximately 7-8% APY
 
-#### Determining Epoch Boundaries
-
-To check if the blockchain has moved to a new epoch or to determine the block range of an epoch, use the `XDPoS_getEpochNumbersBetween` API:
-
-```bash
-curl --location 'https://rpc.xinfin.network' \
---header 'Content-Type: application/json' \
---data '{"jsonrpc":"2.0","method":"XDPoS_getEpochNumbersBetween","params":["0x52FF312", "0x52FF6FA"],"id":1}'
-```
-
-This API returns a list of block numbers where each block is the first block of a new epoch:
-
-```json
-{
-  "jsonrpc": "2.0",
-  "id": 1,
-  "result": [87028748]
-}
-```
-
-Best practices for epoch detection:
-
-- Use a lookback window of ~1000 blocks (enough to cover an entire epoch)
-- Compare the most recent epoch boundary with your previously recorded one
-- If you find a newer epoch boundary, refresh the masternode list
-
-Example implementation:
-
-```typescript
-// Look back 1000 blocks to ensure we catch any epoch transition
-const lookbackBlock = Math.max(1, currentBlock - 1000);
-const hexCurrentBlock = `0x${currentBlock.toString(16)}`;
-const hexLookbackBlock = `0x${lookbackBlock.toString(16)}`;
-
-// Get all epoch boundaries in the last 1000 blocks
-const response = await rpcClient.call('XDPoS_getEpochNumbersBetween', [hexLookbackBlock, hexCurrentBlock]);
-
-if (response?.result?.length > 0) {
-  const latestEpochBlock = response.result[response.result.length - 1];
-
-  // If the latest epoch boundary is newer than what we had before,
-  // we've entered a new epoch
-  const isNewEpoch = latestEpochBlock > previousEpochBlock;
-
-  if (isNewEpoch) {
-    // Refresh masternode list
-  }
-}
-```
-
 ### Mining Process
 
-- Masternodes mine blocks in a round-robin sequence based on round number
-- Example with masternode list [a, b, c, d, e]:
-  - Block 901, Round 1000: miner = a
-  - Block 902, Round 1001: miner = b
-  - Block 903, Round 1002: miner = c
+- At the beginning of each epoch, the first block is mined by masternode at index 0
+- Each subsequent block is mined by the next masternode in the list
+- After reaching the end of the list (108 masternodes), it wraps back to index 0
+- This creates a predictable round-robin sequence based on block position within the epoch
 
 ### Timeout Handling
 
-- If a masternode is offline when its turn arrives, a 10-second timeout occurs
-- After timeout, the next masternode in sequence takes over
-- Example:
-  - Block 901, Round 1000: miner = a
-  - Block 902, Round 1001: miner = b
-  - Block 903, Round 1002: miner = c (offline) → timeout
-  - Block 903, Round 1003: miner = d
+- If a masternode fails to produce a block within 10 seconds, a timeout occurs
+- The next masternode in the sequence takes over
+- Our monitoring system detects these timeouts by:
+  - Checking the timestamp difference between consecutive blocks
+  - Verifying the difference exceeds the 10-second threshold
+  - Confirming the actual miner is the next expected miner after the timeout
 
 ### Block Confirmation Process
 

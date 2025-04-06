@@ -3,7 +3,7 @@ import { BlockchainService } from '@blockchain/blockchain.service';
 import { ConfigService } from '@config/config.service';
 import { MetricsService } from '@metrics/metrics.service';
 import { BlocksMonitorService } from '@monitoring/blocks/blocks.monitor';
-import { ConsensusMonitorService } from '@monitoring/consensus/consensus.monitor';
+import { ConsensusMonitor } from '@monitoring/consensus/consensus.monitor';
 import { RpcMonitorService } from '@monitoring/rpc/rpc.monitor';
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { SchedulerRegistry } from '@nestjs/schedule';
@@ -28,7 +28,7 @@ export class RewardMonitor implements OnModuleInit, OnModuleDestroy {
     private readonly metricsService: MetricsService,
     private readonly alertService: AlertService,
     private readonly schedulerRegistry: SchedulerRegistry,
-    private readonly consensusMonitorService: ConsensusMonitorService,
+    private readonly consensusMonitor: ConsensusMonitor,
   ) {}
 
   async onModuleInit() {

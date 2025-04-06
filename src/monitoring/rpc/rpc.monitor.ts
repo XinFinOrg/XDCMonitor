@@ -398,13 +398,15 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
                 this.alertService[isError ? 'error' : 'warning'](
                   ALERTS.TYPES.RPC_HIGH_LATENCY,
                   'rpc',
-                  `${isError ? 'High' : 'Elevated'} RPC latency on ${endpoint.name}: ${latency}ms`,
+                  `${isError ? 'High' : 'Elevated'} RPC latency on ${endpoint.url} for chain ${endpoint.chainId}: ${latency}ms`,
                   endpoint.chainId,
                 );
               }
             }
 
-            this.logger.debug(`${endpointTypeStr} endpoint ${endpoint.name} is ${isUp ? 'UP' : 'DOWN'}`);
+            this.logger.debug(
+              `${endpointTypeStr} endpoint ( ${endpoint.url} ) for chain ${endpoint.chainId} is ${isUp ? 'UP' : 'DOWN'}`,
+            );
             if (!isUp && postCheckFn) postCheckFn(endpoint, isUp);
 
             // For WebSocket endpoints, update the WebSocket specific status
@@ -486,14 +488,14 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
           this.alertService.error(
             ALERTS.TYPES.RPC_HIGH_LATENCY,
             'rpc',
-            `High RPC latency on ${endpoint.name}: ${latency}ms`,
+            `High RPC latency on ${endpoint.url} for chain ${endpoint.chainId}: ${latency}ms`,
             endpoint.chainId,
           );
         } else if (latency > ALERTS.THRESHOLDS.RPC_LATENCY_WARNING_MS) {
           this.alertService.warning(
             ALERTS.TYPES.RPC_HIGH_LATENCY,
             'rpc',
-            `Elevated RPC latency on ${endpoint.name}: ${latency}ms`,
+            `Elevated RPC latency on ${endpoint.url} for chain ${endpoint.chainId}: ${latency}ms`,
             endpoint.chainId,
           );
         }
@@ -501,7 +503,7 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
 
       return isUp;
     } catch (error) {
-      this.logger.warn(`RPC endpoint ${endpoint.name} is down: ${error.message}`);
+      this.logger.warn(`RPC endpoint ( ${endpoint.url} ) for chain ${endpoint.chainId} is down: ${error.message}`);
       this.updateRpcEndpointStatus(endpoint, false, 0);
       return false;
     }
@@ -972,7 +974,7 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
       this.alertService.error(
         alertType,
         endpointType,
-        `${endpointType.charAt(0).toUpperCase() + endpointType.slice(1)} endpoint ${endpoint.name} - ${endpoint.url} has been down for ${hours}h ${minutes}m`,
+        `${endpointType.charAt(0).toUpperCase() + endpointType.slice(1)} endpoint ( ${endpoint.url} ) for chain ${endpoint.chainId} has been down for ${hours}h ${minutes}m`,
         endpoint.chainId,
       );
 

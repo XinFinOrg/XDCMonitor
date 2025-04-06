@@ -1,16 +1,16 @@
 import { Controller, Get } from '@nestjs/common';
 import { RpcMonitorService } from '@monitoring/rpc/rpc.monitor';
 import { BlocksMonitorService } from '@monitoring/blocks/blocks.monitor';
-import { ConsensusMonitorService } from '@monitoring/consensus/consensus.monitor';
-import { MinerMonitorService } from '@monitoring/consensus/miner/miner-monitor.service';
+import { ConsensusMonitor } from '@monitoring/consensus/consensus.monitor';
+import { MinerMonitor } from '@monitoring/consensus/miner/miner.monitor';
 
 @Controller('monitoring')
 export class MonitoringController {
   constructor(
     private readonly rpcMonitorService: RpcMonitorService,
     private readonly blocksMonitorService: BlocksMonitorService,
-    private readonly consensusMonitorService: ConsensusMonitorService,
-    private readonly minerMonitorService: MinerMonitorService,
+    private readonly consensusMonitorService: ConsensusMonitor,
+    private readonly minerMonitor: MinerMonitor,
   ) {}
 
   @Get('websocket-status')
@@ -36,16 +36,16 @@ export class MonitoringController {
   }
 
   @Get('masternode-performance')
-  getMasternodePerformance() {
+  getMasternodePerformance(chainId: number) {
     return {
-      masternodePerformance: this.minerMonitorService.getMinerPerformance(),
+      masternodePerformance: this.minerMonitor.getMinerPerformance(chainId),
     };
   }
 
   @Get('consensus-violations')
-  getConsensusViolations() {
+  getConsensusViolations(chainId: number) {
     return {
-      consensusViolations: this.minerMonitorService.getRecentViolations(),
+      consensusViolations: this.minerMonitor.getRecentViolations(chainId),
     };
   }
 
