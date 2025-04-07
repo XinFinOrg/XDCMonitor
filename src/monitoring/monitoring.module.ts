@@ -18,19 +18,24 @@ import { ScheduleModule } from '@nestjs/schedule';
 @Module({
   imports: [ScheduleModule.forRoot(), BlockchainModule, ConfigModule, MetricsModule, forwardRef(() => AlertModule)],
   providers: [
-    // Core services
     BlocksMonitorService,
     RpcMonitorService,
     TransactionMonitorService,
     MetricsManager,
-
-    // Consensus monitoring - important: main service must come before individual monitors
-    ConsensusMonitor, // This needs to be initialized before the monitors
+    ConsensusMonitor,
     MinerMonitor,
     EpochMonitor,
     RewardMonitor,
   ],
   controllers: [MonitoringController],
-  exports: [BlocksMonitorService, RpcMonitorService, TransactionMonitorService, ConsensusMonitor],
+  exports: [
+    BlocksMonitorService,
+    RpcMonitorService,
+    TransactionMonitorService,
+    ConsensusMonitor,
+    MinerMonitor,
+    EpochMonitor,
+    RewardMonitor,
+  ],
 })
 export class MonitoringModule {}

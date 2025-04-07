@@ -1,10 +1,8 @@
 import { AlertService } from '@alerts/alert.service';
-import { BlockchainService } from '@blockchain/blockchain.service';
 import { ALERTS } from '@common/constants/config';
 import { RpcRetryClient } from '@common/utils/rpc-retry-client';
 import { ConfigService } from '@config/config.service';
 import { MetricsService } from '@metrics/metrics.service';
-import { BlocksMonitorService } from '@monitoring/blocks/blocks.monitor';
 import { ConsensusMonitor } from '@monitoring/consensus/consensus.monitor';
 import {
   TIMEOUT_THRESHOLD,
@@ -13,20 +11,17 @@ import {
   getMissedRoundsForEpoch,
   getMonitoringConfig,
 } from '@monitoring/consensus/consensus.utils';
-import { RpcMonitorService } from '@monitoring/rpc/rpc.monitor';
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
-import { SchedulerRegistry } from '@nestjs/schedule';
+import { Injectable, Logger, OnModuleDestroy, OnModuleInit, Inject, forwardRef } from '@nestjs/common';
 import { ConsensusMonitoringInfo, ConsensusViolation, MinerPerformance } from '@types';
 import { performance } from 'perf_hooks';
 
-// Interface for missed round tracking
+// Core data structures
 interface MissedRound {
   round: number;
   miner: string;
   blockNumber: number;
 }
 
-// Chain-specific state interface
 interface ChainState {
   chainId: number;
   rpcClient: RpcRetryClient;
@@ -36,8 +31,7 @@ interface ChainState {
   epochRound: number; // Starting round of the current epoch
   knownMissedRounds: MissedRound[]; // Rounds known to be missed in this epoch
   minerPerformance: Record<string, MinerPerformance>;
-  // Store recent timeout and consensus violation events for API access and dashboards
-  recentViolations: ConsensusViolation[];
+  recentViolations: ConsensusViolation[]; // Store recent timeout and consensus violation events for API access and dashboards
   lastMissedRoundsCheck: number; // Block number when we last checked for missed rounds
 }
 
@@ -47,26 +41,18 @@ interface ChainState {
 @Injectable()
 export class MinerMonitor implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(MinerMonitor.name);
+  private readonly MAX_RECENT_VIOLATIONS = 100;
 
-  // Configuration
   private monitoringEnabled = false;
   private scanIntervalMs = 15000; // Default: 15 seconds
   private supportedChains: number[] = [50, 51]; // Default: mainnet and testnet
-
-  // Chain-specific state tracking
   private chainStates: Record<number, ChainState> = {};
 
-  // Constants
-  private readonly MAX_RECENT_VIOLATIONS = 100;
-
   constructor(
-    private readonly blockchainService: BlockchainService,
     private readonly configService: ConfigService,
-    private readonly blocksMonitorService: BlocksMonitorService,
-    private readonly rpcMonitorService: RpcMonitorService,
     private readonly metricsService: MetricsService,
     private readonly alertService: AlertService,
-    private readonly schedulerRegistry: SchedulerRegistry,
+    @Inject(forwardRef(() => ConsensusMonitor))
     private readonly consensusMonitorService: ConsensusMonitor,
   ) {
     const { enabled, scanIntervalMs, chains } = getMonitoringConfig(this.configService);
@@ -91,6 +77,9 @@ export class MinerMonitor implements OnModuleInit, OnModuleDestroy {
     });
   }
 
+  /**
+   * Initialize the monitor and register monitoring intervals for each chain
+   */
   async onModuleInit() {
     if (!this.monitoringEnabled) {
       this.logger.log(`${MinerMonitor.name} is disabled`);
@@ -100,7 +89,9 @@ export class MinerMonitor implements OnModuleInit, OnModuleDestroy {
     try {
       this.logger.log(`Initializing ${MinerMonitor.name}...`);
 
+      // Load historical data from InfluxDB for each chain
       for (const chainId of this.supportedChains) {
+        await this.loadHistoricalMinerData(chainId);
         this.consensusMonitorService.registerMonitoringInterval(
           `${MinerMonitor.name}-${chainId}`,
           () => this.monitorMiners(chainId),
@@ -113,8 +104,10 @@ export class MinerMonitor implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  /**
+   * Cleanup on module destruction
+   */
   onModuleDestroy() {
-    // Cleanup on module destroy
     this.supportedChains.forEach(chainId => {
       this.consensusMonitorService.deregisterMonitoringInterval(`${MinerMonitor.name}-${chainId}`);
     });
@@ -122,14 +115,13 @@ export class MinerMonitor implements OnModuleInit, OnModuleDestroy {
 
   /**
    * Main monitoring logic for miners on a specific chain
+   * Fetches latest blocks and processes miner performance metrics
    */
   private async monitorMiners(chainId: number): Promise<void> {
     const chainState = this.chainStates[chainId];
     const validatorData = this.consensusMonitorService.getValidatorData(chainId);
 
-    if (!this.monitoringEnabled || !chainState || !validatorData?.masternodeList) {
-      return;
-    }
+    if (!this.monitoringEnabled || !chainState || !validatorData?.masternodeList) return;
 
     try {
       const startTime = performance.now();
@@ -155,7 +147,7 @@ export class MinerMonitor implements OnModuleInit, OnModuleDestroy {
         `Chain ${chainId}: Processing ${blockCount} blocks from ${startBlockNum} to ${latestBlockNumber}`,
       );
 
-      // Fetch and process blocks in batch
+      // Process blocks in batch
       const blocks = await fetchBlockBatch(
         chainState.rpcClient,
         startBlockNum,
@@ -172,24 +164,23 @@ export class MinerMonitor implements OnModuleInit, OnModuleDestroy {
 
         this.updateMinerPerformance(chainId, miner, blockNumber);
 
-        const isMissedRound = chainState.knownMissedRounds.some(mr => mr.round === round);
-        if (isMissedRound) {
-          const missedRound = chainState.knownMissedRounds.find(mr => mr.round === round);
+        const missedRound = chainState.knownMissedRounds.find(mr => mr.round === round);
+        if (missedRound) {
           this.logger.debug(
             `Chain ${chainId}: Block ${blockNumber} - Known missed round ${round}: Original ${missedRound.miner}, actual ${miner}`,
           );
         }
       }
 
-      // Log performance and update state
-      this.logger.log(
-        `Chain ${chainId}: Processed ${blocks.length} blocks in ${(performance.now() - startTime).toFixed(2)}ms`,
-      );
-
+      // Update state and log performance
       chainState.lastCheckedBlock = latestBlockNumber;
       if (latestBlockResponse.result.timestamp) {
         chainState.lastBlockTimestamp = parseInt(latestBlockResponse.result.timestamp, 16);
       }
+
+      this.logger.log(
+        `Chain ${chainId}: Processed ${blocks.length} blocks in ${(performance.now() - startTime).toFixed(2)}ms`,
+      );
     } catch (error) {
       this.logger.error(`Miner monitoring error for chain ${chainId}: ${error.message}`);
       this.metricsService.saveAlert({
@@ -204,6 +195,7 @@ export class MinerMonitor implements OnModuleInit, OnModuleDestroy {
 
   /**
    * Update missed rounds information from the blockchain API
+   * Fetches the current set of missed rounds and processes any new ones
    */
   private async updateMissedRounds(chainId: number): Promise<void> {
     try {
@@ -248,6 +240,7 @@ export class MinerMonitor implements OnModuleInit, OnModuleDestroy {
 
   /**
    * Process a missed round and calculate how many miners were skipped
+   * Records metrics, creates violation records, and generates alerts if needed
    */
   private async processMissedRound(chainId: number, missedRound: any): Promise<void> {
     try {
@@ -257,34 +250,23 @@ export class MinerMonitor implements OnModuleInit, OnModuleDestroy {
       const expectedMiner = missedRound.Miner.toLowerCase();
 
       // Fetch current and parent blocks
-      const blockHex = `0x${blockNumber.toString(16)}`;
-      const currentBlockResponse = await chainState.rpcClient.call('eth_getBlockByNumber', [blockHex, false]);
-      if (!currentBlockResponse?.result) {
-        this.logger.warn(`Failed to fetch block ${blockNumber} for missed round verification`);
-        return;
-      }
+      const [currentBlock, prevBlock] = await Promise.all([
+        this.fetchBlock(chainState.rpcClient, blockNumber),
+        this.fetchBlock(chainState.rpcClient, missedRound.ParentBlockNum),
+      ]);
 
-      const prevBlockHex = `0x${missedRound.ParentBlockNum.toString(16)}`;
-      const prevBlockResponse = await chainState.rpcClient.call('eth_getBlockByNumber', [prevBlockHex, false]);
-      if (!prevBlockResponse?.result) {
-        this.logger.warn(`Failed to fetch previous block ${missedRound.ParentBlockNum} for missed round verification`);
-        return;
-      }
+      if (!currentBlock || !prevBlock) return;
 
-      const actualMiner = currentBlockResponse.result.miner.toLowerCase();
-      const timeoutPeriod =
-        parseInt(currentBlockResponse.result.timestamp, 16) - parseInt(prevBlockResponse.result.timestamp, 16);
+      const actualMiner = currentBlock.miner.toLowerCase();
+      const timeoutPeriod = parseInt(currentBlock.timestamp, 16) - parseInt(prevBlock.timestamp, 16);
 
-      // Calculate missed miners by comparing masternode list positions
+      // Calculate missed miners count
       const validatorData = this.consensusMonitorService.getValidatorData(chainId);
       if (!validatorData?.masternodeList?.masternodes) {
-        this.logger.warn(
-          `Cannot determine missed miners accurately - masternode list not available for chain ${chainId}`,
-        );
+        this.logger.warn(`Cannot determine missed miners - masternode list unavailable for chain ${chainId}`);
         return;
       }
 
-      // Find positions in masternode list and calculate skipped miners
       const masternodes = validatorData.masternodeList.masternodes.map(addr => addr.toLowerCase());
       const expectedMinerIndex = masternodes.indexOf(expectedMiner);
       const actualMinerIndex = masternodes.indexOf(actualMiner);
@@ -303,13 +285,10 @@ export class MinerMonitor implements OnModuleInit, OnModuleDestroy {
         );
       }
 
-      // Record metrics for the missed round, including the count of missed miners
+      // Record metrics and create violation
       this.metricsService.recordMissedRound(chainId, blockNumber, round, expectedMiner, actualMiner, missedMiners);
+      this.metricsService.recordTimeoutPeriod(chainId, blockNumber, timeoutPeriod, TIMEOUT_THRESHOLD, missedMiners);
 
-      // Record the timeout period (delay time) for this missed round
-      this.metricsService.recordTimeoutPeriod(chainId, blockNumber, timeoutPeriod, TIMEOUT_THRESHOLD);
-
-      // Create and record violation
       const expectedTimeoutPeriod = missedMiners * TIMEOUT_THRESHOLD;
       const isConsistentTimeout = Math.abs(timeoutPeriod - expectedTimeoutPeriod) <= 2;
 
@@ -325,24 +304,25 @@ export class MinerMonitor implements OnModuleInit, OnModuleDestroy {
       });
 
       this.logger.log(
-        `Chain ${chainId} - Block ${blockNumber} - TIMEOUT: Expected ${expectedMiner} → actual ${actualMiner}, ` +
-          `delay: ${timeoutPeriod}s, missed miners: ${missedMiners} (positions ${expectedMinerIndex} → ${actualMinerIndex})`,
+        `Chain ${chainId} - Block ${blockNumber}: Timeout ${timeoutPeriod}s, ` +
+          `missed miners: ${missedMiners} (${expectedMiner} → ${actualMiner})`,
       );
 
-      // Generate a timeout alert if needed (unusual timeout or multiple miners missed)
+      // Alert on unusual timeouts or multiple missed miners
       if (!isConsistentTimeout || missedMiners >= 2) {
-        // Construct alert message directly in the condition to avoid unnecessary variable
+        const alertMessage = !isConsistentTimeout
+          ? `Chain ${chainId} - Block ${blockNumber}: Unusual timeout of ${timeoutPeriod}s vs expected ${expectedTimeoutPeriod}s for ${missedMiners} missed miners.`
+          : `Chain ${chainId} - Block ${blockNumber}: ${missedMiners} consecutive miners missed their turn.`;
+
         this.alertService.warning(
           ALERTS.TYPES.CONSENSUS_UNUSUAL_TIMEOUT,
           ALERTS.COMPONENTS.CONSENSUS,
-          !isConsistentTimeout
-            ? `Chain ${chainId} - Block ${blockNumber}: Unusual timeout of ${timeoutPeriod}s vs expected ${expectedTimeoutPeriod}s for ${missedMiners} missed miners.`
-            : `Chain ${chainId} - Block ${blockNumber}: ${missedMiners} consecutive miners missed their turn.`,
+          alertMessage,
           chainId,
         );
       }
 
-      // Update miner's cumulative stats
+      // Update miner's missed blocks count
       this.updateMinerMissedStats(chainId, expectedMiner);
     } catch (error) {
       this.logger.error(`Failed to process missed round for chain ${chainId}: ${error.message}`);
@@ -350,7 +330,23 @@ export class MinerMonitor implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * Fetches a block from the blockchain by number
+   * Helper method to reduce code duplication
+   */
+  private async fetchBlock(rpcClient: RpcRetryClient, blockNumber: number): Promise<any> {
+    const blockHex = `0x${blockNumber.toString(16)}`;
+    const response = await rpcClient.call('eth_getBlockByNumber', [blockHex, false]);
+
+    if (!response?.result) {
+      this.logger.warn(`Failed to fetch block ${blockNumber}`);
+      return null;
+    }
+    return response.result;
+  }
+
+  /**
    * Update miner missed round statistics and trigger alerts at thresholds
+   * Called when a miner misses their turn to mine a block
    */
   private updateMinerMissedStats(chainId: number, address: string): void {
     const chainState = this.chainStates[chainId];
@@ -370,7 +366,7 @@ export class MinerMonitor implements OnModuleInit, OnModuleDestroy {
     const minerStats = chainState.minerPerformance[address];
     minerStats.missedBlocks++;
 
-    // Record missed round metric and updated performance
+    // Record metrics
     this.metricsService.recordMinerMissedRound(chainId, address, minerStats.missedBlocks);
     this.metricsService.recordMinerPerformance(
       chainId,
@@ -380,7 +376,7 @@ export class MinerMonitor implements OnModuleInit, OnModuleDestroy {
       chainState.lastCheckedBlock,
     );
 
-    // Alert at significant thresholds (every 10 missed rounds)
+    // Alert at significant thresholds
     if (minerStats.missedBlocks % 10 === 0) {
       this.alertService.warning(
         ALERTS.TYPES.CONSENSUS_FREQUENT_MISSED_ROUNDS,
@@ -393,19 +389,21 @@ export class MinerMonitor implements OnModuleInit, OnModuleDestroy {
 
   /**
    * Record a consensus violation for a specific chain
+   * Stores the violation in a bounded collection for API access and dashboard display
    */
   private recordViolation(chainId: number, violation: ConsensusViolation): void {
     const chainState = this.chainStates[chainId];
-
-    // Use unshift to add to the front (most recent first)
     chainState.recentViolations.unshift(violation);
 
-    // Limit collection size to prevent memory growth
-    if (chainState.recentViolations.length > this.MAX_RECENT_VIOLATIONS) chainState.recentViolations.pop();
+    // Limit collection size
+    if (chainState.recentViolations.length > this.MAX_RECENT_VIOLATIONS) {
+      chainState.recentViolations.pop();
+    }
   }
 
   /**
    * Update miner performance when they successfully mine a block
+   * Updates metrics and records the miner's activity
    */
   private updateMinerPerformance(chainId: number, address: string, blockNumber: number): void {
     const chainState = this.chainStates[chainId];
@@ -422,7 +420,7 @@ export class MinerMonitor implements OnModuleInit, OnModuleDestroy {
       };
     }
 
-    // Update stats and record performance
+    // Update performance metrics
     const minerStats = chainState.minerPerformance[address];
     minerStats.totalBlocksMined++;
     minerStats.lastActiveBlock = blockNumber;
@@ -439,6 +437,7 @@ export class MinerMonitor implements OnModuleInit, OnModuleDestroy {
 
   /**
    * Get miner monitoring info for a specific chain or all chains
+   * Provides data for API endpoints and dashboards
    */
   public getMinerMonitoringInfo(chainId?: number): ConsensusMonitoringInfo | Record<number, ConsensusMonitoringInfo> {
     if (chainId && this.chainStates[chainId]) {
@@ -452,6 +451,10 @@ export class MinerMonitor implements OnModuleInit, OnModuleDestroy {
     return result;
   }
 
+  /**
+   * Get monitoring information for a specific chain
+   * Collects data from various sources into a single structure
+   */
   private getChainMonitoringInfo(chainId: number): ConsensusMonitoringInfo {
     const chainState = this.chainStates[chainId];
     const validatorData = this.consensusMonitorService.getValidatorData(chainId);
@@ -473,6 +476,7 @@ export class MinerMonitor implements OnModuleInit, OnModuleDestroy {
 
   /**
    * Get miner performance metrics for a specific chain
+   * Returns the performance data for all miners on the specified chain
    */
   public getMinerPerformance(chainId: number): Record<string, MinerPerformance> {
     return this.chainStates[chainId]?.minerPerformance || {};
@@ -483,11 +487,60 @@ export class MinerMonitor implements OnModuleInit, OnModuleDestroy {
    * Returns the 10 most recent violations for the specified chain
    */
   public getRecentViolations(chainId: number): ConsensusViolation[] {
-    if (!this.chainStates[chainId]) {
-      return [];
-    }
+    return this.chainStates[chainId]?.recentViolations.slice(0, 10) || [];
+  }
 
-    // Return only the 10 most recent violations
-    return this.chainStates[chainId].recentViolations.slice(0, 10);
+  /**
+   * Load historical miner performance data from InfluxDB
+   * Initializes miner performance tracking with historical data
+   */
+  private async loadHistoricalMinerData(chainId: number): Promise<void> {
+    try {
+      const chainState = this.chainStates[chainId];
+      this.logger.log(`Loading historical miner data for chain ${chainId}...`);
+
+      // Get latest block and set checkpoint
+      const latestBlockResponse = await chainState.rpcClient.call('eth_getBlockByNumber', ['latest', false]);
+      if (!latestBlockResponse?.result) {
+        this.logger.warn(`Could not fetch latest block for chain ${chainId}`);
+        return;
+      }
+
+      const latestBlockNumber = parseInt(latestBlockResponse.result.number, 16);
+      chainState.lastCheckedBlock = latestBlockNumber - 100; // Start checking from 100 blocks back
+
+      // Get validators and their performance data
+      const validatorData = this.consensusMonitorService.getValidatorData(chainId);
+      if (!validatorData?.masternodeList?.masternodes) {
+        this.logger.warn(`Could not load masternode list for chain ${chainId}`);
+        return;
+      }
+
+      const minerAddresses = validatorData.masternodeList.masternodes.map(addr => addr.toLowerCase());
+      const performanceData = await this.metricsService.getMinerPerformanceData(chainId, minerAddresses);
+
+      // Initialize performance data for each miner
+      for (const miner of minerAddresses) {
+        const minerData = performanceData[miner] || {
+          totalBlocksMined: 0,
+          missedBlocks: 0,
+          lastActiveBlock: 0,
+          lastActive: null,
+        };
+
+        chainState.minerPerformance[miner] = {
+          address: miner,
+          totalBlocksMined: minerData.totalBlocksMined,
+          missedBlocks: minerData.missedBlocks,
+          lastActiveBlock: minerData.lastActiveBlock,
+          lastActive: minerData.lastActive ? new Date(minerData.lastActive) : new Date(),
+        };
+      }
+
+      this.logger.log(`Loaded data for ${Object.keys(chainState.minerPerformance).length} miners on chain ${chainId}`);
+    } catch (error) {
+      this.logger.error(`Failed to load historical data for chain ${chainId}: ${error.message}`);
+      this.logger.log('Continuing with empty performance data...');
+    }
   }
 }

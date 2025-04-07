@@ -1,12 +1,13 @@
 import { ConfigService } from '@config/config.service';
 import { MetricsService } from '@metrics/metrics.service';
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy, OnModuleInit, Inject, forwardRef } from '@nestjs/common';
 import { SchedulerRegistry } from '@nestjs/schedule';
 import { ConsensusMonitoringInfo, MasternodeList } from '@types';
 import { createRpcClient, getNextEpochBlock } from './consensus.utils';
 import { EpochMonitor } from './epoch/epoch.monitor';
 import { MinerMonitor } from './miner/miner.monitor';
 import { RewardMonitor } from './reward/reward.monitor';
+import { ENV_VARS } from '@common/constants/config';
 
 // Interface for cached validator data
 interface ChainValidatorData {
@@ -37,15 +38,20 @@ export class ConsensusMonitor implements OnModuleInit, OnModuleDestroy {
   private validatorRefreshInterval = 60000;
 
   constructor(
+    @Inject(forwardRef(() => MinerMonitor))
     private readonly minerMonitor: MinerMonitor,
+
+    @Inject(forwardRef(() => EpochMonitor))
     private readonly epochMonitor: EpochMonitor,
+
+    @Inject(forwardRef(() => RewardMonitor))
     private readonly rewardMonitor: RewardMonitor,
+
     private readonly configService: ConfigService,
     private readonly schedulerRegistry: SchedulerRegistry,
     private readonly metricsService: MetricsService,
   ) {
-    this.supportedChains = this.configService.getNumberArray('consensusMonitoringChains', [50, 51]);
-    this.validatorRefreshInterval = this.configService.get('masternodeRefreshInterval', 60000);
+    this.supportedChains = this.configService.getNumberArray(ENV_VARS.CONSENSUS_MONITORING_CHAIN_IDS, [50, 51]);
     this.logger.log(`Consensus monitoring service initialized for chains: ${this.supportedChains.join(', ')}`);
   }
 
@@ -217,7 +223,7 @@ export class ConsensusMonitor implements OnModuleInit, OnModuleDestroy {
    * Helper method to register a monitoring interval
    * This can be used by the individual monitors instead of managing their own intervals
    */
-  public registerMonitoringInterval(name: string, callback: () => Promise<void>, intervalMs: number): void {
+  public registerMonitoringInterval(name: string, callback: () => Promise<void> | void, intervalMs: number): void {
     try {
       const intervalName = `${name.toLowerCase()}Monitoring`;
 
@@ -226,14 +232,34 @@ export class ConsensusMonitor implements OnModuleInit, OnModuleDestroy {
         this.schedulerRegistry.deleteInterval(intervalName);
       }
 
-      // Create new interval
-      const interval = setInterval(callback, intervalMs);
+      // Execute immediately first
+      this.executeMonitoringCallback(name, callback);
+
+      // Create new interval with a wrapper function that handles both Promise and non-Promise callbacks
+      const interval = setInterval(() => this.executeMonitoringCallback(name, callback), intervalMs);
+
       this.schedulerRegistry.addInterval(intervalName, interval);
       this.intervalRegistry[name] = intervalName;
 
       this.logger.log(`Registered monitoring interval for ${name} with ${intervalMs}ms interval`);
     } catch (error) {
       this.logger.error(`Failed to register monitoring interval for ${name}: ${error.message}`);
+    }
+  }
+
+  /**
+   * Execute a monitoring callback safely handling both Promise and non-Promise returns
+   */
+  private executeMonitoringCallback(name: string, callback: () => Promise<void> | void): void {
+    try {
+      const result = callback();
+      if (result instanceof Promise) {
+        result.catch(error => {
+          this.logger.error(`Error in monitoring interval ${name}: ${error.message}`);
+        });
+      }
+    } catch (error) {
+      this.logger.error(`Error in monitoring interval ${name}: ${error.message}`);
     }
   }
 

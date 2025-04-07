@@ -18,36 +18,6 @@ export interface InfluxDbConfig {
 }
 
 /**
- * Performance metrics collected
- */
-export interface PerformanceMetrics {
-  memoryUsage: {
-    rss: number;
-    heapTotal: number;
-    heapUsed: number;
-    external: number;
-  };
-  cpuUsage: {
-    user: number;
-    system: number;
-  };
-  uptime: number; // in seconds
-  loadAverage: number[];
-}
-
-/**
- * Generic monitoring result
- */
-export interface MonitoringResult<T> {
-  timestamp: number;
-  success: boolean;
-  data?: T;
-  error?: Error;
-  duration: number; // in milliseconds
-  endpoint?: string; // URL or identifier of the monitored service
-}
-
-/**
  * Monitoring configuration
  */
 export interface MonitoringConfig {

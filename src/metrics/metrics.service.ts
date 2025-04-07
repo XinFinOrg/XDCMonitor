@@ -2,6 +2,7 @@ import { ConfigService } from '@config/config.service';
 import { InfluxDB, Point, WriteApi } from '@influxdata/influxdb-client';
 import { Alert } from '@alerts/alert.service';
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { MinerRecord } from '@types';
 
 /**
  * InfluxDB Metrics Service
@@ -566,27 +567,37 @@ export class MetricsService implements OnModuleInit {
    *
    * @param chainId The chain ID
    * @param blockNumber The block number where timeout occurred
-   * @param timeoutPeriod The timeout period in seconds
-   * @param expectedTimeout The expected timeout period (normally ~10s)
+   * @param timeoutPeriod The actual timeout period in seconds
+   * @param expectedTimeoutPerMiner The expected timeout period per missed miner (normally ~10s)
+   * @param missedMiners The number of miners that were missed
    */
-  recordTimeoutPeriod(chainId: number, blockNumber: number, timeoutPeriod: number, expectedTimeout: number = 10): void {
+  recordTimeoutPeriod(
+    chainId: number,
+    blockNumber: number,
+    timeoutPeriod: number,
+    expectedTimeoutPerMiner: number = 10,
+    missedMiners: number = 1,
+  ): void {
+    const expectedTimeout = expectedTimeoutPerMiner * missedMiners;
     const variance = Math.abs(timeoutPeriod - expectedTimeout);
-    const isUnusual = variance > 2; // Timeout differs by more than 2 seconds
+    const isConsistent = variance <= 2; // Within 2 seconds of expected timeout
 
     this.writePoint(
       new Point('consensus_timeout_periods')
         .tag('chainId', chainId.toString())
-        .tag('unusual', isUnusual ? 'true' : 'false')
+        .tag('is_consistent', isConsistent ? 'true' : 'false')
         .intField('block_number', blockNumber)
         .floatField('timeout_period', timeoutPeriod)
         .floatField('expected_timeout', expectedTimeout)
+        .intField('missed_miners', missedMiners)
         .floatField('variance', variance)
         .timestamp(new Date()),
     );
 
     this.logger.debug(
       `Recorded timeout period: chainId=${chainId}, block=${blockNumber}, ` +
-        `timeout=${timeoutPeriod}s, expected=${expectedTimeout}s, variance=${variance}s`,
+        `timeout=${timeoutPeriod}s, expected=${expectedTimeout}s for ${missedMiners} missed miner(s), ` +
+        `variance=${variance}s, consistent=${isConsistent}`,
     );
   }
 
@@ -647,5 +658,86 @@ export class MetricsService implements OnModuleInit {
       `Updated miner performance: chainId=${chainId}, miner=${minerAddress}, ` +
         `totalMined=${totalBlocksMined}, missed=${missedBlocks}, successRate=${successRate.toFixed(2)}%`,
     );
+  }
+
+  /**
+   * Retrieve historical miner performance data from InfluxDB
+   *
+   * @param chainId The chain ID
+   * @param minerAddresses Array of miner addresses to fetch data for
+   * @returns Object mapping miner addresses to their performance data
+   */
+  async getMinerPerformanceData(
+    chainId: number,
+    minerAddresses: string[],
+  ): Promise<
+    Record<
+      string,
+      {
+        totalBlocksMined: number;
+        missedBlocks: number;
+        lastActiveBlock: number;
+        lastActive: string | null;
+      }
+    >
+  > {
+    if (!this.connected || !this.influxClient) {
+      this.logger.warn('Cannot get miner performance data - InfluxDB not connected');
+      return {};
+    }
+
+    try {
+      const config = this.configService.getInfluxDbConfig();
+      const queryApi = this.influxClient.getQueryApi(config.org);
+
+      // Prepare address list for the query
+      const addressList = minerAddresses.map(addr => `"${addr.toLowerCase()}"`).join(', ');
+
+      // Query to get the latest performance data for each miner
+      const query = `
+        from(bucket: "${config.bucket}")
+          |> range(start: -30d)
+          |> filter(fn: (r) => r._measurement == "consensus_miner_performance")
+          |> filter(fn: (r) => r.chainId == "${chainId}")
+          |> filter(fn: (r) => contains(value: r.miner, set: [${addressList}]))
+          |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
+          |> group(columns: ["miner"])
+          |> last()
+      `;
+
+      const result: Record<
+        string,
+        {
+          totalBlocksMined: number;
+          missedBlocks: number;
+          lastActiveBlock: number;
+          lastActive: string | null;
+        }
+      > = {};
+
+      // Execute query and process results
+      const records = await queryApi.collectRows(query);
+      this.logger.debug(`Retrieved ${records.length} miner performance records from InfluxDB`);
+
+      // Process each record
+      for (const record of records) {
+        // Type cast the record to our expected structure
+        const minerRecord = record as MinerRecord;
+        const minerAddress = minerRecord.miner?.toLowerCase();
+        if (!minerAddress) continue;
+
+        result[minerAddress] = {
+          totalBlocksMined: parseInt(String(minerRecord.total_blocks_mined ?? '0')),
+          missedBlocks: parseInt(String(minerRecord.missed_blocks ?? '0')),
+          lastActiveBlock: parseInt(String(minerRecord.last_block ?? '0')),
+          lastActive: minerRecord._time ?? null,
+        };
+      }
+
+      return result;
+    } catch (error) {
+      this.logger.error(`Failed to retrieve miner performance data: ${error.message}`);
+      return {};
+    }
   }
 }
