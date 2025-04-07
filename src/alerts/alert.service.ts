@@ -730,14 +730,14 @@ export class AlertService implements OnModuleInit {
 
     switch (severity) {
       case 'error':
-        await this.error('threshold_exceeded', component, `${title} - ${message}`, chainId);
+        await this.error(ALERTS.TYPES.THRESHOLD_EXCEEDED, component, `${title} - ${message}`, chainId);
         break;
       case 'warning':
         // Use warning method - will save alert to database but not send notifications
-        await this.warning('threshold_warning', component, `${title} - ${message}`, chainId);
+        await this.warning(ALERTS.TYPES.THRESHOLD_WARNING, component, `${title} - ${message}`, chainId);
         break;
       case 'info':
-        await this.info('threshold_notification', component, `${title} - ${message}`, chainId);
+        await this.info(ALERTS.TYPES.THRESHOLD_NOTIFICATION, component, `${title} - ${message}`, chainId);
         break;
     }
   }

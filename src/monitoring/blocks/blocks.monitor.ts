@@ -531,7 +531,7 @@ export class BlocksMonitorService implements OnModuleInit {
     // Send notification
     this.alertService.error(
       ALERTS.TYPES.RPC_ENDPOINT_DOWN,
-      'rpc',
+      ALERTS.COMPONENTS.RPC,
       `Primary RPC endpoint ( ${endpoint} ) for chain ${chainId} has been down for ${downtimeHours}h ${downtimeMinutes}m: ${error.message}`,
       chainId,
     );

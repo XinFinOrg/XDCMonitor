@@ -6,6 +6,7 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { TransactionStatus } from '@types';
 import { ethers } from 'ethers';
+import { ALERTS } from '@common/constants/config';
 
 @Injectable()
 export class TransactionMonitorService implements OnModuleInit {
@@ -181,8 +182,8 @@ export class TransactionMonitorService implements OnModuleInit {
     } else {
       this.logger.warn('Skipping Mainnet transaction tests due to insufficient wallet balance');
       this.alertService.warning(
-        'INSUFFICIENT_WALLET_BALANCE',
-        'transaction',
+        ALERTS.TYPES.INSUFFICIENT_WALLET_BALANCE,
+        ALERTS.COMPONENTS.TRANSACTION,
         `Mainnet test wallet (${this.testWallets[50].address}) has insufficient balance for transaction tests`,
         50,
       );
@@ -199,8 +200,8 @@ export class TransactionMonitorService implements OnModuleInit {
     } else {
       this.logger.warn('Skipping Testnet transaction tests due to insufficient wallet balance');
       this.alertService.warning(
-        'INSUFFICIENT_WALLET_BALANCE',
-        'transaction',
+        ALERTS.TYPES.INSUFFICIENT_WALLET_BALANCE,
+        ALERTS.COMPONENTS.TRANSACTION,
         `Testnet test wallet (${this.testWallets[51].address}) has insufficient balance for transaction tests`,
         51,
       );

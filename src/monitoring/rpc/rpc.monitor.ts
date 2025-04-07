@@ -308,7 +308,13 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
       this.config.rpcBatchSize,
       this.monitorRpcEndpoint.bind(this),
       (endpoint, isUp) =>
-        !isUp && this.checkDowntimeNotification(endpoint, this.rpcStatuses, ALERTS.TYPES.RPC_ENDPOINT_DOWN, 'rpc'),
+        !isUp &&
+        this.checkDowntimeNotification(
+          endpoint,
+          this.rpcStatuses,
+          ALERTS.TYPES.RPC_ENDPOINT_DOWN,
+          ALERTS.COMPONENTS.RPC,
+        ),
     );
   }
 
@@ -333,7 +339,12 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
           if (!status?.downSince) {
             this.updateStatus(endpoint, this.wsStatuses, false);
           }
-          return this.checkDowntimeNotification(endpoint, this.wsStatuses, ALERTS.TYPES.RPC_ENDPOINT_DOWN, 'websocket');
+          return this.checkDowntimeNotification(
+            endpoint,
+            this.wsStatuses,
+            ALERTS.TYPES.RPC_ENDPOINT_DOWN,
+            ALERTS.COMPONENTS.WEBSOCKET,
+          );
         }
         return false;
       },
@@ -397,7 +408,7 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
                 const isError = latency > ALERTS.THRESHOLDS.RPC_LATENCY_ERROR_MS;
                 this.alertService[isError ? 'error' : 'warning'](
                   ALERTS.TYPES.RPC_HIGH_LATENCY,
-                  'rpc',
+                  ALERTS.COMPONENTS.RPC,
                   `${isError ? 'High' : 'Elevated'} RPC latency on ${endpoint.url} for chain ${endpoint.chainId}: ${latency}ms`,
                   endpoint.chainId,
                 );
@@ -487,14 +498,14 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
         if (latency > ALERTS.THRESHOLDS.RPC_LATENCY_ERROR_MS) {
           this.alertService.error(
             ALERTS.TYPES.RPC_HIGH_LATENCY,
-            'rpc',
+            ALERTS.COMPONENTS.RPC,
             `High RPC latency on ${endpoint.url} for chain ${endpoint.chainId}: ${latency}ms`,
             endpoint.chainId,
           );
         } else if (latency > ALERTS.THRESHOLDS.RPC_LATENCY_WARNING_MS) {
           this.alertService.warning(
             ALERTS.TYPES.RPC_HIGH_LATENCY,
-            'rpc',
+            ALERTS.COMPONENTS.RPC,
             `Elevated RPC latency on ${endpoint.url} for chain ${endpoint.chainId}: ${latency}ms`,
             endpoint.chainId,
           );
@@ -561,7 +572,7 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
 
     // Check for downtime alerts
     if (!isUp) {
-      this.checkDowntimeNotification(endpoint, this.rpcStatuses, ALERTS.TYPES.RPC_ENDPOINT_DOWN, 'rpc');
+      this.checkDowntimeNotification(endpoint, this.rpcStatuses, ALERTS.TYPES.RPC_ENDPOINT_DOWN, ALERTS.COMPONENTS.RPC);
     }
   }
 
@@ -596,7 +607,12 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
 
       // Check for downtime notifications if down
       if (!isUp) {
-        this.checkDowntimeNotification(endpoint, this.wsStatuses, ALERTS.TYPES.RPC_ENDPOINT_DOWN, 'websocket');
+        this.checkDowntimeNotification(
+          endpoint,
+          this.wsStatuses,
+          ALERTS.TYPES.RPC_ENDPOINT_DOWN,
+          ALERTS.COMPONENTS.WEBSOCKET,
+        );
       }
 
       return isUp;
@@ -608,7 +624,12 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
       this.blockchainService.updateWsProviderStatus(endpoint.url, false);
 
       // Check for downtime notification
-      this.checkDowntimeNotification(endpoint, this.wsStatuses, ALERTS.TYPES.RPC_ENDPOINT_DOWN, 'websocket');
+      this.checkDowntimeNotification(
+        endpoint,
+        this.wsStatuses,
+        ALERTS.TYPES.RPC_ENDPOINT_DOWN,
+        ALERTS.COMPONENTS.WEBSOCKET,
+      );
 
       return false;
     }
@@ -854,7 +875,12 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
 
         // Check for downtime notifications for WebSocket endpoints
         if (!isUp) {
-          this.checkDowntimeNotification(wsEndpoint, this.wsStatuses, ALERTS.TYPES.RPC_ENDPOINT_DOWN, 'websocket');
+          this.checkDowntimeNotification(
+            wsEndpoint,
+            this.wsStatuses,
+            ALERTS.TYPES.RPC_ENDPOINT_DOWN,
+            ALERTS.COMPONENTS.WEBSOCKET,
+          );
         }
       } else {
         // Handle WebSocket endpoints not found in configuration
@@ -895,7 +921,12 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
             type: 'websocket' as const,
             chainId,
           };
-          this.checkDowntimeNotification(tempEndpoint, this.wsStatuses, ALERTS.TYPES.RPC_ENDPOINT_DOWN, 'websocket');
+          this.checkDowntimeNotification(
+            tempEndpoint,
+            this.wsStatuses,
+            ALERTS.TYPES.RPC_ENDPOINT_DOWN,
+            ALERTS.COMPONENTS.WEBSOCKET,
+          );
         }
       }
 

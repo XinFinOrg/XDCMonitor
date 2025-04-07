@@ -243,6 +243,9 @@ export const API_PATHS = {
 export const ALERTS = {
   // Alert types
   TYPES: {
+    THRESHOLD_EXCEEDED: 'threshold_exceeded',
+    THRESHOLD_WARNING: 'threshold_warning',
+    THRESHOLD_NOTIFICATION: 'threshold_notification',
     RPC_ENDPOINT_DOWN: 'rpc_endpoint_down',
     RPC_HIGH_LATENCY: 'rpc_high_latency',
     MISSING_BLOCKS: 'missing_blocks',
@@ -252,6 +255,19 @@ export const ALERTS = {
     LOW_TX_VOLUME: 'low_transaction_volume',
     SYNC_LAG: 'sync_lag',
     WALLET_LOW_BALANCE: 'wallet_low_balance',
+    INSUFFICIENT_WALLET_BALANCE: 'insufficient_wallet_balance',
+    CONSENSUS_FREQUENT_MISSED_ROUNDS: 'consensus_frequent_missed_rounds',
+    CONSENSUS_UNUSUAL_TIMEOUT: 'consensus_unusual_timeout',
+  },
+
+  // Alert components
+  COMPONENTS: {
+    RPC: 'rpc',
+    WEBSOCKET: 'websocket',
+    TRANSACTION: 'transaction',
+    BLOCK: 'block',
+    SYNC: 'sync',
+    CONSENSUS: 'consensus',
   },
 
   // Alert severities
