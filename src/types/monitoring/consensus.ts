@@ -20,6 +20,7 @@ export interface ConsensusViolation {
   violationType: 'wrong_miner' | 'timeout';
   timestamp: Date;
   timeDifference?: number; // In seconds for timeout violations
+  estimatedMissedMiners?: number; // Estimated number of consecutive miners that missed their turn
 }
 
 /**
@@ -29,7 +30,6 @@ export interface MinerPerformance {
   address: string;
   totalBlocksMined: number;
   missedBlocks: number;
-  timeoutCount: number;
   lastActiveBlock?: number;
   lastActive?: Date;
 }

@@ -525,4 +525,127 @@ export class MetricsService implements OnModuleInit {
   getInfluxClient(): InfluxDB | null {
     return this.connected ? this.influxClient : null;
   }
+
+  /**
+   * Record a missed round event
+   *
+   * @param chainId The chain ID
+   * @param blockNumber The block number where the missed round was detected
+   * @param round The round number that was missed
+   * @param expectedMiner The address of the miner that missed its turn
+   * @param actualMiner The address of the miner that actually mined the block
+   * @param missedMinersCount Number of consecutive miners that missed their turn
+   */
+  recordMissedRound(
+    chainId: number,
+    blockNumber: number,
+    round: number,
+    expectedMiner: string,
+    actualMiner: string,
+    missedMinersCount: number = 1,
+  ): void {
+    this.writePoint(
+      new Point('consensus_missed_rounds')
+        .tag('chainId', chainId.toString())
+        .tag('expected_miner', expectedMiner.toLowerCase())
+        .tag('actual_miner', actualMiner.toLowerCase())
+        .intField('block_number', blockNumber)
+        .intField('round', round)
+        .intField('missed_miners_count', missedMinersCount)
+        .timestamp(new Date()),
+    );
+
+    this.logger.debug(
+      `Recorded missed round: chainId=${chainId}, block=${blockNumber}, round=${round}, ` +
+        `expectedMiner=${expectedMiner}, actualMiner=${actualMiner}, missedMiners=${missedMinersCount}`,
+    );
+  }
+
+  /**
+   * Record a timeout period for a missed round
+   *
+   * @param chainId The chain ID
+   * @param blockNumber The block number where timeout occurred
+   * @param timeoutPeriod The timeout period in seconds
+   * @param expectedTimeout The expected timeout period (normally ~10s)
+   */
+  recordTimeoutPeriod(chainId: number, blockNumber: number, timeoutPeriod: number, expectedTimeout: number = 10): void {
+    const variance = Math.abs(timeoutPeriod - expectedTimeout);
+    const isUnusual = variance > 2; // Timeout differs by more than 2 seconds
+
+    this.writePoint(
+      new Point('consensus_timeout_periods')
+        .tag('chainId', chainId.toString())
+        .tag('unusual', isUnusual ? 'true' : 'false')
+        .intField('block_number', blockNumber)
+        .floatField('timeout_period', timeoutPeriod)
+        .floatField('expected_timeout', expectedTimeout)
+        .floatField('variance', variance)
+        .timestamp(new Date()),
+    );
+
+    this.logger.debug(
+      `Recorded timeout period: chainId=${chainId}, block=${blockNumber}, ` +
+        `timeout=${timeoutPeriod}s, expected=${expectedTimeout}s, variance=${variance}s`,
+    );
+  }
+
+  /**
+   * Record a miner's missed round statistics
+   *
+   * @param chainId The chain ID
+   * @param minerAddress The miner's address
+   * @param missedBlocks The total number of blocks missed by this miner
+   */
+  recordMinerMissedRound(chainId: number, minerAddress: string, missedBlocks: number): void {
+    this.writePoint(
+      new Point('consensus_miner_missed_rounds')
+        .tag('chainId', chainId.toString())
+        .tag('miner', minerAddress.toLowerCase())
+        .intField('missed_blocks', missedBlocks)
+        .timestamp(new Date()),
+    );
+
+    this.logger.debug(
+      `Updated miner missed round stats: chainId=${chainId}, miner=${minerAddress}, ` + `missedBlocks=${missedBlocks}`,
+    );
+  }
+
+  /**
+   * Record comprehensive miner performance metrics
+   *
+   * @param chainId The chain ID
+   * @param minerAddress The miner's address
+   * @param totalBlocksMined Total blocks successfully mined by this validator
+   * @param missedBlocks Total blocks missed by this validator
+   * @param blockNumber The latest block number for this update
+   */
+  recordMinerPerformance(
+    chainId: number,
+    minerAddress: string,
+    totalBlocksMined: number,
+    missedBlocks: number,
+    blockNumber: number,
+  ): void {
+    // Calculate success rate as percentage
+    const totalAttempts = totalBlocksMined + missedBlocks;
+    const successRate = totalAttempts > 0 ? (totalBlocksMined / totalAttempts) * 100 : 100;
+
+    this.writePoint(
+      new Point('consensus_miner_performance')
+        .tag('chainId', chainId.toString())
+        .tag('miner', minerAddress.toLowerCase())
+        .intField('total_blocks_mined', totalBlocksMined)
+        .intField('missed_blocks', missedBlocks)
+        .intField('total_attempts', totalAttempts)
+        .floatField('success_rate', successRate)
+        .intField('last_block', blockNumber)
+        .timestamp(new Date()),
+    );
+
+    this.logger.debug(
+      `Updated miner performance: chainId=${chainId}, miner=${minerAddress}, ` +
+        `totalMined=${totalBlocksMined}, missed=${missedBlocks}, successRate=${successRate.toFixed(2)}%`,
+    );
+  }
 }

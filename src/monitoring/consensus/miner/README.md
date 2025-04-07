@@ -26,14 +26,32 @@ The monitoring system embraces a "blockchain-first" approach:
 
 This approach eliminates false alerts that would occur when using position-based miner prediction, as the blockchain itself provides the definitive record of missed rounds.
 
+### Metrics vs. Alerts Separation
+
+The system maintains a clear separation between metrics collection and alerts:
+
+1. **Dedicated Metrics**:
+
+   - `consensus_missed_rounds`: Records every missed round with detailed information
+   - `consensus_timeout_periods`: Tracks timeout periods between blocks for statistical analysis
+   - `consensus_miner_timeouts`: Maintains cumulative statistics for each miner's performance
+
+2. **Threshold-Based Alerts**:
+   - Alerts are only generated for actionable events that require attention
+   - Unusual timeout periods (deviating more than 2 seconds from expected)
+   - Frequent timeouts for specific miners (every 10 occurrences)
+   - System errors during monitoring
+
+This approach reduces alert noise while maintaining comprehensive data for analysis.
+
 ### Missed Round Processing
 
 For each missed round detected by the blockchain:
 
 1. The system retrieves the actual blocks involved
 2. It calculates the precise timeout period from timestamps
-3. It verifies if the timeout matches the expected 10-second threshold
-4. Any deviations are reported for further investigation
+3. It records metrics for the missed round and timeout period
+4. It generates alerts only when thresholds are exceeded
 
 ### Real-time Monitoring
 
@@ -56,8 +74,8 @@ For newly produced blocks:
 - **BlockchainService**: Access to blockchain data and RPC methods
 - **ConfigService**: Configuration values for monitoring parameters
 - **BlocksMonitorService**: Block data for consensus analysis
-- **MetricsService**: Reports miner performance metrics for dashboards
-- **AlertService**: Sends alerts on detected consensus anomalies
+- **MetricsService**: Records dedicated metrics for missed rounds and timeouts
+- **AlertService**: Sends alerts only when actionable thresholds are exceeded
 - **ConsensusMonitorService**: Provides centralized validator data
 
 ## How It Works
@@ -86,8 +104,36 @@ For each missed round, the system:
 
 1. Retrieves the blocks before and after the missed round
 2. Calculates the actual timeout period from block timestamps
-3. Verifies if the timeout matches the expected 10-second threshold
-4. Reports any deviations from the expected timeout period
+3. Precisely determines number of miners skipped by comparing positions in the masternode list:
+   - Finds the index of the expected miner (who missed their turn)
+   - Finds the index of the actual miner (who successfully mined the block)
+   - Calculates the exact number of miners skipped based on position difference
+   - Handles wraparound cases when the expected miner is near the end of the list
+4. Verifies if the timeout period is consistent with the number of miners skipped:
+   - Each missed miner should add approximately 10 seconds to the timeout
+   - Inconsistencies between actual timeout and expected timeout indicate consensus issues
+5. Records the timeout period as a dedicated metric with enhanced context
+6. Generates specifically tailored alerts based on the scenario detected:
+   - Inconsistent Timeout: When the timeout period doesn't match the expected duration
+   - Multiple Consecutive Misses: When 3+ miners in sequence miss their turns
+
+This position-based analysis provides definitive information about missed miners, rather than estimating based on timeout duration alone. It can accurately distinguish between normal timeout behavior (miners simply offline) and potential consensus issues (timeout periods inconsistent with the number of miners missed).
+
+## Metrics Tracking
+
+The monitoring system tracks four primary types of metrics:
+
+1. **Missed Rounds**: Records each missed round event with round number, block number, expected and actual miners
+2. **Timeout Periods**: Tracks the time between blocks when a timeout occurs, with variance from expected values
+3. **Miner Missed Rounds**: Tracks the cumulative count of missed rounds for each miner
+4. **Comprehensive Miner Performance**: Records complete performance metrics including:
+   - Total blocks successfully mined
+   - Missed blocks count
+   - Total mining attempts
+   - Success rate (as a percentage)
+   - Last active block
+
+These metrics provide a holistic view of the network's consensus health and individual validator performance. The success rate calculation (successful blocks ÷ total attempts × 100) offers a clear indicator of validator reliability over time.
 
 ## API Endpoints
 
@@ -100,11 +146,12 @@ For each missed round, the system:
 - `ConsensusViolation`: Records instances of missed rounds and timeouts
 - `MissedRound`: Stores information about rounds that were missed according to the blockchain
 
-## Monitoring Features
+## Key Features
 
-- **Authoritative Consensus Monitoring**: Uses blockchain data as the source of truth
-- **Timeout Period Verification**: Verifies the actual timeout periods match the expected threshold
-- **Performance Metrics**: Tracks statistics for each masternode (blocks mined, timeouts, etc.)
+- **Metrics-Alerts Separation**: Clear distinction between data collection and actionable notifications
+- **Authoritative Monitoring**: Uses blockchain data as the source of truth
+- **Timeout Verification**: Verifies actual timeout periods match expected thresholds
+- **Performance Tracking**: Tracks statistics for each masternode (blocks mined, timeouts, etc.)
 - **Complete Block Coverage**: Ensures no blocks are missed in the monitoring process
 - **Optimized Processing**: Directly processes blocks in the monitoring loop for improved efficiency
 

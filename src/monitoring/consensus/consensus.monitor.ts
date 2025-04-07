@@ -148,14 +148,9 @@ export class ConsensusMonitor implements OnModuleInit, OnModuleDestroy {
       });
 
       // Log summary for tracking
-      const infoAlert = {
-        type: 'info' as const,
-        title: `Chain ${chainId} - Validator Data Stored`,
-        message: `Epoch ${currentEpoch}: Stored ${masternodeList.masternodes.length} masternodes, ${masternodeList.standbynodes.length} standbynodes, ${masternodeList.penalty.length} penalty nodes`,
-        timestamp,
-        component: 'consensus',
-      };
-      this.metricsService.saveAlert(infoAlert);
+      this.logger.log(
+        `Chain ${chainId} - Validator Data Stored: Epoch ${currentEpoch}: Stored ${masternodeList.masternodes.length} masternodes, ${masternodeList.standbynodes.length} standbynodes, ${masternodeList.penalty.length} penalty nodes`,
+      );
     } catch (error) {
       this.logger.error(`Failed to store validator data in InfluxDB: ${error.message}`);
     }
