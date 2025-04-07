@@ -64,10 +64,25 @@ For newly produced blocks:
 
 ## Configuration Options
 
-- `enableConsensusMonitoring`: Toggle feature on/off via ConfigService
-- `consensusScanInterval`: Time between consensus checks (defaults to 15000ms)
-- `consensusMonitoringChains`: List of chain IDs to monitor (defaults to [50, 51] for mainnet and testnet)
-- Configurable alert thresholds for unusual timeout periods
+The Miner Monitor is configured through environment variables:
+
+- `ENABLE_CONSENSUS_MONITORING`: Enable/disable consensus monitoring (in the "Monitoring features" section)
+- `CONSENSUS_MONITORING_CHAIN_IDS`: Comma-separated list of chain IDs to monitor (default: 50,51)
+- `CONSENSUS_SCAN_INTERVAL`: Time between consensus checks in milliseconds (default: 15000ms)
+
+Example configuration in `.env`:
+
+```
+# Monitoring features
+ENABLE_RPC_MONITORING=true
+ENABLE_BLOCK_MONITORING=true
+ENABLE_PORT_MONITORING=true
+ENABLE_CONSENSUS_MONITORING=true
+
+# Consensus monitoring configuration
+CONSENSUS_MONITORING_CHAIN_IDS=50,51
+CONSENSUS_SCAN_INTERVAL=15000
+```
 
 ## Integration Points
 

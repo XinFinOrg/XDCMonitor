@@ -1,4 +1,16 @@
 /**
+ * Interface for miner record from InfluxDB
+ */
+export interface MinerRecord {
+  miner?: string;
+  total_blocks_mined?: string | number;
+  missed_blocks?: string | number;
+  last_block?: string | number;
+  _time?: string;
+  [key: string]: unknown; // Allow for additional properties from InfluxDB
+}
+
+/**
  * Interface for XDC masternode list
  */
 export interface MasternodeList {

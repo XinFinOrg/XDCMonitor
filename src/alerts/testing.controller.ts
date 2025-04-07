@@ -1,7 +1,7 @@
 import { MetricsService } from '@metrics/metrics.service';
 import { Controller, Get, Logger, Param, Post, Query } from '@nestjs/common';
 import { AlertService } from './alert.service';
-import { RpcMonitorService } from '@monitoring/rpc.monitor';
+import { RpcMonitorService } from '@monitoring/rpc/rpc.monitor';
 
 @Controller('testing')
 export class TestingController {

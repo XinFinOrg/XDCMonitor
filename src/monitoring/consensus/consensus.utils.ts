@@ -1,3 +1,4 @@
+import { ENV_VARS, FEATURE_FLAGS } from '@common/constants/config';
 import { RpcRetryClient } from '@common/utils/rpc-retry-client';
 import { ConfigService } from '@config/config.service';
 
@@ -29,9 +30,9 @@ export function getMonitoringConfig(configService: ConfigService): {
   chains: number[];
 } {
   return {
-    enabled: configService.get('enableConsensusMonitoring', false),
-    scanIntervalMs: configService.get('consensusScanInterval', DEFAULT_SCAN_INTERVAL_MS),
-    chains: configService.getNumberArray('consensusMonitoringChains', [50, 51]),
+    enabled: configService.isFeatureEnabled(FEATURE_FLAGS.ENABLE_CONSENSUS_MONITORING, false),
+    scanIntervalMs: configService.getNumber(ENV_VARS.CONSENSUS_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL_MS),
+    chains: configService.getNumberArray(ENV_VARS.CONSENSUS_MONITORING_CHAIN_IDS, [50, 51]),
   };
 }
 

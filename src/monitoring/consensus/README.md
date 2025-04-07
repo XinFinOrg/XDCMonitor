@@ -28,11 +28,33 @@ The consensus monitoring system supports monitoring multiple chains simultaneous
 - **Mainnet (Chain ID: 50)** - XDC Production Network
 - **Testnet (Chain ID: 51)** - XDC Apothem Network
 
+## Configuration Options
+
+The monitoring system is configured via environment variables in two sections:
+
+### Monitoring Features
+
+```
+# Monitoring features
+ENABLE_RPC_MONITORING=true
+ENABLE_BLOCK_MONITORING=true
+ENABLE_PORT_MONITORING=true
+ENABLE_CONSENSUS_MONITORING=true
+```
+
+### Consensus Specific Configuration
+
+```
+# Consensus monitoring configuration
+CONSENSUS_MONITORING_CHAIN_IDS=50,51
+CONSENSUS_SCAN_INTERVAL=15000
+```
+
 Configuration options:
 
-- `enableConsensusMonitoring`: Toggle feature on/off
-- `consensusScanInterval`: Time between consensus checks (default: 15000ms)
-- `consensusMonitoringChains`: Comma-separated list of chain IDs to monitor (default: 50,51)
+- `ENABLE_CONSENSUS_MONITORING`: Enable/disable the consensus monitoring feature
+- `CONSENSUS_MONITORING_CHAIN_IDS`: Comma-separated list of chain IDs to monitor (default: 50,51)
+- `CONSENSUS_SCAN_INTERVAL`: Time between consensus checks in milliseconds (default: 15000ms)
 
 Each chain maintains its own independent state, including:
 

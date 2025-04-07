@@ -5,7 +5,7 @@ import { MetricsService } from '@metrics/metrics.service';
 import { BlocksMonitorService } from '@monitoring/blocks/blocks.monitor';
 import { ConsensusMonitor } from '@monitoring/consensus/consensus.monitor';
 import { RpcMonitorService } from '@monitoring/rpc/rpc.monitor';
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy, OnModuleInit, Inject, forwardRef } from '@nestjs/common';
 import { SchedulerRegistry } from '@nestjs/schedule';
 
 /**
@@ -26,6 +26,7 @@ export class EpochMonitor implements OnModuleInit, OnModuleDestroy {
     private readonly metricsService: MetricsService,
     private readonly alertService: AlertService,
     private readonly schedulerRegistry: SchedulerRegistry,
+    @Inject(forwardRef(() => ConsensusMonitor))
     private readonly consensusMonitor: ConsensusMonitor,
   ) {}
 
