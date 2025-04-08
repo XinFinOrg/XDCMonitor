@@ -54,7 +54,6 @@ export interface ConsensusMonitoringInfo {
   chainId?: number; // Chain ID (50 for mainnet, 51 for testnet)
   lastCheckedBlock: number;
   currentEpoch: number;
-  nextEpochBlock: number;
   currentEpochBlock?: number; // Block number where the current epoch started
   masternodeCount: number;
   standbyNodeCount: number;

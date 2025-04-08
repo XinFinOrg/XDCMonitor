@@ -11,7 +11,7 @@ import {
   getMissedRoundsForEpoch,
   getMonitoringConfig,
 } from '@monitoring/consensus/consensus.utils';
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit, Inject, forwardRef } from '@nestjs/common';
+import { Inject, Injectable, Logger, forwardRef } from '@nestjs/common';
 import { ConsensusMonitoringInfo, ConsensusViolation, MinerPerformance } from '@types';
 import { performance } from 'perf_hooks';
 
@@ -33,13 +33,14 @@ interface ChainState {
   minerPerformance: Record<string, MinerPerformance>;
   recentViolations: ConsensusViolation[]; // Store recent timeout and consensus violation events for API access and dashboards
   lastMissedRoundsCheck: number; // Block number when we last checked for missed rounds
+  initialRun: boolean; // Track first execution
 }
 
 /**
  * Service for monitoring XDC blockchain miner consensus and timeouts
  */
 @Injectable()
-export class MinerMonitor implements OnModuleInit, OnModuleDestroy {
+export class MinerMonitor {
   private readonly logger = new Logger(MinerMonitor.name);
   private readonly MAX_RECENT_VIOLATIONS = 100;
 
@@ -53,7 +54,7 @@ export class MinerMonitor implements OnModuleInit, OnModuleDestroy {
     private readonly metricsService: MetricsService,
     private readonly alertService: AlertService,
     @Inject(forwardRef(() => ConsensusMonitor))
-    private readonly consensusMonitorService: ConsensusMonitor,
+    private readonly consensusMonitor: ConsensusMonitor,
   ) {
     const { enabled, scanIntervalMs, chains } = getMonitoringConfig(this.configService);
     this.monitoringEnabled = enabled;
@@ -73,53 +74,31 @@ export class MinerMonitor implements OnModuleInit, OnModuleDestroy {
         minerPerformance: {},
         recentViolations: [],
         lastMissedRoundsCheck: 0,
+        initialRun: true,
       };
     });
   }
 
   /**
-   * Initialize the monitor and register monitoring intervals for each chain
+   * Get the scan interval
    */
-  async onModuleInit() {
-    if (!this.monitoringEnabled) {
-      this.logger.log(`${MinerMonitor.name} is disabled`);
-      return;
-    }
-
-    try {
-      this.logger.log(`Initializing ${MinerMonitor.name}...`);
-
-      // Load historical data from InfluxDB for each chain
-      for (const chainId of this.supportedChains) {
-        await this.loadHistoricalMinerData(chainId);
-        this.consensusMonitorService.registerMonitoringInterval(
-          `${MinerMonitor.name}-${chainId}`,
-          () => this.monitorMiners(chainId),
-          this.scanIntervalMs,
-        );
-        this.logger.log(`Monitoring enabled for chain ${chainId}`);
-      }
-    } catch (error) {
-      this.logger.error(`Failed to initialize ${MinerMonitor.name}: ${error.message}`);
-    }
-  }
-
-  /**
-   * Cleanup on module destruction
-   */
-  onModuleDestroy() {
-    this.supportedChains.forEach(chainId => {
-      this.consensusMonitorService.deregisterMonitoringInterval(`${MinerMonitor.name}-${chainId}`);
-    });
+  getScanIntervalMs(): number {
+    return this.scanIntervalMs;
   }
 
   /**
    * Main monitoring logic for miners on a specific chain
    * Fetches latest blocks and processes miner performance metrics
    */
-  private async monitorMiners(chainId: number): Promise<void> {
+  public async monitorMiners(chainId: number): Promise<void> {
     const chainState = this.chainStates[chainId];
-    const validatorData = this.consensusMonitorService.getValidatorData(chainId);
+    const validatorData = this.consensusMonitor.getValidatorData(chainId);
+
+    // Log initialization message only on first run
+    if (chainState.initialRun) {
+      this.logger.log(`${MinerMonitor.name} for chain ${chainId} started monitoring`);
+      chainState.initialRun = false;
+    }
 
     if (!this.monitoringEnabled || !chainState || !validatorData?.masternodeList) return;
 
@@ -261,7 +240,7 @@ export class MinerMonitor implements OnModuleInit, OnModuleDestroy {
       const timeoutPeriod = parseInt(currentBlock.timestamp, 16) - parseInt(prevBlock.timestamp, 16);
 
       // Calculate missed miners count
-      const validatorData = this.consensusMonitorService.getValidatorData(chainId);
+      const validatorData = this.consensusMonitor.getValidatorData(chainId);
       if (!validatorData?.masternodeList?.masternodes) {
         this.logger.warn(`Cannot determine missed miners - masternode list unavailable for chain ${chainId}`);
         return;
@@ -457,14 +436,13 @@ export class MinerMonitor implements OnModuleInit, OnModuleDestroy {
    */
   private getChainMonitoringInfo(chainId: number): ConsensusMonitoringInfo {
     const chainState = this.chainStates[chainId];
-    const validatorData = this.consensusMonitorService.getValidatorData(chainId);
+    const validatorData = this.consensusMonitor.getValidatorData(chainId);
 
     return {
       isEnabled: this.monitoringEnabled,
       chainId,
       lastCheckedBlock: chainState.lastCheckedBlock,
       currentEpoch: validatorData?.currentEpoch || 0,
-      nextEpochBlock: validatorData?.nextEpochBlock || 0,
       currentEpochBlock: chainState.currentEpochBlock,
       masternodeCount: validatorData?.masternodeList?.masternodes.length || 0,
       standbyNodeCount: validatorData?.masternodeList?.standbynodes.length || 0,
@@ -494,7 +472,7 @@ export class MinerMonitor implements OnModuleInit, OnModuleDestroy {
    * Load historical miner performance data from InfluxDB
    * Initializes miner performance tracking with historical data
    */
-  private async loadHistoricalMinerData(chainId: number): Promise<void> {
+  public async loadHistoricalMinerData(chainId: number): Promise<void> {
     try {
       const chainState = this.chainStates[chainId];
       this.logger.log(`Loading historical miner data for chain ${chainId}...`);
@@ -510,7 +488,7 @@ export class MinerMonitor implements OnModuleInit, OnModuleDestroy {
       chainState.lastCheckedBlock = latestBlockNumber - 100; // Start checking from 100 blocks back
 
       // Get validators and their performance data
-      const validatorData = this.consensusMonitorService.getValidatorData(chainId);
+      const validatorData = this.consensusMonitor.getValidatorData(chainId);
       if (!validatorData?.masternodeList?.masternodes) {
         this.logger.warn(`Could not load masternode list for chain ${chainId}`);
         return;

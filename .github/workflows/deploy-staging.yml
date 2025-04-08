@@ -126,6 +126,8 @@ jobs:
           INFLUXDB_ADMIN_PASSWORD: ${{ secrets.STAGING_INFLUXDB_ADMIN_PASSWORD }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.STAGING_TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.STAGING_TELEGRAM_CHAT_ID }}
+          TELEGRAM_MAINNET_TOPIC_ID: ${{ secrets.STAGING_TELEGRAM_MAINNET_TOPIC_ID }}
+          TELEGRAM_TESTNET_TOPIC_ID: ${{ secrets.STAGING_TELEGRAM_TESTNET_TOPIC_ID }}
           GRAFANA_ADMIN_USER: ${{ secrets.STAGING_GRAFANA_ADMIN_USER }}
           GRAFANA_ADMIN_PASSWORD: ${{ secrets.STAGING_GRAFANA_ADMIN_PASSWORD }}
           MNEMONIC_WALLET: ${{ secrets.STAGING_MNEMONIC_WALLET }}
@@ -151,7 +153,6 @@ jobs:
           ENABLE_RPC_MONITORING=true
           ENABLE_PORT_MONITORING=true
           ENABLE_BLOCK_MONITORING=true
-          ENABLE_CONSENSUS_MONITORING=true
           BLOCK_TIME_THRESHOLD=3.0
 
           # Alert configuration
@@ -162,6 +163,8 @@ jobs:
           # Telegram notification configuration
           TELEGRAM_BOT_TOKEN="${TELEGRAM_BOT_TOKEN}"
           TELEGRAM_CHAT_ID="${TELEGRAM_CHAT_ID}"
+          TELEGRAM_MAINNET_TOPIC_ID="${TELEGRAM_MAINNET_TOPIC_ID}"
+          TELEGRAM_TESTNET_TOPIC_ID="${TELEGRAM_TESTNET_TOPIC_ID}"
 
           # Logging configuration
           LOG_LEVEL=info
@@ -187,6 +190,7 @@ jobs:
           TEST_TESTNET_RECEIVER_ADDRESS="${TEST_TESTNET_RECEIVER_ADDRESS}"
 
           # Consensus monitoring configuration
+          ENABLE_CONSENSUS_MONITORING=true
           CONSENSUS_MONITORING_CHAIN_IDS=50,51
           CONSENSUS_SCAN_INTERVAL=15000
           EOF

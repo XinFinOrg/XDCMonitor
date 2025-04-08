@@ -1,11 +1,11 @@
-import { ALERTS } from '@common/constants/config';
+import { ALERTS, BLOCKCHAIN } from '@common/constants/config';
 import { AlertCategory, AlertManager, Alert as AlertManagerAlert, AlertSeverity } from '@common/utils/alert-manager';
 import { ConfigService } from '@config/config.service';
+import { QueryApi } from '@influxdata/influxdb-client';
 import { MetricsService } from '@metrics/metrics.service';
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import axios from 'axios';
-import { QueryApi } from '@influxdata/influxdb-client';
 
 export interface Alert {
   type: 'error' | 'warning' | 'info';
@@ -492,6 +492,8 @@ export class AlertService implements OnModuleInit {
         config: {
           botToken: alertConfig.telegramBotToken,
           chatId: alertConfig.telegramChatId,
+          mainnetTopicId: alertConfig.telegramMainnetTopicId,
+          testnetTopicId: alertConfig.telegramTestnetTopicId,
         },
       });
     }
@@ -589,9 +591,15 @@ export class AlertService implements OnModuleInit {
       title: alert.title,
       message: alert.message,
       shouldNotify: true,
+      metadata: {
+        chainId: chainId,
+      },
     });
 
     this.metricsService.saveAlert(fullAlert, chainId);
+
+    // Send chat notifications with the chainId
+    await this.sendToChat(fullAlert, chainId);
   }
 
   /**
@@ -753,7 +761,7 @@ export class AlertService implements OnModuleInit {
   /**
    * Send alert to chat channels (Telegram, webhook, etc.)
    */
-  private async sendToChat(alert: Alert): Promise<void> {
+  private async sendToChat(alert: Alert, chainId?: number): Promise<void> {
     if (
       !this.configService.getMonitoringConfig().alertNotifications.enableWebhook &&
       !this.configService.getMonitoringConfig().alertNotifications.enableTelegram
@@ -769,7 +777,7 @@ export class AlertService implements OnModuleInit {
         this.configService.getMonitoringConfig().alertNotifications.telegramBotToken &&
         this.configService.getMonitoringConfig().alertNotifications.telegramChatId
       ) {
-        await this.sendToTelegram(message);
+        await this.sendToTelegram(message, chainId);
       }
 
       // Send to webhook if configured
@@ -794,7 +802,7 @@ export class AlertService implements OnModuleInit {
   /**
    * Send an alert to Telegram
    */
-  private async sendToTelegram(message: string): Promise<void> {
+  private async sendToTelegram(message: string, chainId?: number): Promise<void> {
     try {
       const alertConfig = this.configService.getMonitoringConfig().alertNotifications;
       const botToken = alertConfig.telegramBotToken;
@@ -805,13 +813,37 @@ export class AlertService implements OnModuleInit {
         return;
       }
 
+      // Determine topic ID based on chainId
+      let messageThreadId: string | undefined;
+      if (chainId == BLOCKCHAIN.CHAIN_IDS_NUM.MAINNET && alertConfig.telegramMainnetTopicId) {
+        // Mainnet
+        messageThreadId = alertConfig.telegramMainnetTopicId;
+        this.logger.debug(`Using Mainnet topic ID: ${messageThreadId}`);
+      } else if (chainId == BLOCKCHAIN.CHAIN_IDS_NUM.TESTNET && alertConfig.telegramTestnetTopicId) {
+        // Testnet
+        messageThreadId = alertConfig.telegramTestnetTopicId;
+        this.logger.debug(`Using Testnet topic ID: ${messageThreadId}`);
+      }
+
       const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
-      await axios.post(url, {
+      const payload: any = {
         chat_id: chatId,
         text: message,
         parse_mode: 'Markdown',
-      });
-      this.logger.debug('Alert sent to Telegram');
+      };
+
+      // Add message_thread_id if we have a valid topic ID
+      if (messageThreadId) {
+        payload.message_thread_id = messageThreadId;
+      }
+
+      await axios.post(url, payload);
+
+      if (messageThreadId) {
+        this.logger.debug(`Alert sent to Telegram topic ${messageThreadId}`);
+      } else {
+        this.logger.debug('Alert sent to Telegram main thread');
+      }
     } catch (error) {
       this.logger.error(`Failed to send message to Telegram: ${error.message}`);
     }

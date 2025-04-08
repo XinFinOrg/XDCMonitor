@@ -62,3 +62,6 @@ influxdb_data/
 
 # Exclude all tsbuildinfo files
 *.tsbuildinfo
+
+# cursor
+.cursor/

@@ -14,6 +14,27 @@ The Miner Monitor service tracks the XDPoS 2.0 consensus mechanism across XDC ne
 4. **Miner Performance Tracking**: Records statistics on each masternode's mining activity and reliability
 5. **Consensus Monitoring**: Logs blockchain consensus events without attempting to predict miners
 
+## Architecture Integration
+
+The MinerMonitor is designed to work within the orchestrated monitoring system:
+
+1. **Orchestrated Initialization**:
+
+   - Rather than self-initializing, MinerMonitor waits for ConsensusMonitor to trigger it
+   - This ensures validator data is available before monitoring starts
+   - Prevents race conditions where monitoring would begin before data is ready
+
+2. **Data Flow**:
+
+   - ConsensusMonitor loads and manages validator data for all chains
+   - MinerMonitor retrieves this data via `consensusMonitor.getValidatorData()`
+   - This creates a clean dependency structure where data flows from centralized storage
+
+3. **Lifecycle Management**:
+   - ConsensusMonitor registers and manages all monitoring intervals
+   - MinerMonitor exposes its monitoring logic but doesn't schedule itself
+   - This centralizes scheduling and cleanup for better resource management
+
 ## Monitoring Approach
 
 ### Blockchain-First Approach
@@ -88,12 +109,33 @@ CONSENSUS_SCAN_INTERVAL=15000
 
 - **BlockchainService**: Access to blockchain data and RPC methods
 - **ConfigService**: Configuration values for monitoring parameters
-- **BlocksMonitorService**: Block data for consensus analysis
 - **MetricsService**: Records dedicated metrics for missed rounds and timeouts
 - **AlertService**: Sends alerts only when actionable thresholds are exceeded
-- **ConsensusMonitorService**: Provides centralized validator data
+- **ConsensusMonitor**: Provides validator data and manages monitoring intervals
 
 ## How It Works
+
+### Initialization Flow
+
+The initialization sequence follows the orchestrated approach:
+
+1. **Module Init**:
+
+   - MinerMonitor is created with dependencies injected
+   - Basic structure is initialized but monitoring doesn't start
+   - State is prepared to begin monitoring when triggered
+
+2. **Orchestrated Start**:
+
+   - ConsensusMonitor first loads validator data for all chains
+   - It then calls `miner.loadHistoricalMinerData()` for each chain
+   - Finally, it registers monitoring intervals for MinerMonitor
+   - This ensures data is available before monitoring begins
+
+3. **Monitoring Execution**:
+   - ConsensusMonitor triggers `monitorMiners()` on the set interval
+   - MinerMonitor retrieves validator data from ConsensusMonitor
+   - This creates a clean dependency flow for data
 
 ### Block Coverage
 
@@ -163,6 +205,7 @@ These metrics provide a holistic view of the network's consensus health and indi
 
 ## Key Features
 
+- **Orchestrated Architecture**: Works within an orchestrated monitoring system
 - **Metrics-Alerts Separation**: Clear distinction between data collection and actionable notifications
 - **Authoritative Monitoring**: Uses blockchain data as the source of truth
 - **Timeout Verification**: Verifies actual timeout periods match expected thresholds
