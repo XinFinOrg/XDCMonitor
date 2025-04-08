@@ -6,11 +6,12 @@ This directory contains the XDC Consensus Monitoring System, which tracks and va
 
 ## Architecture
 
-The system follows a modular design with a central coordinator and specialized monitoring services:
+The system follows a modular NestJS architecture with a central coordinator and specialized monitoring services:
 
-### Central Coordinator
+### Module Structure
 
-- **[ConsensusMonitorService](./consensus.monitor.ts)** - Coordinates the monitoring services and provides a unified interface
+- **[ConsensusModule](./consensus.module.ts)** - NestJS module that encapsulates all consensus-related monitors
+- **[ConsensusMonitor](./consensus.monitor.ts)** - Orchestrates the monitoring services and provides a unified interface
 - **[Consensus Utilities](./consensus.utils.ts)** - Shared utilities for epoch detection, RPC client creation, and configuration
 
 ### Specialized Monitors
@@ -19,7 +20,16 @@ The system follows a modular design with a central coordinator and specialized m
 2. **[Epoch Monitor](./epoch/README.md)** - Monitors epoch transitions and masternode list updates 🚧
 3. **[Reward Monitor](./reward/README.md)** - Validates reward distribution at epoch boundaries 🚧
 
-The specialized services are coordinated by the `ConsensusMonitorService`, which provides a unified interface for the monitoring system.
+### Orchestration Flow
+
+The `ConsensusMonitor` acts as the orchestration service with a coordinated initialization flow:
+
+1. First loads validator data for all chains
+2. Only after data is available, initializes component monitors
+3. Manages the monitoring intervals for all components
+4. Provides a central access point for validator data
+
+This approach ensures that all component monitors have access to the necessary validation data before they begin their monitoring activities, preventing race conditions.
 
 ## Multi-Chain Support
 

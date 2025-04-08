@@ -74,6 +74,7 @@ export class AlertManager {
       ...options,
       timestamp,
       acknowledged: false,
+      metadata: options.metadata || {},
     };
 
     // Add to alerts array (and maintain size limit)
@@ -251,7 +252,7 @@ export class AlertManager {
    * Send an alert via Telegram
    */
   private async sendTelegram(alert: Alert, channel: NotificationChannel): Promise<void> {
-    const { botToken, chatId } = channel.config;
+    const { botToken, chatId, mainnetTopicId, testnetTopicId } = channel.config;
 
     if (!botToken || !chatId) {
       throw new Error('Telegram bot token or chat ID is not configured');
@@ -280,15 +281,37 @@ export class AlertManager {
         } as any, // Use type assertion to bypass type checking issues
       });
 
+      // Extract chainId from metadata if available
+      const chainId = alert.metadata?.chainId as number | undefined;
+
+      // Determine message thread ID based on chainId
+      let messageThreadId: string | undefined;
+      if (chainId === 50 && mainnetTopicId) {
+        messageThreadId = mainnetTopicId;
+        this.logger.debug(`Using Mainnet topic ID: ${messageThreadId}`);
+      } else if (chainId === 51 && testnetTopicId) {
+        messageThreadId = testnetTopicId;
+        this.logger.debug(`Using Testnet topic ID: ${messageThreadId}`);
+      }
+
+      // Create options object with optional message_thread_id
+      const options: TelegramBot.SendMessageOptions = {
+        parse_mode: 'Markdown',
+      };
+
+      if (messageThreadId) {
+        options.message_thread_id = parseInt(messageThreadId, 10);
+      }
+
       // Send the message with retry logic
-      const result = await this.sendTelegramMessageSafely(bot, chatId, message);
+      const result = await this.sendTelegramMessageSafely(bot, chatId, message, options);
 
       if (result) {
         this.logger.debug(`Telegram notification sent, message ID: ${result.message_id}`);
       } else {
         // If all retries with the bot lib failed, try the direct HTTP fallback method
         this.logger.debug('All retries failed with bot library, attempting fallback HTTP method');
-        const fallbackResult = await this.sendTelegramFallback(botToken, chatId, message, 'Markdown');
+        const fallbackResult = await this.sendTelegramFallback(botToken, chatId, message, 'Markdown', messageThreadId);
 
         if (fallbackResult) {
           this.logger.debug('Telegram notification sent using fallback HTTP method');
@@ -302,6 +325,8 @@ export class AlertManager {
               .replace(/📱 [*]Component:[*]/g, '📱 Component:')
               .replace(/🔍 [*]Category:[*]/g, '🔍 Category:')
               .replace(/⏰ [*]Time:[*]/g, '⏰ Time:'),
+            undefined,
+            messageThreadId,
           );
 
           if (plainTextResult) {
@@ -327,6 +352,7 @@ export class AlertManager {
     chatId: string | number,
     text: string,
     parseMode?: string,
+    messageThreadId?: string,
   ): Promise<boolean> {
     try {
       this.logger.debug('Attempting to send message using fallback HTTP method');
@@ -347,6 +373,11 @@ export class AlertManager {
       // Only add parse_mode if specified
       if (parseMode) {
         data.parse_mode = parseMode;
+      }
+
+      // Add message_thread_id if specified
+      if (messageThreadId) {
+        data.message_thread_id = parseInt(messageThreadId, 10);
       }
 
       // Send the request with axios

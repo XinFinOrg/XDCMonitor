@@ -9,44 +9,29 @@ import { MinerMonitor } from './miner/miner.monitor';
 import { RewardMonitor } from './reward/reward.monitor';
 import { ENV_VARS } from '@common/constants/config';
 
-// Interface for cached validator data
+// Cached validator data interface
 interface ChainValidatorData {
   masternodeList: MasternodeList;
   currentEpoch: number;
-  nextEpochBlock: number;
   lastUpdated: Date;
 }
 
 /**
  * Main service for coordinating XDC blockchain consensus monitoring
- *
- * This service coordinates the three specialized monitors:
- * - MinerMonitor: Tracks miner order and timeouts
- * - EpochMonitor: Tracks epoch transitions and masternode list changes
- * - RewardMonitor: Tracks reward distribution at epoch boundaries
+ * Orchestrates MinerMonitor, EpochMonitor, and RewardMonitor
  */
 @Injectable()
 export class ConsensusMonitor implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(ConsensusMonitor.name);
   private intervalRegistry: Record<string, string> = {};
-  private supportedChains: number[] = [50, 51]; // Default: mainnet and testnet
-
-  // Cached validator data for each chain
+  private supportedChains: number[];
   private chainValidatorData: Record<number, ChainValidatorData> = {};
-
-  // Refresh interval in ms (default: 60 seconds)
   private validatorRefreshInterval = 60000;
 
   constructor(
-    @Inject(forwardRef(() => MinerMonitor))
-    private readonly minerMonitor: MinerMonitor,
-
-    @Inject(forwardRef(() => EpochMonitor))
-    private readonly epochMonitor: EpochMonitor,
-
-    @Inject(forwardRef(() => RewardMonitor))
-    private readonly rewardMonitor: RewardMonitor,
-
+    @Inject(forwardRef(() => MinerMonitor)) private readonly minerMonitor: MinerMonitor,
+    @Inject(forwardRef(() => EpochMonitor)) private readonly epochMonitor: EpochMonitor,
+    @Inject(forwardRef(() => RewardMonitor)) private readonly rewardMonitor: RewardMonitor,
     private readonly configService: ConfigService,
     private readonly schedulerRegistry: SchedulerRegistry,
     private readonly metricsService: MetricsService,
@@ -58,11 +43,9 @@ export class ConsensusMonitor implements OnModuleInit, OnModuleDestroy {
   async onModuleInit() {
     // Initialize validator data for each chain
     for (const chainId of this.supportedChains) {
-      // Create initial empty data structure
       this.chainValidatorData[chainId] = {
         masternodeList: null,
         currentEpoch: 0,
-        nextEpochBlock: 0,
         lastUpdated: null,
       };
 
@@ -76,13 +59,23 @@ export class ConsensusMonitor implements OnModuleInit, OnModuleDestroy {
         this.validatorRefreshInterval,
       );
     }
+
+    // Now that validator data is loaded, initialize component monitors
+    this.logger.log('Validator data loaded for all chains, initializing component monitors...');
+    await this.initializeMinerMonitoring();
+    // await this.initializeEpochMonitoring();
+    // await this.initializeRewardMonitoring();
   }
 
   onModuleDestroy() {
     // Clean up all intervals
     for (const chainId of this.supportedChains) {
       this.deregisterMonitoringInterval(`ValidatorRefresh-${chainId}`);
+      this.deregisterMonitoringInterval(`${MinerMonitor.name}-${chainId}`);
+      // this.deregisterMonitoringInterval(`${EpochMonitor.name}-${chainId}`);
+      // this.deregisterMonitoringInterval(`${RewardMonitor.name}-${chainId}`);
     }
+    this.logger.log('All monitoring intervals deregistered');
   }
 
   /**
@@ -93,23 +86,24 @@ export class ConsensusMonitor implements OnModuleInit, OnModuleDestroy {
       const rpcClient = createRpcClient(this.configService, chainId);
       const result = await this.fetchMasternodeList(`ConsensusMonitor-${chainId}`, rpcClient);
 
-      if (result) {
-        // Update the in-memory cache
-        this.chainValidatorData[chainId] = {
-          ...result,
-          lastUpdated: new Date(),
-        };
+      if (!result) return;
 
-        // Store the complete validator data in InfluxDB
-        this.storeValidatorData(chainId, result);
+      // Update the in-memory cache
+      this.chainValidatorData[chainId] = {
+        ...result,
+        lastUpdated: new Date(),
+      };
 
-        this.logger.log(
-          `Validator data refreshed for chain ${chainId}: epoch=${result.currentEpoch}, ` +
-            `masternodes=${result.masternodeList.masternodes.length}, ` +
-            `standbynodes=${result.masternodeList.standbynodes.length}, ` +
-            `penalty=${result.masternodeList.penalty.length}`,
-        );
-      }
+      // Store the complete validator data in InfluxDB
+      this.storeValidatorData(chainId, result);
+
+      const { masternodeList, currentEpoch } = result;
+      this.logger.log(
+        `Validator data refreshed for chain ${chainId}: epoch=${currentEpoch}, ` +
+          `masternodes=${masternodeList.masternodes.length}, ` +
+          `standbynodes=${masternodeList.standbynodes.length}, ` +
+          `penalty=${masternodeList.penalty.length}`,
+      );
     } catch (error) {
       this.logger.error(`Failed to refresh validator data for chain ${chainId}: ${error.message}`);
     }
@@ -119,15 +113,11 @@ export class ConsensusMonitor implements OnModuleInit, OnModuleDestroy {
    * Store validator data in InfluxDB
    * This provides historical tracking of validator node changes over time
    */
-  private storeValidatorData(
-    chainId: number,
-    data: { masternodeList: MasternodeList; currentEpoch: number; nextEpochBlock: number },
-  ): void {
+  private storeValidatorData(chainId: number, data: { masternodeList: MasternodeList; currentEpoch: number }): void {
     try {
       const { masternodeList, currentEpoch } = data;
-      const timestamp = new Date();
 
-      // Store summary metrics using the new public method
+      // Store summary metrics
       this.metricsService.recordValidatorSummary(
         chainId,
         currentEpoch,
@@ -138,25 +128,18 @@ export class ConsensusMonitor implements OnModuleInit, OnModuleDestroy {
         masternodeList.round,
       );
 
-      // Store each masternode address in its own record
+      // Store each node address in its own record
       masternodeList.masternodes.forEach((address, index) => {
         this.metricsService.recordValidatorDetail(chainId, currentEpoch, address.toLowerCase(), 'masternode', index);
       });
 
-      // Store standby nodes
       masternodeList.standbynodes.forEach((address, index) => {
         this.metricsService.recordValidatorDetail(chainId, currentEpoch, address.toLowerCase(), 'standby', index);
       });
 
-      // Store penalty nodes
       masternodeList.penalty.forEach(address => {
         this.metricsService.recordValidatorDetail(chainId, currentEpoch, address.toLowerCase(), 'penalty');
       });
-
-      // Log summary for tracking
-      this.logger.log(
-        `Chain ${chainId} - Validator Data Stored: Epoch ${currentEpoch}: Stored ${masternodeList.masternodes.length} masternodes, ${masternodeList.standbynodes.length} standbynodes, ${masternodeList.penalty.length} penalty nodes`,
-      );
     } catch (error) {
       this.logger.error(`Failed to store validator data in InfluxDB: ${error.message}`);
     }
@@ -172,12 +155,9 @@ export class ConsensusMonitor implements OnModuleInit, OnModuleDestroy {
 
   /**
    * Check if a node address is in the penalty list
-   * This is useful for other monitors to check
    */
   public isNodePenalized(chainId: number, address: string): boolean {
-    if (!this.chainValidatorData[chainId]?.masternodeList?.penalty) {
-      return false;
-    }
+    if (!this.chainValidatorData[chainId]?.masternodeList?.penalty) return false;
 
     address = address.toLowerCase();
     return this.chainValidatorData[chainId].masternodeList.penalty.map(a => a.toLowerCase()).includes(address);
@@ -187,24 +167,14 @@ export class ConsensusMonitor implements OnModuleInit, OnModuleDestroy {
    * Get node status (masternode, standby, penalty, or none)
    */
   public getNodeStatus(chainId: number, address: string): 'masternode' | 'standby' | 'penalty' | 'none' {
-    if (!this.chainValidatorData[chainId]?.masternodeList) {
-      return 'none';
-    }
+    if (!this.chainValidatorData[chainId]?.masternodeList) return 'none';
 
     address = address.toLowerCase();
     const { masternodes, standbynodes, penalty } = this.chainValidatorData[chainId].masternodeList;
 
-    if (masternodes.map(a => a.toLowerCase()).includes(address)) {
-      return 'masternode';
-    }
-
-    if (standbynodes.map(a => a.toLowerCase()).includes(address)) {
-      return 'standby';
-    }
-
-    if (penalty.map(a => a.toLowerCase()).includes(address)) {
-      return 'penalty';
-    }
+    if (masternodes.map(a => a.toLowerCase()).includes(address)) return 'masternode';
+    if (standbynodes.map(a => a.toLowerCase()).includes(address)) return 'standby';
+    if (penalty.map(a => a.toLowerCase()).includes(address)) return 'penalty';
 
     return 'none';
   }
@@ -220,8 +190,7 @@ export class ConsensusMonitor implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Helper method to register a monitoring interval
-   * This can be used by the individual monitors instead of managing their own intervals
+   * Register a monitoring interval
    */
   public registerMonitoringInterval(name: string, callback: () => Promise<void> | void, intervalMs: number): void {
     try {
@@ -235,9 +204,8 @@ export class ConsensusMonitor implements OnModuleInit, OnModuleDestroy {
       // Execute immediately first
       this.executeMonitoringCallback(name, callback);
 
-      // Create new interval with a wrapper function that handles both Promise and non-Promise callbacks
+      // Create new interval
       const interval = setInterval(() => this.executeMonitoringCallback(name, callback), intervalMs);
-
       this.schedulerRegistry.addInterval(intervalName, interval);
       this.intervalRegistry[name] = intervalName;
 
@@ -269,7 +237,6 @@ export class ConsensusMonitor implements OnModuleInit, OnModuleDestroy {
   public deregisterMonitoringInterval(name: string): void {
     try {
       const intervalName = this.intervalRegistry[name] || `${name.toLowerCase()}Monitoring`;
-
       if (this.schedulerRegistry.doesExist('interval', intervalName)) {
         this.schedulerRegistry.deleteInterval(intervalName);
         this.logger.log(`Deregistered monitoring interval for ${name}`);
@@ -285,73 +252,29 @@ export class ConsensusMonitor implements OnModuleInit, OnModuleDestroy {
   public async fetchMasternodeList(
     component: string,
     rpcClient: any,
-  ): Promise<{ masternodeList: MasternodeList; currentEpoch: number; nextEpochBlock: number } | null> {
+  ): Promise<{ masternodeList: MasternodeList; currentEpoch: number } | null> {
     try {
       const response = await rpcClient.call('XDPoS_getMasternodesByNumber', ['latest']);
 
-      if (!response || !response.result) {
-        return null;
-      }
+      if (!response) return null;
 
-      const result = response.result;
-
-      // Calculate the current epoch number differently
-      // The Number in the response is the current block height
-      const currentBlockNumber = result.Number;
-
-      // Find the current epoch by checking back a reasonable number of blocks
-      // to find the previous epoch boundary
-      const lookBackBlock = Math.max(0, currentBlockNumber - 1500);
-      const hexCurrentBlock = `0x${currentBlockNumber.toString(16)}`;
-      const hexLookBackBlock = `0x${lookBackBlock.toString(16)}`;
-
-      let currentEpoch = 0;
-      try {
-        const epochResponse = await rpcClient.call('XDPoS_getEpochNumbersBetween', [hexLookBackBlock, hexCurrentBlock]);
-
-        if (
-          epochResponse &&
-          epochResponse.result &&
-          Array.isArray(epochResponse.result) &&
-          epochResponse.result.length > 0
-        ) {
-          // Get the most recent epoch boundary
-          const epochBoundaries = epochResponse.result;
-          const mostRecentEpochBoundary = epochBoundaries[epochBoundaries.length - 1];
-
-          // Calculate how many "epoch transitions" we've had
-          // This is not a perfect calculation but gives us an approximate epoch number
-          currentEpoch = Math.floor(mostRecentEpochBoundary / 900);
-        } else {
-          // Fallback to approximate calculation if we can't determine precisely
-          currentEpoch = Math.floor(currentBlockNumber / 900);
-        }
-      } catch (error) {
-        // Fallback to approximate calculation on error
-        this.logger.error(`Failed to determine current epoch for ${component}: ${error.message}`);
-        currentEpoch = Math.floor(currentBlockNumber / 900);
-      }
-
-      // Get the next epoch block
-      let nextEpochBlock = currentBlockNumber + 900; // Default fallback
-      try {
-        // Look ahead to find the next epoch boundary
-        const nextEpochNumber = await getNextEpochBlock(currentBlockNumber, rpcClient);
-        if (nextEpochNumber > 0) nextEpochBlock = nextEpochNumber;
-      } catch (error) {
-        this.logger.error(`Failed to determine next epoch block for ${component}: ${error.message}`);
-      }
+      /**
+       * epochNum := x.config.V2.SwitchEpoch + uint64(epochSwitchInfo.EpochSwitchBlockInfo.Round)/x.config.Epoch
+       * - SwitchEpoch:       common.MaintnetConstant.TIPV2SwitchBlock.Uint64() / 900,
+       * - TIPV2SwitchBlock:  big.NewInt(80370000), // Target 2nd Oct 2024
+       * - x.config.Epoch:    900
+       */
+      let currentEpoch = Math.floor(80370000 / 900) + Math.floor(response.Round / 900);
 
       return {
         masternodeList: {
-          number: result.Number,
-          round: result.Round,
-          masternodes: result.Masternodes,
-          penalty: result.Penalty,
-          standbynodes: result.Standbynodes,
+          number: response.Number,
+          round: response.Round,
+          masternodes: response.Masternodes,
+          penalty: response.Penalty,
+          standbynodes: response.Standbynodes,
         },
         currentEpoch,
-        nextEpochBlock,
       };
     } catch (error) {
       this.logger.error(`Failed to fetch masternode list for ${component}: ${error.message}`);
@@ -364,5 +287,24 @@ export class ConsensusMonitor implements OnModuleInit, OnModuleDestroy {
    */
   public getSupportedChains(): number[] {
     return this.supportedChains;
+  }
+
+  /**
+   * Initialize miner monitoring after validator data is loaded
+   */
+  private async initializeMinerMonitoring() {
+    try {
+      for (const chainId of this.supportedChains) {
+        await this.minerMonitor.loadHistoricalMinerData(chainId);
+        this.registerMonitoringInterval(
+          `${MinerMonitor.name}-${chainId}`,
+          () => this.minerMonitor.monitorMiners(chainId),
+          this.minerMonitor.getScanIntervalMs(),
+        );
+        this.logger.log(`Miner monitoring enabled for chain ${chainId}`);
+      }
+    } catch (error) {
+      this.logger.error(`Failed to initialize miner monitoring: ${error.message}`);
+    }
   }
 }

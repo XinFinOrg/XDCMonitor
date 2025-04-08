@@ -5,9 +5,15 @@
 // Blockchain constants
 export const BLOCKCHAIN = {
   // Chain IDs
-  CHAIN_IDS: {
+  CHAIN_IDS_STR: {
     MAINNET: '50',
     TESTNET: '51',
+  },
+
+  // Chain IDs as numbers
+  CHAIN_IDS_NUM: {
+    MAINNET: 50,
+    TESTNET: 51,
   },
 
   // RPC endpoints
@@ -116,6 +122,8 @@ export const ENV_VARS = {
   ALERT_WEBHOOK_URL: 'NOTIFICATION_WEBHOOK_URL',
   TELEGRAM_BOT_TOKEN: 'TELEGRAM_BOT_TOKEN',
   TELEGRAM_CHAT_ID: 'TELEGRAM_CHAT_ID',
+  TELEGRAM_MAINNET_TOPIC_ID: 'TELEGRAM_MAINNET_TOPIC_ID',
+  TELEGRAM_TESTNET_TOPIC_ID: 'TELEGRAM_TESTNET_TOPIC_ID',
 
   // Wallet Configuration
   MNEMONIC_WALLET: 'MNEMONIC_WALLET',

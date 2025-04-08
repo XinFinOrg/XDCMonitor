@@ -6,7 +6,7 @@
       "request": "launch",
       "name": "Debug XDC Monitor",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "start:fast"],
+      "runtimeArgs": ["run", "start:fast", "--", "--inspect"],
       "skipFiles": ["<node_internals>/**"],
       "console": "integratedTerminal",
       "env": {

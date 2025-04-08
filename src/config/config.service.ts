@@ -191,9 +191,11 @@ export class ConfigService {
         webhookUrl: this.get(ENV_VARS.ALERT_WEBHOOK_URL, undefined),
         telegramBotToken: this.get(ENV_VARS.TELEGRAM_BOT_TOKEN, undefined),
         telegramChatId: this.get(ENV_VARS.TELEGRAM_CHAT_ID, undefined),
+        telegramMainnetTopicId: this.get(ENV_VARS.TELEGRAM_MAINNET_TOPIC_ID, undefined),
+        telegramTestnetTopicId: this.get(ENV_VARS.TELEGRAM_TESTNET_TOPIC_ID, undefined),
         enableWebhook: this.isFeatureEnabled(FEATURE_FLAGS.ENABLE_WEBHOOK_NOTIFICATIONS, false),
-        enableTelegram: this.getBoolean('ENABLE_CHAT_NOTIFICATIONS', false),
-        enableDashboard: this.getBoolean('ENABLE_DASHBOARD_ALERTS', true),
+        enableTelegram: this.isFeatureEnabled(FEATURE_FLAGS.ENABLE_CHAT_NOTIFICATIONS, false),
+        enableDashboard: this.isFeatureEnabled(FEATURE_FLAGS.ENABLE_DASHBOARD_ALERTS, true),
       };
 
       this.monitoringConfig = {
@@ -203,7 +205,7 @@ export class ConfigService {
         enableTransactionsMonitoring: this.isFeatureEnabled(FEATURE_FLAGS.ENABLE_TRANSACTION_MONITORING, true),
         enableRpcMonitoring: this.isFeatureEnabled(FEATURE_FLAGS.ENABLE_RPC_MONITORING, true),
         enableMetricsCollection: this.isFeatureEnabled(FEATURE_FLAGS.ENABLE_METRICS_COLLECTION, true),
-        enableAlerts: this.getBoolean('ENABLE_DASHBOARD_ALERTS', true),
+        enableAlerts: this.isFeatureEnabled(FEATURE_FLAGS.ENABLE_DASHBOARD_ALERTS, true),
         alertNotifications,
         slowRpcThresholdMs: this.getNumber(ENV_VARS.SLOW_RPC_THRESHOLD_MS, DEFAULTS.SLOW_RPC_THRESHOLD_MS),
         blockDiscrepancySyncThreshold: this.getNumber(

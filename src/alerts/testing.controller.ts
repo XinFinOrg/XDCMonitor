@@ -59,19 +59,27 @@ export class TestingController {
     @Query('type') type: string = 'warning',
     @Query('title') title: string = 'Manual Test Alert',
     @Query('message') message: string = 'This is a manually triggered test alert',
+    @Query('chainId') chainIdStr: string = '',
   ) {
     const alertType = ['error', 'warning', 'info'].includes(type) ? (type as 'error' | 'warning' | 'info') : 'warning';
+    const chainId = chainIdStr ? parseInt(chainIdStr) : undefined;
 
-    this.logger.log(`Manually triggering ${alertType} alert: ${title}`);
+    this.logger.log(`Manually triggering ${alertType} alert: ${title}${chainId ? ` for chain ID ${chainId}` : ''}`);
 
-    await this.alertService.addAlert({
-      type: alertType as 'error' | 'warning' | 'info',
-      title,
-      message,
-      component: 'Testing',
-    });
+    await this.alertService.addAlert(
+      {
+        type: alertType as 'error' | 'warning' | 'info',
+        title,
+        message,
+        component: 'Testing',
+      },
+      chainId,
+    );
 
-    return { success: true, message: `${alertType} alert triggered: ${title}` };
+    return {
+      success: true,
+      message: `${alertType} alert triggered: ${title}${chainId ? ` for chain ID ${chainId}` : ''}`,
+    };
   }
 
   /**
@@ -178,5 +186,54 @@ export class TestingController {
           message: 'Unknown alert type. Available types: block-time, tx-errors, tx-volume, rpc-time',
         };
     }
+  }
+
+  /**
+   * Test Telegram topics functionality
+   * Sends alerts to both Mainnet and Testnet topics
+   */
+  @Get('test-telegram-topics')
+  async testTelegramTopics() {
+    this.logger.log('Testing Telegram topics for Mainnet and Testnet alerts');
+
+    // Send a Mainnet alert (chain ID 50)
+    await this.alertService.addAlert(
+      {
+        type: 'info',
+        title: 'Mainnet Test Alert',
+        message: 'This alert should appear in the Mainnet topic',
+        component: 'Testing',
+      },
+      50,
+    ); // Mainnet chain ID
+
+    // Send a Testnet alert (chain ID 51)
+    await this.alertService.addAlert(
+      {
+        type: 'info',
+        title: 'Testnet Test Alert',
+        message: 'This alert should appear in the Testnet topic',
+        component: 'Testing',
+      },
+      51,
+    ); // Testnet chain ID
+
+    // Send a general alert (no specific chain)
+    await this.alertService.addAlert({
+      type: 'info',
+      title: 'General Test Alert',
+      message: 'This alert should appear in the main thread (no topic)',
+      component: 'Testing',
+    });
+
+    return {
+      success: true,
+      message: 'Test alerts sent to Mainnet topic, Testnet topic, and main thread',
+      details: [
+        { chainId: 50, title: 'Mainnet Test Alert' },
+        { chainId: 51, title: 'Testnet Test Alert' },
+        { chainId: undefined, title: 'General Test Alert' },
+      ],
+    };
   }
 }

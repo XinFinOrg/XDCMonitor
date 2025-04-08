@@ -10,6 +10,8 @@ export interface AlertNotificationConfig {
   webhookUrl?: string;
   telegramBotToken?: string;
   telegramChatId?: string;
+  telegramMainnetTopicId?: string;
+  telegramTestnetTopicId?: string;
   enableWebhook: boolean;
   enableTelegram: boolean;
   enableDashboard: boolean;
