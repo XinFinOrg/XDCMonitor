@@ -1,6 +1,21 @@
 /**
- * Interface for miner record from InfluxDB
+ * Interface and enum for miner record from InfluxDB
  */
+
+export enum MinerStatus {
+  Masternode = 'masternode',
+  Standby = 'standby',
+  Penalty = 'penalty',
+  None = 'none',
+}
+
+export enum Severity {
+  Info = 'info',
+  Warning = 'warning',
+  Error = 'error',
+  Critical = 'critical',
+}
+
 export interface MinerRecord {
   miner?: string;
   total_blocks_mined?: string | number;
@@ -50,7 +65,6 @@ export interface MinerPerformance {
  * Interface for consensus monitoring information
  */
 export interface ConsensusMonitoringInfo {
-  isEnabled: boolean;
   chainId?: number; // Chain ID (50 for mainnet, 51 for testnet)
   lastCheckedBlock: number;
   currentEpoch: number;
@@ -68,6 +82,6 @@ export interface ConsensusMonitoringInfo {
 export interface ConsensusAlert {
   name: string;
   message: string;
-  severity: 'info' | 'warning' | 'error' | 'critical';
+  severity: Severity;
   metadata: Record<string, any>;
 }

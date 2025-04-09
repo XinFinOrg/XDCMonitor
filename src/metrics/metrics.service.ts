@@ -2,7 +2,7 @@ import { ConfigService } from '@config/config.service';
 import { InfluxDB, Point, WriteApi } from '@influxdata/influxdb-client';
 import { Alert } from '@alerts/alert.service';
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { MinerRecord } from '@types';
+import { MinerRecord, MinerStatus } from '@types';
 
 /**
  * InfluxDB Metrics Service
@@ -505,14 +505,18 @@ export class MetricsService implements OnModuleInit {
   recordValidatorDetail(
     chainId: number,
     epoch: number,
+    blockNumber: number,
+    round: number,
     address: string,
-    status: 'masternode' | 'standby' | 'penalty',
+    status: MinerStatus,
     index?: number,
   ): void {
     this.writePoint(
       new Point('validator_nodes')
         .tag('chainId', chainId.toString())
         .tag('epoch', epoch.toString())
+        .tag('block_number', blockNumber.toString())
+        .tag('round', round.toString())
         .tag('address', address.toLowerCase())
         .tag('status', status)
         .intField('index', index ?? 0),

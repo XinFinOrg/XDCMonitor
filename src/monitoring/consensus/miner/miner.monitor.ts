@@ -44,7 +44,6 @@ export class MinerMonitor {
   private readonly logger = new Logger(MinerMonitor.name);
   private readonly MAX_RECENT_VIOLATIONS = 100;
 
-  private monitoringEnabled = false;
   private scanIntervalMs = 15000; // Default: 15 seconds
   private supportedChains: number[] = [50, 51]; // Default: mainnet and testnet
   private chainStates: Record<number, ChainState> = {};
@@ -56,13 +55,10 @@ export class MinerMonitor {
     @Inject(forwardRef(() => ConsensusMonitor))
     private readonly consensusMonitor: ConsensusMonitor,
   ) {
-    const { enabled, scanIntervalMs, chains } = getMonitoringConfig(this.configService);
-    this.monitoringEnabled = enabled;
-    this.scanIntervalMs = scanIntervalMs;
-    this.supportedChains = chains;
+    this.supportedChains = this.consensusMonitor.getSupportedChains();
 
     // Initialize chain states
-    chains.forEach(chainId => {
+    this.supportedChains.forEach(chainId => {
       this.chainStates[chainId] = {
         chainId,
         rpcClient: createRpcClient(this.configService, chainId),
@@ -82,7 +78,7 @@ export class MinerMonitor {
   /**
    * Get the scan interval
    */
-  getScanIntervalMs(): number {
+  public getScanIntervalMs(): number {
     return this.scanIntervalMs;
   }
 
@@ -100,7 +96,7 @@ export class MinerMonitor {
       chainState.initialRun = false;
     }
 
-    if (!this.monitoringEnabled || !chainState || !validatorData?.masternodeList) return;
+    if (!chainState || !validatorData?.masternodeList) return;
 
     try {
       const startTime = performance.now();
@@ -439,7 +435,6 @@ export class MinerMonitor {
     const validatorData = this.consensusMonitor.getValidatorData(chainId);
 
     return {
-      isEnabled: this.monitoringEnabled,
       chainId,
       lastCheckedBlock: chainState.lastCheckedBlock,
       currentEpoch: validatorData?.currentEpoch || 0,
