@@ -271,6 +271,8 @@ export const ALERTS = {
     INSUFFICIENT_WALLET_BALANCE: 'insufficient_wallet_balance',
     CONSENSUS_FREQUENT_MISSED_ROUNDS: 'consensus_frequent_missed_rounds',
     CONSENSUS_UNUSUAL_TIMEOUT: 'consensus_unusual_timeout',
+    CONSENSUS_PENALTY_LIST_SIZE_EXCEEDED: 'consensus_penalty_list_size_exceeded',
+    CONSENSUS_FREQUENT_PENALTY_NODES: 'consensus_frequent_penalty_nodes',
   },
 
   // Alert components
