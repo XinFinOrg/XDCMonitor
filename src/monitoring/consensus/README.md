@@ -182,5 +182,5 @@ The monitoring system exposes several API endpoints through the `MonitoringContr
 Current implementation status:
 
 - ✅ Miner Monitor: Fully implemented with multi-chain support
-- 🚧 Epoch Monitor: Skeleton implementation
+- ✅ Epoch Monitor: Fully implemented with sliding window penalty tracking
 - 🚧 Reward Monitor: Skeleton implementation

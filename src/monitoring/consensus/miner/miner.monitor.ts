@@ -102,11 +102,11 @@ export class MinerMonitor {
       const startTime = performance.now();
       const latestBlockResponse = await chainState.rpcClient.call('eth_getBlockByNumber', ['latest', false]);
 
-      if (!latestBlockResponse?.result) {
+      if (!latestBlockResponse) {
         throw new Error(`Could not fetch latest block for chain ${chainId}`);
       }
 
-      const latestBlockNumber = parseInt(latestBlockResponse.result.number, 16);
+      const latestBlockNumber = parseInt(latestBlockResponse.number, 16);
       if (latestBlockNumber <= chainState.lastCheckedBlock) return;
 
       // Check for missed rounds periodically
@@ -149,8 +149,8 @@ export class MinerMonitor {
 
       // Update state and log performance
       chainState.lastCheckedBlock = latestBlockNumber;
-      if (latestBlockResponse.result.timestamp) {
-        chainState.lastBlockTimestamp = parseInt(latestBlockResponse.result.timestamp, 16);
+      if (latestBlockResponse.timestamp) {
+        chainState.lastBlockTimestamp = parseInt(latestBlockResponse.timestamp, 16);
       }
 
       this.logger.log(
@@ -158,13 +158,16 @@ export class MinerMonitor {
       );
     } catch (error) {
       this.logger.error(`Miner monitoring error for chain ${chainId}: ${error.message}`);
-      this.metricsService.saveAlert({
-        type: 'error',
-        title: `Chain ${chainId} - Miner Monitoring Error`,
-        message: error.message,
-        timestamp: new Date(),
-        component: 'consensus',
-      });
+      this.metricsService.saveAlert(
+        {
+          type: 'error',
+          title: `Chain ${chainId} - Miner Monitoring Error`,
+          message: error.message,
+          timestamp: new Date(),
+          component: 'consensus',
+        },
+        chainId,
+      );
     }
   }
 
@@ -474,12 +477,12 @@ export class MinerMonitor {
 
       // Get latest block and set checkpoint
       const latestBlockResponse = await chainState.rpcClient.call('eth_getBlockByNumber', ['latest', false]);
-      if (!latestBlockResponse?.result) {
+      if (!latestBlockResponse) {
         this.logger.warn(`Could not fetch latest block for chain ${chainId}`);
         return;
       }
 
-      const latestBlockNumber = parseInt(latestBlockResponse.result.number, 16);
+      const latestBlockNumber = parseInt(latestBlockResponse.number, 16);
       chainState.lastCheckedBlock = latestBlockNumber - 100; // Start checking from 100 blocks back
 
       // Get validators and their performance data

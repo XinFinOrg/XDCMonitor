@@ -16,6 +16,7 @@ export const RPC_ENDPOINTS = [
   { url: 'https://rpc.primenumbers.xyz', name: 'PrimeNumbers RPC', type: 'rpc' as const, chainId: MAINNET_CHAIN_ID },
   { url: 'https://erpc.xdcrpc.com', name: 'XDCRPC eRPC', type: 'erpc' as const, chainId: MAINNET_CHAIN_ID },
   { url: 'https://xdcrpc.com', name: 'XDCRPC', type: 'rpc' as const, chainId: MAINNET_CHAIN_ID },
+  { url: 'https://rpc.xdc.org', name: 'XDC.org RPC', type: 'rpc' as const, chainId: MAINNET_CHAIN_ID },
   {
     url: 'http://173.212.233.170:8989',
     name: 'mst1-Custom Mainnet RPC',
