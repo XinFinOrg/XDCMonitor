@@ -236,4 +236,105 @@ export class TestingController {
       ],
     };
   }
+
+  /**
+   * Manually generate a weekly report
+   * Allows getting a report for a custom date range
+   */
+  @Get('generate-weekly-report')
+  async generateWeeklyReport(
+    @Query('startDays') startDaysAgo: string = '7',
+    @Query('endDays') endDaysAgo: string = '0',
+  ) {
+    this.logger.log('Manually generating weekly report');
+
+    const now = new Date();
+    const startDate = new Date(now.getTime() - parseInt(startDaysAgo) * 24 * 60 * 60 * 1000);
+    const endDate = new Date(now.getTime() - parseInt(endDaysAgo) * 24 * 60 * 60 * 1000);
+
+    // Generate the report
+    const report = await this.alertService.generateWeeklyReport(startDate, endDate);
+
+    // Format for API response
+    return {
+      success: true,
+      message: `Weekly report generated for period ${startDate.toISOString()} to ${endDate.toISOString()}`,
+      report: {
+        period: {
+          start: report.startDate,
+          end: report.endDate,
+        },
+        stats: {
+          totalAlerts: report.totalAlerts,
+          byType: report.alertCounts,
+          byNetwork: {
+            mainnet: report.alertsByChain.mainnet,
+            testnet: report.alertsByChain.testnet,
+            other: report.alertsByChain.other,
+          },
+          topAlertTypes: Object.entries(report.alertsByType)
+            .sort(([, a], [, b]) => b - a)
+            .slice(0, 5)
+            .map(([type, count]) => ({ type, count })),
+        },
+        // Include component breakdown
+        byComponent: Object.entries(report.alertsByComponent).map(([name, counts]) => ({
+          name,
+          counts,
+        })),
+      },
+    };
+  }
+
+  /**
+   * Get the formatted weekly report message
+   * This returns the same format that would be sent to Telegram
+   */
+  @Get('weekly-report-message')
+  async getWeeklyReportMessage(
+    @Query('startDays') startDaysAgo: string = '7',
+    @Query('endDays') endDaysAgo: string = '0',
+  ) {
+    this.logger.log('Getting formatted weekly report message');
+
+    const now = new Date();
+    const startDate = new Date(now.getTime() - parseInt(startDaysAgo) * 24 * 60 * 60 * 1000);
+    const endDate = new Date(now.getTime() - parseInt(endDaysAgo) * 24 * 60 * 60 * 1000);
+
+    // Generate the report
+    const report = await this.alertService.getWeeklyReportForRange(startDate, endDate);
+
+    // Get the formatted message that would be sent to Telegram
+    const message = this.alertService.getFormattedWeeklyReportMessage(report);
+
+    return {
+      success: true,
+      message: `Weekly report message generated for period ${startDate.toISOString()} to ${endDate.toISOString()}`,
+      formattedReport: message,
+    };
+  }
+
+  /**
+   * Send the weekly report to communication channels
+   * This will generate a report and actually send it to configured channels
+   */
+  @Post('send-weekly-report')
+  async sendWeeklyReport(@Query('startDays') startDaysAgo: string = '7', @Query('endDays') endDaysAgo: string = '0') {
+    this.logger.log('Manually sending weekly report');
+
+    const now = new Date();
+    const startDate = new Date(now.getTime() - parseInt(startDaysAgo) * 24 * 60 * 60 * 1000);
+    const endDate = new Date(now.getTime() - parseInt(endDaysAgo) * 24 * 60 * 60 * 1000);
+
+    // Generate the report
+    const report = await this.alertService.generateWeeklyReport(startDate, endDate);
+
+    // Send the report
+    await this.alertService.sendWeeklyReport(report);
+
+    return {
+      success: true,
+      message: `Weekly report sent for period ${startDate.toISOString()} to ${endDate.toISOString()}`,
+    };
+  }
 }

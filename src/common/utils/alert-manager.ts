@@ -24,6 +24,7 @@ export interface AlertOptions {
   message: string;
   timestamp?: number;
   metadata?: Record<string, any>;
+  chainId?: number;
   shouldNotify?: boolean;
   notificationChannels?: string[];
 }
