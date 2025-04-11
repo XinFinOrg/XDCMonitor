@@ -537,6 +537,9 @@ export class MetricsService implements OnModuleInit {
    * @param chainId The chain ID
    * @param blockNumber The block number where the missed round was detected
    * @param round The round number that was missed
+   * @param epoch The epoch number
+   * @param epochRound The round number start of the epoch
+   * @param epochBlock The block number start of the epoch
    * @param expectedMiner The address of the miner that missed its turn
    * @param actualMiner The address of the miner that actually mined the block
    * @param missedMinersCount Number of consecutive miners that missed their turn
@@ -545,6 +548,9 @@ export class MetricsService implements OnModuleInit {
     chainId: number,
     blockNumber: number,
     round: number,
+    epoch: number,
+    epochRound: number,
+    epochBlock: number,
     expectedMiner: string,
     actualMiner: string,
     missedMinersCount: number = 1,
@@ -556,6 +562,9 @@ export class MetricsService implements OnModuleInit {
         .tag('actual_miner', actualMiner.toLowerCase())
         .intField('block_number', blockNumber)
         .intField('round', round)
+        .intField('epoch', epoch)
+        .intField('epoch_round', epochRound)
+        .intField('epoch_block', epochBlock)
         .intField('missed_miners_count', missedMinersCount)
         .timestamp(new Date()),
     );
@@ -571,6 +580,10 @@ export class MetricsService implements OnModuleInit {
    *
    * @param chainId The chain ID
    * @param blockNumber The block number where timeout occurred
+   * @param round The round number where timeout occurred
+   * @param epoch The epoch number
+   * @param epochRound The round number start of the epoch
+   * @param epochBlock The block number start of the epoch
    * @param timeoutPeriod The actual timeout period in seconds
    * @param expectedTimeoutPerMiner The expected timeout period per missed miner (normally ~10s)
    * @param missedMiners The number of miners that were missed
@@ -578,6 +591,10 @@ export class MetricsService implements OnModuleInit {
   recordTimeoutPeriod(
     chainId: number,
     blockNumber: number,
+    round: number,
+    epoch: number,
+    epochRound: number,
+    epochBlock: number,
     timeoutPeriod: number,
     expectedTimeoutPerMiner: number = 10,
     missedMiners: number = 1,
@@ -591,6 +608,10 @@ export class MetricsService implements OnModuleInit {
         .tag('chainId', chainId.toString())
         .tag('is_consistent', isConsistent ? 'true' : 'false')
         .intField('block_number', blockNumber)
+        .intField('round', round)
+        .intField('epoch', epoch)
+        .intField('epoch_round', epochRound)
+        .intField('epoch_block', epochBlock)
         .floatField('timeout_period', timeoutPeriod)
         .floatField('expected_timeout', expectedTimeout)
         .intField('missed_miners', missedMiners)
