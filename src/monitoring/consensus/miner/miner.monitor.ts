@@ -6,6 +6,7 @@ import { MetricsService } from '@metrics/metrics.service';
 import { ConsensusMonitor } from '@monitoring/consensus/consensus.monitor';
 import {
   TIMEOUT_THRESHOLD,
+  calculateEpochNumber,
   createRpcClient,
   fetchBlockBatch,
   getMissedRoundsForEpoch,
@@ -27,8 +28,9 @@ interface ChainState {
   rpcClient: RpcRetryClient;
   lastCheckedBlock: number;
   lastBlockTimestamp: number;
+  currentEpochNumber: number; // Epoch number
+  currentEpochRound: number; // Starting round of the current epoch
   currentEpochBlock: number; // Block number where the current epoch started
-  epochRound: number; // Starting round of the current epoch
   knownMissedRounds: MissedRound[]; // Rounds known to be missed in this epoch
   minerPerformance: Record<string, MinerPerformance>;
   recentViolations: ConsensusViolation[]; // Store recent timeout and consensus violation events for API access and dashboards
@@ -64,8 +66,9 @@ export class MinerMonitor {
         rpcClient: createRpcClient(this.configService, chainId),
         lastCheckedBlock: 0,
         lastBlockTimestamp: 0,
+        currentEpochNumber: 0,
+        currentEpochRound: 0,
         currentEpochBlock: 0,
-        epochRound: 0,
         knownMissedRounds: [],
         minerPerformance: {},
         recentViolations: [],
@@ -110,7 +113,7 @@ export class MinerMonitor {
       if (latestBlockNumber <= chainState.lastCheckedBlock) return;
 
       // Check for missed rounds periodically
-      if (chainState.lastMissedRoundsCheck === 0 || latestBlockNumber - chainState.lastMissedRoundsCheck >= 50) {
+      if (chainState.lastMissedRoundsCheck == 0 || latestBlockNumber - chainState.lastMissedRoundsCheck >= 50) {
         await this.updateMissedRounds(chainId);
         chainState.lastMissedRoundsCheck = latestBlockNumber;
       }
@@ -128,7 +131,7 @@ export class MinerMonitor {
         startBlockNum,
         latestBlockNumber,
         Math.min(50, blockCount),
-        true,
+        false,
       );
 
       // Update miner performance for each block
@@ -186,9 +189,9 @@ export class MinerMonitor {
       if (chainState.currentEpochBlock !== missedRoundsData.EpochBlockNumber) {
         this.logger.log(`Chain ${chainId}: Updating epoch block ${missedRoundsData.EpochBlockNumber}`);
         chainState.currentEpochBlock = missedRoundsData.EpochBlockNumber;
+        chainState.currentEpochRound = missedRoundsData.EpochRound;
+        chainState.currentEpochNumber = calculateEpochNumber(missedRoundsData.EpochRound, chainId);
       }
-
-      chainState.epochRound = missedRoundsData.EpochRound;
 
       // Track new missed rounds
       const existingRounds = new Set(chainState.knownMissedRounds.map(mr => mr.round));
@@ -203,13 +206,19 @@ export class MinerMonitor {
       if (newMissedRounds.length > 0) {
         this.logger.log(`Chain ${chainId}: Found ${newMissedRounds.length} new missed rounds`);
         for (const missedRound of newMissedRounds) {
-          await this.processMissedRound(chainId, missedRound);
+          await this.processMissedRound(
+            chainId,
+            missedRound,
+            chainState.currentEpochNumber,
+            chainState.currentEpochRound,
+            chainState.currentEpochBlock,
+          );
         }
       }
 
       this.logger.log(
         `Chain ${chainId}: Updated missed rounds - epoch: ${chainState.currentEpochBlock}, ` +
-          `round: ${chainState.epochRound}, count: ${chainState.knownMissedRounds.length}`,
+          `round: ${chainState.currentEpochRound}, count: ${chainState.knownMissedRounds.length}`,
       );
     } catch (error) {
       this.logger.error(`Chain ${chainId}: Failed to update missed rounds: ${error.message}`);
@@ -220,7 +229,13 @@ export class MinerMonitor {
    * Process a missed round and calculate how many miners were skipped
    * Records metrics, creates violation records, and generates alerts if needed
    */
-  private async processMissedRound(chainId: number, missedRound: any): Promise<void> {
+  private async processMissedRound(
+    chainId: number,
+    missedRound: any,
+    epoch: number,
+    epochRound: number,
+    epochBlock: number,
+  ): Promise<void> {
     try {
       const chainState = this.chainStates[chainId];
       const blockNumber = missedRound.CurrentBlockNum;
@@ -264,8 +279,28 @@ export class MinerMonitor {
       }
 
       // Record metrics and create violation
-      this.metricsService.recordMissedRound(chainId, blockNumber, round, expectedMiner, actualMiner, missedMiners);
-      this.metricsService.recordTimeoutPeriod(chainId, blockNumber, timeoutPeriod, TIMEOUT_THRESHOLD, missedMiners);
+      this.metricsService.recordMissedRound(
+        chainId,
+        blockNumber,
+        round,
+        epoch,
+        epochRound,
+        epochBlock,
+        expectedMiner,
+        actualMiner,
+        missedMiners,
+      );
+      this.metricsService.recordTimeoutPeriod(
+        chainId,
+        blockNumber,
+        round,
+        epoch,
+        epochRound,
+        epochBlock,
+        timeoutPeriod,
+        TIMEOUT_THRESHOLD,
+        missedMiners,
+      );
 
       const expectedTimeoutPeriod = missedMiners * TIMEOUT_THRESHOLD;
       const isConsistentTimeout = Math.abs(timeoutPeriod - expectedTimeoutPeriod) <= 2;
@@ -315,11 +350,11 @@ export class MinerMonitor {
     const blockHex = `0x${blockNumber.toString(16)}`;
     const response = await rpcClient.call('eth_getBlockByNumber', [blockHex, false]);
 
-    if (!response?.result) {
+    if (!response) {
       this.logger.warn(`Failed to fetch block ${blockNumber}`);
       return null;
     }
-    return response.result;
+    return response;
   }
 
   /**

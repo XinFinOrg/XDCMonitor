@@ -37,87 +37,6 @@ export function getMonitoringConfig(configService: ConfigService): {
 }
 
 /**
- * Checks if the block is the first block of a new epoch or within a new epoch compared to previous state
- *
- * @param currentBlock Current block number
- * @param previousBlocksEpochStart The most recent epoch start block we have recorded
- * @param rpcClient RPC client to use for API calls
- * @returns Promise<{isNewEpoch: boolean, latestEpochBlock: number}> Whether this is a new epoch and the latest epoch boundary
- */
-export async function checkEpochTransition(
-  currentBlock: number,
-  previousEpochBlock: number,
-  rpcClient: RpcRetryClient,
-): Promise<{ isNewEpoch: boolean; latestEpochBlock: number }> {
-  try {
-    // Look back 1000 blocks to ensure we catch any epoch transition
-    const lookbackBlock = Math.max(1, currentBlock - 1000);
-
-    // Convert block numbers to hex for the RPC call
-    const hexCurrentBlock = `0x${currentBlock.toString(16)}`;
-    const hexLookbackBlock = `0x${lookbackBlock.toString(16)}`;
-
-    // Get all epoch boundaries in the last 1000 blocks
-    const response = await rpcClient.call('XDPoS_getEpochNumbersBetween', [hexLookbackBlock, hexCurrentBlock]);
-
-    if (response && response.result && Array.isArray(response.result) && response.result.length > 0) {
-      const epochBoundaries = response.result;
-      const latestEpochBlock = epochBoundaries[epochBoundaries.length - 1];
-
-      // If the most recent epoch boundary is newer than what we had before,
-      // we've entered a new epoch
-      const isNewEpoch = latestEpochBlock > previousEpochBlock;
-
-      return {
-        isNewEpoch,
-        latestEpochBlock,
-      };
-    }
-
-    // No epoch boundaries found, so we're still in the same epoch
-    return {
-      isNewEpoch: false,
-      latestEpochBlock: previousEpochBlock,
-    };
-  } catch (error) {
-    console.error(`Error checking for epoch transition: ${error.message}`);
-    return {
-      isNewEpoch: false,
-      latestEpochBlock: previousEpochBlock,
-    };
-  }
-}
-
-/**
- * Gets the next epoch boundary after the specified block
- * @param currentBlock Current block number
- * @param rpcClient RPC client to use for API calls
- * @returns Promise<number> The block number of the next epoch boundary, or 0 if error
- */
-export async function getNextEpochBlock(currentBlock: number, rpcClient: RpcRetryClient): Promise<number> {
-  try {
-    // Look ahead a reasonable number of blocks (1500 should cover at least one epoch)
-    const lookAheadBlock = currentBlock + 1500;
-    const hexCurrentBlock = `0x${currentBlock.toString(16)}`;
-    const hexLookAheadBlock = `0x${lookAheadBlock.toString(16)}`;
-
-    // Use XDPoS_getEpochNumbersBetween to get epoch boundaries ahead
-    const response = await rpcClient.call('XDPoS_getEpochNumbersBetween', [hexCurrentBlock, hexLookAheadBlock]);
-
-    if (response && response.result && Array.isArray(response.result) && response.result.length > 0) {
-      // Return the first epoch boundary after current block
-      return response.result[0];
-    }
-
-    // Fallback: if no epoch boundary found in the lookahead window
-    return currentBlock + 900; // Approximate with default epoch size
-  } catch (error) {
-    console.error(`Error getting next epoch block: ${error.message}`);
-    return currentBlock + 900; // Fallback to approximate
-  }
-}
-
-/**
  * Gets missed rounds information for the current epoch
  * @param rpcClient RPC client to use for API calls
  * @param blockNumber Optional block number to query (defaults to 'latest')
@@ -140,7 +59,7 @@ export async function getMissedRoundsForEpoch(
 } | null> {
   try {
     const response = await rpcClient.call('XDPoS_getMissedRoundsInEpochByBlockNum', [blockNumber]);
-    if (response && response.result) return response.result;
+    if (response) return response;
     return null;
   } catch (error) {
     console.error(`Error getting missed rounds: ${error.message}`);
@@ -182,11 +101,7 @@ export async function fetchBlockBatch(
       const batchResponses = await Promise.all(batchPromises);
 
       // Process responses
-      for (const response of batchResponses) {
-        if (response && response.result) {
-          results.push(response.result);
-        }
-      }
+      for (const response of batchResponses) if (response) results.push(response);
     }
 
     return results;
@@ -194,4 +109,23 @@ export async function fetchBlockBatch(
     console.error(`Error fetching block batch: ${error.message}`);
     return [];
   }
+}
+
+/**
+ * Calculate epoch number
+ * @param round Round number to calculate epoch number for
+ * @param chainId Chain ID to use for calculation
+ * @returns Epoch number
+ */
+export function calculateEpochNumber(round: number, chainId: number): number {
+  /**
+   * epochNum := x.config.V2.SwitchEpoch + uint64(epochSwitchInfo.EpochSwitchBlockInfo.Round)/x.config.Epoch
+   * - SwitchEpoch:       common.MaintnetConstant.TIPV2SwitchBlock.Uint64() / 900,
+   * - TIPV2SwitchBlock:  big.NewInt(80370000), // Target 2nd Oct 2024  ( chainId 50)
+   * - TIPV2SwitchBlock:  big.NewInt(56828700), // Target 13rd Nov 2023 ( chainId 51)
+   * - x.config.Epoch:    900
+   */
+
+  const switchBlock = chainId === 50 ? 80370000 : 56828700;
+  return Math.floor(switchBlock / 900) + Math.floor(round / 900);
 }

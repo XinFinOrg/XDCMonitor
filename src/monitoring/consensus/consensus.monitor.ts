@@ -3,7 +3,7 @@ import { MetricsService } from '@metrics/metrics.service';
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit, Inject, forwardRef } from '@nestjs/common';
 import { SchedulerRegistry } from '@nestjs/schedule';
 import { ConsensusMonitoringInfo, MasternodeList, MinerStatus } from '@types';
-import { createRpcClient, getNextEpochBlock } from './consensus.utils';
+import { calculateEpochNumber, createRpcClient } from './consensus.utils';
 import { EpochMonitor } from './epoch/epoch.monitor';
 import { MinerMonitor } from './miner/miner.monitor';
 import { RewardMonitor } from './reward/reward.monitor';
@@ -99,7 +99,7 @@ export class ConsensusMonitor implements OnModuleInit, OnModuleDestroy {
   private async refreshValidatorData(chainId: number): Promise<void> {
     try {
       const rpcClient = createRpcClient(this.configService, chainId);
-      const result = await this.fetchMasternodeList(`ConsensusMonitor-${chainId}`, rpcClient);
+      const result = await this.fetchMasternodeList(`ConsensusMonitor-${chainId}`, rpcClient, chainId);
 
       if (!result) return;
 
@@ -248,19 +248,14 @@ export class ConsensusMonitor implements OnModuleInit, OnModuleDestroy {
   public async fetchMasternodeList(
     component: string,
     rpcClient: any,
+    chainId: number,
   ): Promise<{ masternodeList: MasternodeList; currentEpoch: number } | null> {
     try {
       const response = await rpcClient.call('XDPoS_getMasternodesByNumber', ['latest']);
 
       if (!response) return null;
 
-      /**
-       * epochNum := x.config.V2.SwitchEpoch + uint64(epochSwitchInfo.EpochSwitchBlockInfo.Round)/x.config.Epoch
-       * - SwitchEpoch:       common.MaintnetConstant.TIPV2SwitchBlock.Uint64() / 900,
-       * - TIPV2SwitchBlock:  big.NewInt(80370000), // Target 2nd Oct 2024
-       * - x.config.Epoch:    900
-       */
-      let currentEpoch = Math.floor(80370000 / 900) + Math.floor(response.Round / 900);
+      let currentEpoch = calculateEpochNumber(response.Round, chainId);
 
       return {
         masternodeList: {

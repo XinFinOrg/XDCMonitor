@@ -409,7 +409,7 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
                 this.alertService[isError ? 'error' : 'warning'](
                   ALERTS.TYPES.RPC_HIGH_LATENCY,
                   ALERTS.COMPONENTS.RPC,
-                  `${isError ? 'High' : 'Elevated'} RPC latency on ${endpoint.url} for chain ${endpoint.chainId}: ${latency}ms`,
+                  `${isError ? 'High' : 'Elevated'} RPC latency on ${endpoint.url} for chain ${endpoint.chainId} is :  ${latency / 1000}s`,
                   endpoint.chainId,
                 );
               }
@@ -499,14 +499,14 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
           this.alertService.error(
             ALERTS.TYPES.RPC_HIGH_LATENCY,
             ALERTS.COMPONENTS.RPC,
-            `High RPC latency on ${endpoint.url} for chain ${endpoint.chainId}: ${latency}ms`,
+            `High RPC latency on ${endpoint.url} for chain ${endpoint.chainId} is :  ${latency / 1000}s`,
             endpoint.chainId,
           );
         } else if (latency > ALERTS.THRESHOLDS.RPC_LATENCY_WARNING_MS) {
           this.alertService.warning(
             ALERTS.TYPES.RPC_HIGH_LATENCY,
             ALERTS.COMPONENTS.RPC,
-            `Elevated RPC latency on ${endpoint.url} for chain ${endpoint.chainId}: ${latency}ms`,
+            `Elevated RPC latency on ${endpoint.url} for chain ${endpoint.chainId} is :  ${latency / 1000}s`,
             endpoint.chainId,
           );
         }
