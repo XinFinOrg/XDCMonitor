@@ -2633,6 +2633,23 @@
         }
       ],
       "title": "Validator Node Distribution",
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "_time": true
+            },
+            "indexByName": {
+              "Masternodes": 1,
+              "Penalty Nodes": 3,
+              "Standby Nodes": 2,
+              "_time": 0
+            },
+            "renameByName": {}
+          }
+        }
+      ],
       "type": "bargauge"
     },
     {
@@ -3135,7 +3152,9 @@
           "calcs": ["min", "max", "mean"],
           "displayMode": "table",
           "placement": "right",
-          "showLegend": true
+          "showLegend": true,
+          "sortBy": "displayName",
+          "sortDesc": false
         },
         "tooltip": {
           "mode": "multi",
@@ -3154,6 +3173,27 @@
         }
       ],
       "title": "Timeout Period Analysis",
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {},
+            "indexByName": {
+              "_time": 0,
+              "expected_timeout": 2,
+              "missed_miners": 3,
+              "timeout_period": 1,
+              "variance": 4
+            },
+            "renameByName": {
+              "expected_timeout": "Expected Timeout",
+              "missed_miners": "Missed Miners",
+              "timeout_period": "Timeout Period",
+              "variance": "Variance"
+            }
+          }
+        }
+      ],
       "type": "timeseries"
     },
     {
@@ -3291,7 +3331,7 @@
             "type": "influxdb",
             "uid": "influxdb"
           },
-          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"consensus_missed_rounds\" and r.chainId == \"51\")\n  |> pivot(rowKey:[\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  // Group by unique identifiers for a missed round\n  |> group(columns: [\"round\", \"block_number\", \"expected_miner\", \"actual_miner\"])\n  // Take most recent record for each group\n  |> sort(columns: [\"_time\"], desc: true)\n  |> limit(n: 1)\n  // Ungroup for final sorting\n  |> group()\n  |> sort(columns: [\"block_number\"], desc: true)\n  |> limit(n: 50)",
+          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"consensus_missed_rounds\" and r.chainId == \"51\")\n  |> pivot(rowKey:[\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  // Group by unique identifiers for a missed round\n  |> group(columns: [\"round\", \"block_number\", \"expected_miner\", \"actual_miner\"])\n  // Take most recent record for each group\n  |> sort(columns: [\"_time\"], desc: true)\n  |> limit(n: 1)\n  // Ungroup for final sorting\n  |> group()\n  |> sort(columns: [\"block_number\"], desc: true)\n  |> limit(n: 100)",
           "refId": "A"
         }
       ],
@@ -3309,25 +3349,25 @@
             },
             "indexByName": {
               "_time": 0,
-              "epoch": 1,
-              "block_number": 2,
-              "round": 3,
-              "epoch_round": 4,
-              "epoch_block": 5,
-              "expected_miner": 6,
               "actual_miner": 7,
-              "missed_miners_count": 8
+              "block_number": 2,
+              "epoch": 1,
+              "epoch_block": 5,
+              "epoch_round": 4,
+              "expected_miner": 6,
+              "missed_miners_count": 8,
+              "round": 3
             },
             "renameByName": {
               "_time": "Time",
+              "actual_miner": "Actual Miner",
+              "block_number": "Block",
               "epoch": "Epoch",
               "epoch_block": "Epoch Start Block",
               "epoch_round": "Epoch Start Round",
-              "missed_miners_count": "Miners Skipped",
-              "block_number": "Block",
-              "round": "Round",
               "expected_miner": "Expected Miner",
-              "actual_miner": "Actual Miner"
+              "missed_miners_count": "Miners Skipped",
+              "round": "Round"
             }
           }
         }
@@ -3496,13 +3536,13 @@
     "list": []
   },
   "time": {
-    "from": "now-6h",
+    "from": "now-24h",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "",
   "title": "XDC Apothem Testnet Monitoring",
   "uid": "apothem-testnet",
-  "version": 119,
+  "version": 143,
   "weekStart": ""
 }

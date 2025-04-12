@@ -13,6 +13,8 @@ The Miner Monitor service tracks the XDPoS 2.0 consensus mechanism across XDC ne
 3. **Timeout Period Verification**: Verifies the actual timeout periods from block timestamps
 4. **Miner Performance Tracking**: Records statistics on each masternode's mining activity and reliability
 5. **Consensus Monitoring**: Logs blockchain consensus events without attempting to predict miners
+6. **Batch Processing**: Processes blocks in configurable batches for efficient resource utilization
+7. **Violation Recording**: Maintains a history of consensus violations for analysis and reporting
 
 ## Architecture Integration
 
@@ -34,6 +36,7 @@ The MinerMonitor is designed to work within the orchestrated monitoring system:
    - ConsensusMonitor registers and manages all monitoring intervals
    - MinerMonitor exposes its monitoring logic but doesn't schedule itself
    - This centralizes scheduling and cleanup for better resource management
+   - Monitoring cycles are tracked to detect initial runs and handle them appropriately
 
 ## Monitoring Approach
 
@@ -56,6 +59,7 @@ The system maintains a clear separation between metrics collection and alerts:
    - `consensus_missed_rounds`: Records every missed round with detailed information
    - `consensus_timeout_periods`: Tracks timeout periods between blocks for statistical analysis
    - `consensus_miner_timeouts`: Maintains cumulative statistics for each miner's performance
+   - `consensus_miner_performance`: Tracks comprehensive mining statistics for each masternode
 
 2. **Threshold-Based Alerts**:
    - Alerts are only generated for actionable events that require attention
@@ -73,6 +77,7 @@ For each missed round detected by the blockchain:
 2. It calculates the precise timeout period from timestamps
 3. It records metrics for the missed round and timeout period
 4. It generates alerts only when thresholds are exceeded
+5. It updates the miner performance statistics to reflect missed rounds
 
 ### Real-time Monitoring
 
@@ -82,6 +87,8 @@ For newly produced blocks:
 2. It records miner performance metrics for each block
 3. It identifies blocks associated with known missed rounds
 4. It relies on the blockchain API for authoritative timeout data
+5. It periodically checks for missed rounds using blockchain API
+6. It updates performance statistics for each active miner
 
 ## Configuration Options
 
@@ -143,9 +150,10 @@ The Miner Monitor uses an efficient batch processing approach to ensure complete
 
 1. Every monitoring cycle (typically 15 seconds), the service:
    - Determines the latest block number
-   - Fetches all blocks produced since the last check in efficient batches
+   - Fetches all blocks produced since the last check in efficient batches (default batch size: 50)
    - Processes each block directly in the monitoring loop
    - Updates performance metrics and identifies known missed rounds
+   - Logs performance statistics for transparency
 
 ### Missed Round Detection
 
@@ -154,6 +162,7 @@ The system uses the blockchain's `XDPoS_getMissedRoundsInEpochByBlockNum` API to
 - Get authoritative information about which rounds were missed
 - Identify which masternodes were expected to mine but didn't
 - Track the actual miners who took over after timeouts
+- Update this data periodically (every 50 blocks by default)
 
 ### Timeout Period Verification
 
@@ -188,20 +197,23 @@ The monitoring system tracks four primary types of metrics:
    - Missed blocks count
    - Total mining attempts
    - Success rate (as a percentage)
-   - Last active block
+   - Last active block number
+   - Latest mining round
 
 These metrics provide a holistic view of the network's consensus health and individual validator performance. The success rate calculation (successful blocks ÷ total attempts × 100) offers a clear indicator of validator reliability over time.
 
 ## API Endpoints
 
-- `/monitoring/masternode-performance`: Shows performance metrics for each masternode
-- `/monitoring/consensus-violations`: Lists detected consensus events with timestamp and details
+- `/monitoring/masternode-performance/:chainId`: Shows performance metrics for each masternode on a specific chain
+- `/monitoring/consensus-violations/:chainId`: Lists detected consensus events with timestamp and details
+- `/monitoring/consensus-status`: Overall consensus monitoring status across chains
 
 ## Data Structures
 
 - `MinerPerformance`: Tracks mining statistics for each masternode
 - `ConsensusViolation`: Records instances of missed rounds and timeouts
 - `MissedRound`: Stores information about rounds that were missed according to the blockchain
+- `ChainState`: Maintains monitoring state for each supported chain
 
 ## Key Features
 
@@ -212,6 +224,10 @@ These metrics provide a holistic view of the network's consensus health and indi
 - **Performance Tracking**: Tracks statistics for each masternode (blocks mined, timeouts, etc.)
 - **Complete Block Coverage**: Ensures no blocks are missed in the monitoring process
 - **Optimized Processing**: Directly processes blocks in the monitoring loop for improved efficiency
+- **Recent Violation History**: Maintains a capped list of recent violations for analysis
+- **Adaptive Monitoring**: Checks for missed rounds at dynamic intervals based on block production
+- **Multi-Chain Support**: Simultaneously monitors both Mainnet and Testnet with chain-specific state
+- **Comprehensive API**: Exposes detailed monitoring data through well-structured API endpoints
 
 ## Implementation Tasks
 

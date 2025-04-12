@@ -9,6 +9,7 @@ A comprehensive Node.js-based monitoring system for the XDC Network. This applic
 - **RPC Port Monitoring**: HTTP/HTTPS port checks, WebSocket port checks
 - **Block Propagation Monitoring**: Block time tracking, slow block detection
 - **Transaction Monitoring**: Automated transaction testing, smart contract deployment testing
+- **Consensus Monitoring**: Masternode performance tracking, epoch transitions, validator penalties
 - **Alert System**: Dashboard alerts, Telegram notifications, webhook notifications
 - **Metrics Collection**: InfluxDB time-series database, Grafana dashboards
 
@@ -22,6 +23,7 @@ The XDC Monitor has been optimized with a modular, maintainable architecture:
 - **Enhanced Queue System**: Resilient job processing with retry, timeout, and prioritization
 - **Time-Series Data Management**: Efficient time window data structures for metrics
 - **Modular Services**: Clean separation of concerns with specialized service modules
+- **Consensus Monitoring**: Specialized monitors for miners, epochs, and rewards
 
 ### Performance Optimizations
 
@@ -31,6 +33,7 @@ The XDC Monitor has been optimized with a modular, maintainable architecture:
 - **Smart Error Handling**: Automatic retry with exponential backoff for transient failures
 - **Code Optimization**: Helper methods reduce duplication and improve maintainability
 - **DRY Principle**: Don't Repeat Yourself approach for alert classification and formatting
+- **Sliding Window Data**: Memory-efficient approach for tracking recent state without database overhead
 
 ### Technical Details
 
@@ -83,10 +86,24 @@ The system monitors the following conditions:
    - Threshold: 3 consecutive failures
 
 6. **Test Wallet Balance**
+
    - Alerts when test wallet balance falls below the required minimum (0.01 XDC)
    - Severity: Warning
    - Component: wallet
    - Threshold: 0.01 XDC
+
+7. **Penalty List Size**
+
+   - Alerts when the validator penalty list exceeds a configured threshold
+   - Severity: Warning
+   - Component: consensus
+   - Threshold: 20 validators
+
+8. **Frequently Penalized Nodes**
+   - Alerts when validators appear in the penalty list too frequently
+   - Severity: Warning
+   - Component: consensus
+   - Threshold: Penalized in 70% or more of recent epochs
 
 ### Alert Delivery
 
@@ -109,6 +126,8 @@ ENABLE_CHAT_NOTIFICATIONS=true
 # Telegram configuration
 TELEGRAM_BOT_TOKEN="your-telegram-bot-token-here"
 TELEGRAM_CHAT_ID="your-telegram-chat-id-here"
+TELEGRAM_MAINNET_TOPIC_ID="topic-id-for-mainnet-alerts"
+TELEGRAM_TESTNET_TOPIC_ID="topic-id-for-testnet-alerts"
 
 # Webhook configuration
 NOTIFICATION_WEBHOOK_URL="https://hooks.slack.com/services/XXX/YYY/ZZZ"
@@ -223,7 +242,12 @@ ENABLE_RPC_MONITORING=true
 ENABLE_PORT_MONITORING=true
 ENABLE_BLOCK_MONITORING=true
 ENABLE_TRANSACTION_MONITORING=true
+ENABLE_CONSENSUS_MONITORING=true
 BLOCK_TIME_THRESHOLD=3.0
+
+# Consensus monitoring configuration
+CONSENSUS_MONITORING_CHAIN_IDS=50,51
+CONSENSUS_SCAN_INTERVAL=15000
 
 # Alert configuration
 ENABLE_DASHBOARD_ALERTS=true
@@ -233,6 +257,8 @@ NOTIFICATION_WEBHOOK_URL=
 # Telegram notification configuration
 TELEGRAM_BOT_TOKEN="your-telegram-bot-token-here"
 TELEGRAM_CHAT_ID="your-telegram-chat-id-here"
+TELEGRAM_MAINNET_TOPIC_ID="topic-id-for-mainnet-alerts"
+TELEGRAM_TESTNET_TOPIC_ID="topic-id-for-testnet-alerts"
 
 # Logging configuration
 LOG_LEVEL=info
@@ -378,6 +404,11 @@ The application stores the following metrics in InfluxDB:
 - `transaction_monitor` - Transaction test results, tagged with `type`, `chainId`, and `rpc`
 - `transaction_monitor_confirmation_time` - Transaction confirmation time in ms, tagged with `type`, `chainId`, and `rpc`
 - `wallet_balance` - Test wallet balances, tagged with `chainId`, with a field for sufficient balance
+- `validator_summary` - Summary metrics for validators, tagged with `chainId`
+- `validator_nodes` - Count of masternodes, standbynodes, and penalty nodes
+- `consensus_missed_rounds` - Tracks missed mining rounds with detailed information
+- `consensus_timeout_periods` - Records timeout periods between blocks with duration and miners skipped
+- `consensus_miner_performance` - Complete mining performance data by validator
 
 ## Transaction Monitoring
 
@@ -600,6 +631,11 @@ src/
 │   ├── blocks.monitor.ts    # Block monitoring implementation
 │   ├── rpc.monitor.ts       # RPC endpoint monitoring
 │   ├── transaction.monitor.ts # Transaction monitoring implementation
+│   ├── consensus/           # Consensus monitoring services
+│   │   ├── consensus.monitor.ts # Main consensus orchestration service
+│   │   ├── miner/           # Masternode mining monitoring
+│   │   ├── epoch/           # Epoch and penalty tracking
+│   │   └── reward/          # Reward distribution monitoring
 │   ├── monitoring.controller.ts # API endpoints for monitoring data
 │   ├── notification.controller.ts # Notification endpoints
 │   └── testing.controller.ts # Testing endpoints
@@ -645,15 +681,24 @@ The application includes several powerful utilities:
    - Memory-efficient storage
 
 3. **AlertManager**: Centralized alert management
+
    - Multiple delivery channels (Telegram, webhook, dashboard)
    - Alert throttling to prevent notification storms
    - Severity-based prioritization
    - Network classification for targeted routing
+
 4. **Modular Helpers**: Optimized code structure with reusable components
+
    - Smart network detection for Mainnet/Testnet classification
    - Standardized table formatting for consistent display
    - Component aggregation for detailed reporting
    - Runtime optimization through code reuse
+
+5. **ConsensusMonitor**: Orchestration for consensus monitoring
+   - Coordinated initialization of component monitors
+   - Centralized validator data management
+   - Complete round-trip monitoring for consensus violations
+   - Sliding window approach for memory-efficient state tracking
 
 ## Contributing
 

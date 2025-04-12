@@ -2236,7 +2236,7 @@
       "type": "bargauge"
     },
     {
-      "collapsed": true,
+      "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
@@ -2244,883 +2244,1030 @@
         "y": 75
       },
       "id": 1000,
-      "panels": [
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb"
-          },
-          "description": "Current epoch information for the XDC Network",
-          "fieldConfig": {
-            "defaults": {
-              "color": {
-                "mode": "thresholds"
-              },
-              "mappings": [],
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  }
-                ]
-              },
-              "unit": "none"
-            },
-            "overrides": []
-          },
-          "gridPos": {
-            "h": 5,
-            "w": 3,
-            "x": 0,
-            "y": 77
-          },
-          "id": 1001,
-          "options": {
-            "colorMode": "value",
-            "graphMode": "none",
-            "justifyMode": "auto",
-            "orientation": "auto",
-            "reduceOptions": {
-              "calcs": ["lastNotNull"],
-              "fields": "/^epoch$/",
-              "values": false
-            },
-            "textMode": "auto"
-          },
-          "pluginVersion": "10.2.0",
-          "targets": [
-            {
-              "datasource": {
-                "type": "influxdb",
-                "uid": "influxdb"
-              },
-              "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"validator_summary\" and r.chainId == \"50\")\n  |> last()\n  |> pivot(rowKey:[\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")",
-              "refId": "A"
-            }
-          ],
-          "title": "Current Epoch",
-          "type": "stat"
-        },
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb"
-          },
-          "description": "Active masternode count for the current epoch",
-          "fieldConfig": {
-            "defaults": {
-              "color": {
-                "mode": "thresholds"
-              },
-              "mappings": [],
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "red",
-                    "value": null
-                  },
-                  {
-                    "color": "orange",
-                    "value": 90
-                  },
-                  {
-                    "color": "green",
-                    "value": 105
-                  }
-                ]
-              },
-              "unit": "none"
-            },
-            "overrides": []
-          },
-          "gridPos": {
-            "h": 5,
-            "w": 3,
-            "x": 3,
-            "y": 77
-          },
-          "id": 1002,
-          "options": {
-            "colorMode": "value",
-            "graphMode": "none",
-            "justifyMode": "auto",
-            "orientation": "auto",
-            "reduceOptions": {
-              "calcs": ["lastNotNull"],
-              "fields": "/^masternode_count$/",
-              "values": false
-            },
-            "textMode": "auto"
-          },
-          "pluginVersion": "10.2.0",
-          "targets": [
-            {
-              "datasource": {
-                "type": "influxdb",
-                "uid": "influxdb"
-              },
-              "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"validator_summary\" and r.chainId == \"50\")\n  |> last()\n  |> pivot(rowKey:[\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")",
-              "refId": "A"
-            }
-          ],
-          "title": "Active Masternodes",
-          "type": "stat"
-        },
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb"
-          },
-          "description": "Standby node count for the current epoch",
-          "fieldConfig": {
-            "defaults": {
-              "color": {
-                "mode": "thresholds"
-              },
-              "mappings": [],
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  }
-                ]
-              },
-              "unit": "none"
-            },
-            "overrides": []
-          },
-          "gridPos": {
-            "h": 5,
-            "w": 3,
-            "x": 6,
-            "y": 77
-          },
-          "id": 1003,
-          "options": {
-            "colorMode": "value",
-            "graphMode": "none",
-            "justifyMode": "auto",
-            "orientation": "auto",
-            "reduceOptions": {
-              "calcs": ["lastNotNull"],
-              "fields": "/^standbynode_count$/",
-              "values": false
-            },
-            "textMode": "auto"
-          },
-          "pluginVersion": "10.2.0",
-          "targets": [
-            {
-              "datasource": {
-                "type": "influxdb",
-                "uid": "influxdb"
-              },
-              "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"validator_summary\" and r.chainId == \"50\")\n  |> last()\n  |> pivot(rowKey:[\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")",
-              "refId": "A"
-            }
-          ],
-          "title": "Standby Nodes",
-          "type": "stat"
-        },
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb"
-          },
-          "description": "Penalty node count for the current epoch",
-          "fieldConfig": {
-            "defaults": {
-              "color": {
-                "mode": "thresholds"
-              },
-              "mappings": [],
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  },
-                  {
-                    "color": "yellow",
-                    "value": 10
-                  },
-                  {
-                    "color": "red",
-                    "value": 20
-                  }
-                ]
-              },
-              "unit": "none"
-            },
-            "overrides": []
-          },
-          "gridPos": {
-            "h": 5,
-            "w": 3,
-            "x": 9,
-            "y": 77
-          },
-          "id": 1004,
-          "options": {
-            "colorMode": "value",
-            "graphMode": "none",
-            "justifyMode": "auto",
-            "orientation": "auto",
-            "reduceOptions": {
-              "calcs": ["lastNotNull"],
-              "fields": "/^penalty_count$/",
-              "values": false
-            },
-            "textMode": "auto"
-          },
-          "pluginVersion": "10.2.0",
-          "targets": [
-            {
-              "datasource": {
-                "type": "influxdb",
-                "uid": "influxdb"
-              },
-              "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"validator_summary\" and r.chainId == \"50\")\n  |> last()\n  |> pivot(rowKey:[\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")",
-              "refId": "A"
-            }
-          ],
-          "title": "Penalty Nodes",
-          "type": "stat"
-        },
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb"
-          },
-          "description": "Distribution of validator nodes across different statuses",
-          "fieldConfig": {
-            "defaults": {
-              "color": {
-                "mode": "palette-classic"
-              },
-              "custom": {
-                "hideFrom": {
-                  "legend": false,
-                  "tooltip": false,
-                  "viz": false
-                }
-              },
-              "mappings": []
-            },
-            "overrides": [
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "Masternodes"
-                },
-                "properties": [
-                  {
-                    "id": "color",
-                    "value": {
-                      "fixedColor": "green",
-                      "mode": "fixed"
-                    }
-                  }
-                ]
-              },
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "Standby Nodes"
-                },
-                "properties": [
-                  {
-                    "id": "color",
-                    "value": {
-                      "fixedColor": "blue",
-                      "mode": "fixed"
-                    }
-                  }
-                ]
-              },
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "Penalty Nodes"
-                },
-                "properties": [
-                  {
-                    "id": "color",
-                    "value": {
-                      "fixedColor": "red",
-                      "mode": "fixed"
-                    }
-                  }
-                ]
-              }
-            ]
-          },
-          "gridPos": {
-            "h": 10,
-            "w": 12,
-            "x": 12,
-            "y": 77
-          },
-          "id": 1005,
-          "options": {
-            "legend": {
-              "displayMode": "list",
-              "placement": "bottom",
-              "showLegend": true
-            },
-            "pieType": "pie",
-            "reduceOptions": {
-              "calcs": ["lastNotNull"],
-              "fields": "",
-              "values": false
-            },
-            "tooltip": {
-              "mode": "single",
-              "sort": "none"
-            }
-          },
-          "pluginVersion": "10.2.0",
-          "targets": [
-            {
-              "datasource": {
-                "type": "influxdb",
-                "uid": "influxdb"
-              },
-              "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"validator_summary\" and r.chainId == \"50\")\n  |> last()\n  |> pivot(rowKey:[\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> map(fn: (r) => ({ \n    _time: r._time,\n    \"Masternodes\": r.masternode_count,\n    \"Standby Nodes\": r.standbynode_count,\n    \"Penalty Nodes\": r.penalty_count\n  }))\n  |> yield(name: \"node_distribution\")",
-              "refId": "A"
-            }
-          ],
-          "title": "Validator Node Distribution",
-          "type": "piechart"
-        },
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb"
-          },
-          "description": "Number of penalty nodes over time",
-          "fieldConfig": {
-            "defaults": {
-              "color": {
-                "mode": "palette-classic"
-              },
-              "custom": {
-                "axisBorderShow": false,
-                "axisCenteredZero": false,
-                "axisColorMode": "text",
-                "axisLabel": "",
-                "axisPlacement": "auto",
-                "barAlignment": 0,
-                "drawStyle": "line",
-                "fillOpacity": 10,
-                "gradientMode": "none",
-                "hideFrom": {
-                  "legend": false,
-                  "tooltip": false,
-                  "viz": false
-                },
-                "insertNulls": false,
-                "lineInterpolation": "linear",
-                "lineWidth": 1,
-                "pointSize": 5,
-                "scaleDistribution": {
-                  "type": "linear"
-                },
-                "showPoints": "never",
-                "spanNulls": false,
-                "stacking": {
-                  "group": "A",
-                  "mode": "none"
-                },
-                "thresholdsStyle": {
-                  "mode": "line"
-                }
-              },
-              "mappings": [],
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  },
-                  {
-                    "color": "red",
-                    "value": 20
-                  }
-                ]
-              },
-              "unit": "none"
-            },
-            "overrides": []
-          },
-          "gridPos": {
-            "h": 8,
-            "w": 12,
-            "x": 0,
-            "y": 82
-          },
-          "id": 1006,
-          "options": {
-            "legend": {
-              "calcs": [],
-              "displayMode": "list",
-              "placement": "bottom",
-              "showLegend": true
-            },
-            "tooltip": {
-              "mode": "single",
-              "sort": "none"
-            }
-          },
-          "pluginVersion": "10.2.0",
-          "targets": [
-            {
-              "datasource": {
-                "type": "influxdb",
-                "uid": "influxdb"
-              },
-              "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"validator_summary\" and r.chainId == \"50\" and r._field == \"penalty_count\")\n  |> aggregateWindow(every: 5m, fn: last, createEmpty: false)",
-              "refId": "A"
-            }
-          ],
-          "title": "Penalty List Size Over Time",
-          "type": "timeseries"
-        },
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb"
-          },
-          "description": "Top miners by most missed blocks",
-          "fieldConfig": {
-            "defaults": {
-              "color": {
-                "mode": "thresholds"
-              },
-              "custom": {
-                "align": "auto",
-                "cellOptions": {
-                  "type": "auto"
-                },
-                "inspect": false
-              },
-              "mappings": [],
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  },
-                  {
-                    "color": "red",
-                    "value": 10
-                  }
-                ]
-              }
-            },
-            "overrides": [
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "success_rate"
-                },
-                "properties": [
-                  {
-                    "id": "unit",
-                    "value": "percentunit"
-                  },
-                  {
-                    "id": "custom.cellOptions",
-                    "value": {
-                      "mode": "thresholds",
-                      "type": "color-background"
-                    }
-                  },
-                  {
-                    "id": "thresholds",
-                    "value": {
-                      "mode": "absolute",
-                      "steps": [
-                        {
-                          "color": "red",
-                          "value": null
-                        },
-                        {
-                          "color": "yellow",
-                          "value": 0.95
-                        },
-                        {
-                          "color": "green",
-                          "value": 0.98
-                        }
-                      ]
-                    }
-                  },
-                  {
-                    "id": "displayName",
-                    "value": "Success Rate"
-                  }
-                ]
-              },
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "miner"
-                },
-                "properties": [
-                  {
-                    "id": "displayName",
-                    "value": "Validator Address"
-                  }
-                ]
-              },
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "missed_blocks"
-                },
-                "properties": [
-                  {
-                    "id": "displayName",
-                    "value": "Missed Blocks"
-                  }
-                ]
-              },
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "total_blocks_mined"
-                },
-                "properties": [
-                  {
-                    "id": "displayName",
-                    "value": "Blocks Mined"
-                  }
-                ]
-              },
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "total_attempts"
-                },
-                "properties": [
-                  {
-                    "id": "displayName",
-                    "value": "Total Attempts"
-                  }
-                ]
-              }
-            ]
-          },
-          "gridPos": {
-            "h": 12,
-            "w": 24,
-            "x": 0,
-            "y": 90
-          },
-          "id": 1007,
-          "options": {
-            "cellHeight": "sm",
-            "footer": {
-              "countRows": false,
-              "fields": "",
-              "reducer": ["sum"],
-              "show": false
-            },
-            "showHeader": true
-          },
-          "pluginVersion": "10.2.0",
-          "targets": [
-            {
-              "datasource": {
-                "type": "influxdb",
-                "uid": "influxdb"
-              },
-              "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"consensus_miner_performance\" and r.chainId == \"50\")\n  |> pivot(rowKey:[\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> group(columns: [\"miner\"])\n  |> last()\n  |> sort(columns: [\"missed_blocks\"], desc: true)\n  |> limit(n: 20)",
-              "refId": "A"
-            }
-          ],
-          "title": "Miner Performance (Top 20 by Missed Blocks)",
-          "type": "table"
-        },
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb"
-          },
-          "description": "Timeout periods detected on the network",
-          "fieldConfig": {
-            "defaults": {
-              "color": {
-                "mode": "palette-classic"
-              },
-              "custom": {
-                "axisBorderShow": false,
-                "axisCenteredZero": false,
-                "axisColorMode": "text",
-                "axisLabel": "",
-                "axisPlacement": "auto",
-                "barAlignment": 0,
-                "drawStyle": "line",
-                "fillOpacity": 10,
-                "gradientMode": "none",
-                "hideFrom": {
-                  "legend": false,
-                  "tooltip": false,
-                  "viz": false
-                },
-                "insertNulls": false,
-                "lineInterpolation": "linear",
-                "lineWidth": 1,
-                "pointSize": 5,
-                "scaleDistribution": {
-                  "type": "linear"
-                },
-                "showPoints": "auto",
-                "spanNulls": false,
-                "stacking": {
-                  "group": "A",
-                  "mode": "none"
-                },
-                "thresholdsStyle": {
-                  "mode": "off"
-                }
-              },
-              "mappings": [],
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  },
-                  {
-                    "color": "red",
-                    "value": 80
-                  }
-                ]
-              },
-              "unit": "s"
-            },
-            "overrides": [
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "timeout_period"
-                },
-                "properties": [
-                  {
-                    "id": "displayName",
-                    "value": "Timeout Period"
-                  }
-                ]
-              },
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "expected_timeout"
-                },
-                "properties": [
-                  {
-                    "id": "displayName",
-                    "value": "Expected Timeout"
-                  },
-                  {
-                    "id": "color",
-                    "value": {
-                      "fixedColor": "blue",
-                      "mode": "fixed"
-                    }
-                  }
-                ]
-              }
-            ]
-          },
-          "gridPos": {
-            "h": 8,
-            "w": 24,
-            "x": 0,
-            "y": 102
-          },
-          "id": 1008,
-          "options": {
-            "legend": {
-              "calcs": ["mean", "max"],
-              "displayMode": "table",
-              "placement": "right",
-              "showLegend": true
-            },
-            "tooltip": {
-              "mode": "multi",
-              "sort": "none"
-            }
-          },
-          "pluginVersion": "10.2.0",
-          "targets": [
-            {
-              "datasource": {
-                "type": "influxdb",
-                "uid": "influxdb"
-              },
-              "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"consensus_timeout_periods\" and r.chainId == \"50\")\n  |> pivot(rowKey:[\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")",
-              "refId": "A"
-            }
-          ],
-          "title": "Timeout Period Analysis",
-          "type": "timeseries"
-        },
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb"
-          },
-          "description": "Recent missed rounds with expected and actual miner",
-          "fieldConfig": {
-            "defaults": {
-              "color": {
-                "mode": "thresholds"
-              },
-              "custom": {
-                "align": "auto",
-                "cellOptions": {
-                  "type": "auto"
-                },
-                "inspect": false
-              },
-              "mappings": [],
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "text",
-                    "value": null
-                  }
-                ]
-              }
-            },
-            "overrides": [
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "_time"
-                },
-                "properties": [
-                  {
-                    "id": "displayName",
-                    "value": "Time"
-                  }
-                ]
-              },
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "block_number"
-                },
-                "properties": [
-                  {
-                    "id": "displayName",
-                    "value": "Block"
-                  }
-                ]
-              },
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "round"
-                },
-                "properties": [
-                  {
-                    "id": "displayName",
-                    "value": "Round"
-                  }
-                ]
-              },
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "expected_miner"
-                },
-                "properties": [
-                  {
-                    "id": "displayName",
-                    "value": "Expected Miner"
-                  }
-                ]
-              },
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "actual_miner"
-                },
-                "properties": [
-                  {
-                    "id": "displayName",
-                    "value": "Actual Miner"
-                  }
-                ]
-              },
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "missed_miners_count"
-                },
-                "properties": [
-                  {
-                    "id": "displayName",
-                    "value": "Miners Skipped"
-                  }
-                ]
-              }
-            ]
-          },
-          "gridPos": {
-            "h": 8,
-            "w": 24,
-            "x": 0,
-            "y": 110
-          },
-          "id": 1009,
-          "options": {
-            "cellHeight": "sm",
-            "footer": {
-              "countRows": false,
-              "fields": "",
-              "reducer": ["sum"],
-              "show": false
-            },
-            "showHeader": true,
-            "sortBy": [
-              {
-                "desc": true,
-                "displayName": "Time"
-              }
-            ]
-          },
-          "pluginVersion": "10.2.0",
-          "targets": [
-            {
-              "datasource": {
-                "type": "influxdb",
-                "uid": "influxdb"
-              },
-              "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"consensus_missed_rounds\" and r.chainId == \"50\")\n  |> pivot(rowKey:[\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> sort(columns: [\"_time\"], desc: true)\n  |> limit(n: 50)",
-              "refId": "A"
-            }
-          ],
-          "title": "Recent Missed Rounds",
-          "type": "table"
-        }
-      ],
+      "panels": [],
       "title": "Consensus Monitoring",
       "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb"
+      },
+      "description": "Current epoch information for the XDC Mainnet",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 4,
+        "x": 0,
+        "y": 76
+      },
+      "id": 1010,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "10.2.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb"
+          },
+          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"validator_summary\" and r.chainId == \"50\")\n  |> last()\n  |> map(fn: (r) => ({ _time: r._time, _value: int(v: r.epoch), _field: \"Epoch\" }))",
+          "refId": "A"
+        }
+      ],
+      "title": "Current Epoch",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb"
+      },
+      "description": "Start Round of epoch information for the XDC Apothem Testnet",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 4,
+        "x": 4,
+        "y": 76
+      },
+      "id": 1011,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "10.2.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb"
+          },
+          "query": "// First find the latest epoch\nlatestEpoch = from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"validator_summary\" and r.chainId == \"51\")\n  |> keep(columns: [\"epoch\"])\n  |> sort(columns: [\"epoch\"], desc: true)\n  |> limit(n: 1)\n  |> findRecord(fn: (key) => true, idx: 0)\n\n// Then get the round data for only that epoch\nfrom(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"validator_summary\" and r.chainId == \"51\")\n  |> filter(fn: (r) => r.epoch == latestEpoch.epoch)\n  |> filter(fn: (r) => r._field == \"round\")\n  |> last()",
+          "refId": "A"
+        }
+      ],
+      "title": "Start Round Of Epoch",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb"
+      },
+      "description": "Start Block of epoch information for the XDC Apothem Testnet",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 4,
+        "x": 8,
+        "y": 76
+      },
+      "id": 1012,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "10.2.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb"
+          },
+          "query": "// First find the latest epoch\nlatestEpoch = from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"validator_summary\" and r.chainId == \"51\")\n  |> keep(columns: [\"epoch\"])\n  |> sort(columns: [\"epoch\"], desc: true)\n  |> limit(n: 1)\n  |> findRecord(fn: (key) => true, idx: 0)\n\n// Then get the block number data for only that epoch\nfrom(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"validator_summary\" and r.chainId == \"51\")\n  |> filter(fn: (r) => r.epoch == latestEpoch.epoch)\n  |> filter(fn: (r) => r._field == \"block_number\")\n  |> last()",
+          "refId": "A"
+        }
+      ],
+      "title": "Start Block Of Epoch",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb"
+      },
+      "description": "Distribution of validator nodes across different statuses",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "continuous-RdYlGr"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Masternodes"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Standby Nodes"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "yellow",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Penalty Nodes"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 12,
+        "w": 12,
+        "x": 12,
+        "y": 76
+      },
+      "id": 1013,
+      "options": {
+        "displayMode": "basic",
+        "minVizHeight": 10,
+        "minVizWidth": 0,
+        "namePlacement": "auto",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "showUnfilled": true,
+        "valueMode": "color"
+      },
+      "pluginVersion": "10.2.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb"
+          },
+          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"validator_summary\" and r.chainId == \"50\")\n  |> last()\n  |> pivot(rowKey:[\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> map(fn: (r) => ({ \n    _time: r._time,\n    \"Masternodes\": r.masternode_count,\n    \"Standby Nodes\": r.standbynode_count,\n    \"Penalty Nodes\": r.penalty_count\n  }))\n  |> yield(name: \"node_distribution\")",
+          "refId": "A"
+        }
+      ],
+      "title": "Validator Node Distribution",
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "_time": true
+            },
+            "indexByName": {
+              "Masternodes": 1,
+              "Penalty Nodes": 3,
+              "Standby Nodes": 2,
+              "_time": 0
+            },
+            "renameByName": {}
+          }
+        }
+      ],
+      "type": "bargauge"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb"
+      },
+      "description": "Number of penalty nodes over time",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "line"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 20
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 79
+      },
+      "id": 1014,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "10.2.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb"
+          },
+          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"validator_summary\" and r.chainId == \"50\" and r._field == \"penalty_count\")\n  |> keep(columns: [\"_time\", \"_value\"])\n  |> aggregateWindow(every: 5m, fn: last, createEmpty: false)",
+          "refId": "A"
+        }
+      ],
+      "title": "Penalty List Size Over Time",
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {},
+            "indexByName": {},
+            "renameByName": {
+              "Value": "Penalty Size",
+              "_value": "Penalty Count"
+            }
+          }
+        }
+      ],
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb"
+      },
+      "description": "Shows validator performance metrics for the top 20 nodes with the most missed blocks.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": true,
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "miner"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Validator Address"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "missed_blocks"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Missed Blocks"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "thresholds"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "yellow",
+                      "value": 1
+                    },
+                    {
+                      "color": "red",
+                      "value": 5
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "total_blocks_mined"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Blocks Mined"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "total_attempts"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Total Attempts"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "success_rate"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Success Rate"
+              },
+              {
+                "id": "unit",
+                "value": "percentunit"
+              },
+              {
+                "id": "min",
+                "value": 0
+              },
+              {
+                "id": "max",
+                "value": 1
+              },
+              {
+                "id": "decimals",
+                "value": 2
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "red",
+                      "value": null
+                    },
+                    {
+                      "color": "yellow",
+                      "value": 0.9
+                    },
+                    {
+                      "color": "green",
+                      "value": 0.98
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "last_block"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Last Active Block"
+              },
+              {
+                "id": "unit",
+                "value": "none"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 88
+      },
+      "id": 1015,
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": ["sum"],
+          "show": false
+        },
+        "showHeader": true,
+        "sortBy": [
+          {
+            "desc": true,
+            "displayName": "Missed Blocks"
+          },
+          {
+            "desc": true,
+            "displayName": "Blocks Mined"
+          },
+          {
+            "desc": true,
+            "displayName": "Success Rate"
+          }
+        ]
+      },
+      "pluginVersion": "10.2.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb"
+          },
+          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"consensus_miner_performance\" and r.chainId == \"50\")\n  |> pivot(rowKey:[\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> filter(fn: (r) => exists r.missed_blocks and exists r.total_blocks_mined)\n  |> map(fn: (r) => ({\n      miner: r.miner,\n      total_blocks_mined: float(v: r.total_blocks_mined),\n      missed_blocks: float(v: r.missed_blocks),\n      total_attempts: float(v: r.total_attempts),\n      success_rate: float(v: r.success_rate) / 100.0,\n      last_block: float(v: r.last_block)\n    }))\n  |> group()\n  |> sort(columns: [\"missed_blocks\"], desc: true)\n  |> limit(n: 20)",
+          "refId": "A"
+        }
+      ],
+      "title": "Miner Performance (Top 20 by Missed Blocks)",
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {},
+            "indexByName": {
+              "last_block": 5,
+              "miner": 0,
+              "missed_blocks": 2,
+              "success_rate": 4,
+              "total_attempts": 3,
+              "total_blocks_mined": 1
+            },
+            "renameByName": {}
+          }
+        }
+      ],
+      "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb"
+      },
+      "description": "Timeout periods detected on the network",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "timeout_period"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Timeout Period"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "expected_timeout"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Expected Timeout"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "blue",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "missed_miners"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Missed Miners"
+              },
+              {
+                "id": "unit",
+                "value": "none"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "variance"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Variance"
+              },
+              {
+                "id": "unit",
+                "value": "s"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "block_number"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Block Number"
+              },
+              {
+                "id": "unit",
+                "value": "none"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 96
+      },
+      "id": 1008,
+      "options": {
+        "legend": {
+          "calcs": ["min", "max", "mean"],
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "sortBy": "displayName",
+          "sortDesc": false
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "10.2.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb"
+          },
+          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"consensus_timeout_periods\" and r.chainId == \"50\")\n  |> pivot(rowKey:[\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> map(fn: (r) => ({\n      _time: r._time,\n      timeout_period: r.timeout_period,\n      expected_timeout: r.expected_timeout,\n      missed_miners: r.missed_miners,\n      variance: r.variance\n    }))\n  |> keep(columns: [\"_time\", \"timeout_period\", \"expected_timeout\", \"missed_miners\", \"variance\"])",
+          "refId": "A"
+        }
+      ],
+      "title": "Timeout Period Analysis",
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {},
+            "indexByName": {
+              "_time": 0,
+              "expected_timeout": 2,
+              "missed_miners": 3,
+              "timeout_period": 1,
+              "variance": 4
+            },
+            "renameByName": {
+              "expected_timeout": "Expected Timeout",
+              "missed_miners": "Missed Miners",
+              "timeout_period": "Timeout Period",
+              "variance": "Variance"
+            }
+          }
+        }
+      ],
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb"
+      },
+      "description": "Recent missed rounds with expected and actual miner",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text"
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "_time"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Time"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "block_number"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Block"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "round"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Round"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "expected_miner"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Expected Miner"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "actual_miner"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Actual Miner"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "missed_miners_count"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Miners Skipped"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 104
+      },
+      "id": 1016,
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": ["sum"],
+          "show": false
+        },
+        "frameIndex": 0,
+        "showHeader": true,
+        "sortBy": [
+          {
+            "desc": true,
+            "displayName": "Time"
+          }
+        ]
+      },
+      "pluginVersion": "10.2.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb"
+          },
+          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"consensus_missed_rounds\" and r.chainId == \"50\")\n  |> pivot(rowKey:[\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  // Group by unique identifiers for a missed round\n  |> group(columns: [\"round\", \"block_number\", \"expected_miner\", \"actual_miner\"])\n  // Take most recent record for each group\n  |> sort(columns: [\"_time\"], desc: true)\n  |> limit(n: 1)\n  // Ungroup for final sorting\n  |> group()\n  |> sort(columns: [\"block_number\"], desc: true)\n  |> limit(n: 100)",
+          "refId": "A"
+        }
+      ],
+      "title": "Recent Missed Rounds (Deduplicated)",
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "_measurement": true,
+              "_start": true,
+              "_stop": true,
+              "chainId": true,
+              "epoch_block": false
+            },
+            "indexByName": {
+              "_time": 0,
+              "actual_miner": 7,
+              "block_number": 2,
+              "epoch": 1,
+              "epoch_block": 5,
+              "epoch_round": 4,
+              "expected_miner": 6,
+              "missed_miners_count": 8,
+              "round": 3
+            },
+            "renameByName": {
+              "_time": "Time",
+              "actual_miner": "Actual Miner",
+              "block_number": "Block",
+              "epoch": "Epoch",
+              "epoch_block": "Epoch Start Block",
+              "epoch_round": "Epoch Start Round",
+              "expected_miner": "Expected Miner",
+              "missed_miners_count": "Miners Skipped",
+              "round": "Round"
+            }
+          }
+        }
+      ],
+      "type": "table"
     },
     {
       "collapsed": true,
@@ -3128,7 +3275,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 76
+        "y": 112
       },
       "id": 114,
       "panels": [
@@ -3209,7 +3356,7 @@
             "h": 7,
             "w": 24,
             "x": 0,
-            "y": 76
+            "y": 113
           },
           "id": 123,
           "options": {
@@ -3285,13 +3432,13 @@
     "list": []
   },
   "time": {
-    "from": "now-6h",
+    "from": "now-24h",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "",
   "title": "XDC Network Unified Dashboard",
   "uid": "xdc-unified-dashboard",
-  "version": 214,
+  "version": 226,
   "weekStart": ""
 }

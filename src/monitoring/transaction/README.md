@@ -12,6 +12,7 @@ The Transaction Monitor service performs active transaction testing on XDC netwo
 4. **Smart Contract Deployment**: Deploys a simple storage contract to test contract creation functionality
 5. **Transaction Lifecycle**: Tracks transaction submission, confirmation, and receipt validation
 6. **Provider Testing**: Tests transaction functionality across all available RPC endpoints
+7. **Multi-endpoint Validation**: Verifies transaction compatibility across different RPC endpoints on the same network
 
 ## Configuration Options
 
@@ -30,10 +31,11 @@ The Transaction Monitor service performs active transaction testing on XDC netwo
 
 ## Scheduled Testing
 
-- Uses `@nestjs/schedule` Cron decorator to run tests every 5 minutes
+- Uses `@nestjs/schedule` Cron decorator to run tests every 5 minutes (`0 */5 * * * *`)
 - Tests are executed on both Mainnet (chainId 50) and Testnet (chainId 51)
 - For each available provider, both transaction types (value transfer and contract deployment) are tested
 - Status changes and metrics are updated after each test cycle
+- Dynamic provider selection uses only active and healthy endpoints
 
 ## Error Handling
 
@@ -41,3 +43,16 @@ The Transaction Monitor service performs active transaction testing on XDC netwo
 - Differentiates between various failure types (insufficient funds, network errors, etc.)
 - Skips tests with clear error notifications when prerequisite conditions aren't met
 - Maintains wallet state between test runs
+- Automatic alerts for insufficient wallet balances
+
+## Key Features
+
+- **Active Transaction Testing**: Tests real transaction workflows rather than just passive monitoring
+- **Dual Network Support**: Parallel testing on both Mainnet and Testnet networks
+- **Multiple Transaction Types**: Tests both simple value transfers and contract deployments
+- **Multi-endpoint Validation**: Tests all active RPC endpoints on each network
+- **Wallet Balance Monitoring**: Tracks test wallet balances with alerts for low funds
+- **Efficient Transaction Amount**: Uses minimal amounts (0.0001 XDC) for cost-effective testing
+- **Comprehensive Metrics**: Records transaction success rates, confirmation times, and gas usage
+- **Automatic Alerts**: Sends notifications for transaction failures and insufficient balances
+- **Fail-safe Design**: Won't attempt transactions if wallet balance is too low

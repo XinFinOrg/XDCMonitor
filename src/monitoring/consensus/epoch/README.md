@@ -34,6 +34,28 @@ The Epoch Monitor uses a simple, memory-efficient approach:
 3. **No Database Persistence**: All monitoring happens in-memory for better performance
 4. **Event-Driven Updates**: Updates happen when epochs change, not on fixed intervals
 5. **Chain-Specific Tracking**: Separate tracking for each monitored chain
+6. **Orchestrated Operation**: Integrates with ConsensusMonitor for validator data access
+7. **Sorted Epoch Tracking**: Maintains epochs in sorted order for optimized lookups
+
+## Architecture Integration
+
+The EpochMonitor is designed to work within the orchestrated consensus monitoring system:
+
+1. **Data Flow**:
+
+   - Relies on ConsensusMonitor as the source of validator and epoch data
+   - Receives penalty list updates through the `updatePenaltyData` method
+   - Called by ConsensusMonitor when validator data is refreshed
+
+2. **Lifecycle Management**:
+
+   - Exposes `monitorEpochPenalties` method for monitoring, but doesn't self-schedule
+   - ConsensusMonitor manages the monitoring interval and triggers checks
+   - Operates on a 5-minute interval for efficient resource usage
+
+3. **Multi-Chain Support**:
+   - Maintains separate penalty tracking state for each chain ID
+   - Generates chain-specific alerts with appropriate network names (Mainnet/Testnet)
 
 ## Alerts
 
@@ -69,3 +91,31 @@ The Epoch Monitor has the following hardcoded configuration values:
 | maxPenaltyListSize         | Maximum allowed penalty list size           | 20             |
 | monitoringIntervalMs       | Monitoring interval in milliseconds         | 300000 (5 min) |
 | slidingWindowSize          | Number of epochs to keep in sliding window  | 10             |
+
+## Integration Points
+
+- **ConsensusMonitor**: Source of validator data and epoch information
+- **MetricsService**: Records statistics about penalty frequency and validator status
+- **AlertService**: Generates alerts for large penalty lists and frequently penalized nodes
+
+## Metrics Collection
+
+The Epoch Monitor leverages the metrics provided by the ConsensusMonitor:
+
+- **validator_summary**: Records counts of masternodes, standbynodes, and penalized nodes
+- **validator_nodes**: Records individual validator status with address, status, and epoch
+
+These metrics flow into Grafana dashboards for visualization and analysis.
+
+## Key Features
+
+- **Memory-Efficient Design**: Uses simple data structures with minimal memory footprint
+- **Automatic Window Management**: Maintains optimal sliding window size as epochs progress
+- **Percentage-Based Alerting**: Uses relative metrics (percentage of epochs) rather than absolute counts
+- **Complete Address Recording**: Provides full addresses in alerts for easy identification
+- **Adaptive Monitoring**: Updates only when new epoch data becomes available
+- **Multi-Chain Support**: Maintains separate state for each monitored chain
+- **Comprehensive Alert Context**: Includes detailed statistics in alerts for better context
+- **Sorted Epoch Tracking**: Maintains epochs in sorted order for optimized lookups
+- **Minimum Sample Size**: Only evaluates nodes with sufficient history (at least 5 epochs)
+- **Targeted Alerting**: Generates alerts only for actionable issues

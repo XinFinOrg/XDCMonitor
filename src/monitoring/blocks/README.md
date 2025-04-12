@@ -16,7 +16,9 @@ The Blocks Monitor service monitors blocks across XDC networks (Mainnet and Test
 
 - `enableBlockMonitoring`: Toggle feature on/off via ConfigService
 - `scanInterval`: Time between block checks (defaults to 15000ms)
-- `startupDelay`, `errorRecoveryDelay`, `initialScanDelay`: Timing parameters for graceful initialization
+- `startupDelay`: Delay before starting monitoring (defaults to 5000ms)
+- `errorRecoveryDelay`: Delay before retrying after errors (defaults to 10000ms)
+- `initialScanDelay`: Delay for initial scan (defaults to 3000ms)
 - Network configurations for Mainnet (`chainId: 50`) and Testnet (`chainId: 51`) endpoints
 
 ## Integration Points
@@ -39,3 +41,15 @@ The Blocks Monitor service monitors blocks across XDC networks (Mainnet and Test
 - `NetworkConfig`: Stores network configuration including endpoints and clients
 - `BlockInfo`: Contains block data including height, timestamp, and transaction info
 - `BlockMonitoringInfo`: Comprehensive monitoring status for API responses
+- `RpcRetryClient`: Resilient RPC client with automatic failover and retry capabilities
+
+## Key Features
+
+- **Multi-endpoint Monitoring**: Tracks multiple RPC endpoints per network to identify discrepancies
+- **Automatic Failover**: Switches to healthy endpoints when primary endpoints fail
+- **Transaction Analysis**: Analyzes transaction success rates within blocks
+- **Sliding Window Analysis**: Maintains 24-hour windows of block times for trend analysis
+- **Resilient Initialization**: Graceful startup with configurable delays
+- **Health Metrics**: Comprehensive metrics for block times, processing rates, and endpoint health
+- **Batch Transaction Processing**: Efficient processing of transactions in configurable batches
+- **Dynamic Configuration**: Runtime configuration updates without service restart

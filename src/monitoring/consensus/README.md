@@ -17,7 +17,7 @@ The system follows a modular NestJS architecture with a central coordinator and 
 ### Specialized Monitors
 
 1. **[Miner Monitor](./miner/README.md)** - Tracks the round-robin mining pattern and timeout detection with complete block coverage ✅
-2. **[Epoch Monitor](./epoch/README.md)** - Monitors epoch transitions and masternode list updates 🚧
+2. **[Epoch Monitor](./epoch/README.md)** - Monitors epoch transitions and masternode list updates ✅
 3. **[Reward Monitor](./reward/README.md)** - Validates reward distribution at epoch boundaries 🚧
 
 ### Orchestration Flow
@@ -99,6 +99,19 @@ The system leverages specialized XDC blockchain APIs for accurate monitoring:
 
 By using these native APIs instead of relying solely on our calculations, the monitoring system achieves higher accuracy and reliability.
 
+## Key Features
+
+- **Centralized Validator Management**: Central ConsensusMonitor service manages validator data for all monitors
+- **Coordinated Initialization**: Orchestrated startup to ensure data availability before monitoring begins
+- **Sliding Window Epoch Tracking**: Memory-efficient tracking of recent epochs with array-based storage
+- **Dynamic Chain Detection**: Auto-detects supported chains based on configuration
+- **Real-time Alert Generation**: Generates alerts for consensus rule violations
+- **Complete Block Coverage**: Processes all blocks with batch fetching for complete monitoring
+- **Penalty Detection**: Tracks which nodes appear in penalty lists with frequency analysis
+- **Timeout Period Detection**: Identifies when miners fail to produce blocks within timeouts
+- **InfluxDB Metrics**: Records detailed metrics for validator status, missed blocks, and timeouts
+- **Violation Tracking**: Maintains history of recent consensus violations for analysis
+
 ## XDPoS 2.0 Consensus Details
 
 ### Masternode System
@@ -168,14 +181,38 @@ All consensus monitoring services integrate with:
 - **MetricsService** - Reporting monitoring metrics
 - **AlertService** - Sending alerts on detected issues
 
-## API
+## API Endpoints
 
 The monitoring system exposes several API endpoints through the `MonitoringController`:
 
 - `/monitoring/consensus-status` - Overall consensus monitoring status across chains
-- `/monitoring/consensus-status/:chainId` - Consensus status for a specific chain
 - `/monitoring/masternode-performance/:chainId` - Performance metrics for masternodes on a specific chain
 - `/monitoring/consensus-violations/:chainId` - Detected consensus rule violations on a specific chain
+
+## Epoch Monitor Details
+
+The Epoch Monitor focuses specifically on tracking penalties across epoch transitions:
+
+- **Sliding Window Approach**: Maintains data for the last 10 epochs in memory
+- **Penalty Tracking**: Records which nodes appear in penalty lists in each epoch
+- **Frequency Analysis**: Calculates how often nodes appear in penalty lists
+- **Alert Generation**:
+  - Alerts when nodes are penalized in ≥70% of recent epochs
+  - Alerts when penalty list exceeds 20 nodes
+- **Update Mechanism**:
+  - Updates when validator data changes
+  - Automatically adapts window as new epochs arrive
+
+## Miner Monitor Details
+
+The Miner Monitor focuses on block production and consensus rule compliance:
+
+- **Performance Tracking**: Records successful mining operations per address
+- **Missed Rounds Detection**: Uses blockchain API to get authoritative data on missed rounds
+- **Timeout Detection**: Analyzes timestamp differences to detect timeout events
+- **Violation Recording**: Maintains record of consensus violations for analysis
+- **Batch Processing**: Processes blocks in configurable batches for efficiency
+- **Complete Coverage**: Ensures every block is analyzed, even across monitoring restarts
 
 ## Development Status
 

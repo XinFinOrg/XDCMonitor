@@ -12,6 +12,7 @@ The RPC Monitor service monitors the health and performance of XDC RPC endpoints
 4. **Explorer & Faucet Monitoring**: Checks related infrastructure services through HTTP requests
 5. **Adaptive Monitoring**: Dynamically adjusts check frequency based on endpoint health status (increases frequency for problematic endpoints)
 6. **Batch Processing**: Processes endpoint checks in configurable batches with delays to prevent resource spikes
+7. **Priority-Based Checking**: Prioritizes checking of down endpoints to detect recovery faster
 
 ## Configuration Options
 
@@ -22,7 +23,14 @@ The RPC Monitor service monitors the health and performance of XDC RPC endpoints
   - `PORT_CHECK_INTERVAL_MS`: Port check interval (default: 30000ms)
   - `SERVICE_CHECK_INTERVAL_MS`: Service check interval (default: 60000ms)
   - `SYNC_INTERVAL_MS`: Blockchain service sync interval (default: 60000ms)
-- Batch sizes and delay settings with adaptive monitoring parameters
+- Batch configuration:
+  - `RPC_CHECK_BATCH_SIZE`: Number of RPC endpoints to check in parallel (default: 3)
+  - `WS_CHECK_BATCH_SIZE`: Number of WebSocket endpoints to check in parallel (default: 2)
+  - `BATCH_DELAY_MS`: Delay between batches to prevent resource spikes (default: 500ms)
+- Adaptive monitoring settings:
+  - `ENABLE_ADAPTIVE_MONITORING`: Toggle adaptive monitoring (default: false)
+  - `MAX_CHECK_INTERVAL_MS`: Maximum interval for healthy endpoints (default: 120000ms)
+  - `MIN_CHECK_INTERVAL_MS`: Minimum interval for problematic endpoints (default: 15000ms)
 
 ## Integration Points
 
@@ -46,3 +54,16 @@ The RPC Monitor service monitors the health and performance of XDC RPC endpoints
 - Latency tracking for performance analysis
 - Health factor calculations based on endpoint availability percentages
 - Downtime notification management with configurable thresholds (default: 1 hour)
+
+## Key Features
+
+- **Multi-Method Verification**: Uses both direct RPC calls and blockchain service providers
+- **Staggered Initialization**: Prevents resource spikes by spacing out initial endpoint checks
+- **Parallel Batch Processing**: Processes endpoints in configurable parallel batches
+- **WebSocket Subscription Testing**: Verifies WebSocket functionality with real subscriptions
+- **Port Availability Checks**: Validates network connectivity independent of service availability
+- **Service Health Metrics**: Tracks explorer and faucet service availability
+- **Adaptive Check Frequencies**: Increases check frequency for problematic endpoints
+- **Automatic Client Management**: Creates and manages RPC clients with retry capabilities
+- **Health Factor Calculation**: Provides overall health percentage for monitoring dashboards
+- **Priority-Based Recovery Detection**: Checks down endpoints more frequently to detect recovery
