@@ -1135,8 +1135,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               }
             ]
           },
@@ -1229,8 +1228,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -1400,8 +1398,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "yellow",
@@ -1515,8 +1512,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "yellow",
@@ -1625,8 +1621,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "red",
-                "value": null
+                "color": "red"
               },
               {
                 "color": "green",
@@ -1648,8 +1643,7 @@
                   "mode": "absolute",
                   "steps": [
                     {
-                      "color": "red",
-                      "value": null
+                      "color": "red"
                     }
                   ]
                 }
@@ -1769,8 +1763,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -1867,8 +1860,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "red",
-                "value": null
+                "color": "red"
               },
               {
                 "color": "green",
@@ -1890,8 +1882,7 @@
                   "mode": "absolute",
                   "steps": [
                     {
-                      "color": "red",
-                      "value": null
+                      "color": "red"
                     }
                   ]
                 }
@@ -2011,8 +2002,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -2095,8 +2085,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "red",
-                "value": null
+                "color": "red"
               },
               {
                 "color": "yellow",
@@ -2191,8 +2180,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "red",
-                "value": null
+                "color": "red"
               },
               {
                 "color": "green",
@@ -2281,8 +2269,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "red",
-                "value": null
+                "color": "red"
               },
               {
                 "color": "green",
@@ -2368,8 +2355,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               }
             ]
           },
@@ -2426,8 +2412,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               }
             ]
           },
@@ -2484,8 +2469,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               }
             ]
           },
@@ -2542,8 +2526,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -2700,8 +2683,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -2783,8 +2765,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               }
             ]
           }
@@ -2824,8 +2805,7 @@
                   "mode": "absolute",
                   "steps": [
                     {
-                      "color": "green",
-                      "value": null
+                      "color": "green"
                     },
                     {
                       "color": "yellow",
@@ -2896,8 +2876,7 @@
                   "mode": "absolute",
                   "steps": [
                     {
-                      "color": "red",
-                      "value": null
+                      "color": "red"
                     },
                     {
                       "color": "yellow",
@@ -2968,7 +2947,7 @@
             "type": "influxdb",
             "uid": "influxdb"
           },
-          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"consensus_miner_performance\" and r.chainId == \"51\")\n  |> pivot(rowKey:[\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> filter(fn: (r) => exists r.missed_blocks and exists r.total_blocks_mined)\n  |> map(fn: (r) => ({\n      miner: r.miner,\n      total_blocks_mined: float(v: r.total_blocks_mined),\n      missed_blocks: float(v: r.missed_blocks),\n      total_attempts: float(v: r.total_attempts),\n      success_rate: float(v: r.success_rate) / 100.0,\n      last_block: float(v: r.last_block)\n    }))\n  |> group()\n  |> sort(columns: [\"missed_blocks\"], desc: true)\n  |> limit(n: 20)",
+          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"consensus_miner_performance\" and r.chainId == \"51\")\n  |> pivot(rowKey:[\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> filter(fn: (r) => exists r.missed_blocks and exists r.total_blocks_mined)\n  |> map(fn: (r) => ({\n      _value: 1,\n      miner: r.miner,\n      total_blocks_mined: float(v: r.total_blocks_mined),\n      missed_blocks: float(v: r.missed_blocks),\n      total_attempts: float(v: r.total_attempts),\n      success_rate: float(v: r.success_rate) / 100.0,\n      last_block: float(v: r.last_block),\n      _time: r._time\n    }))\n  |> group(columns: [\"miner\"])\n  |> sort(columns: [\"_time\"], desc: true)\n  |> first()\n  |> drop(columns: [\"_value\"])\n  |> group()\n  |> sort(columns: [\"missed_blocks\"], desc: true)\n  |> limit(n: 20)",
           "refId": "A"
         }
       ],
@@ -3040,8 +3019,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -3219,8 +3197,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "text",
-                "value": null
+                "color": "text"
               }
             ]
           }
@@ -3411,8 +3388,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               }
             ]
           }
@@ -3543,6 +3519,6 @@
   "timezone": "",
   "title": "XDC Apothem Testnet Monitoring",
   "uid": "apothem-testnet",
-  "version": 143,
+  "version": 152,
   "weekStart": ""
 }
