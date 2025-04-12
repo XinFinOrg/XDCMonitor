@@ -1,11 +1,11 @@
-import { ALERTS } from '@common/constants/config';
+import { ALERTS, BLOCKCHAIN } from '@common/constants/config';
 import { AlertCategory, AlertManager, Alert as AlertManagerAlert, AlertSeverity } from '@common/utils/alert-manager';
 import { ConfigService } from '@config/config.service';
+import { QueryApi } from '@influxdata/influxdb-client';
 import { MetricsService } from '@metrics/metrics.service';
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import axios from 'axios';
-import { QueryApi } from '@influxdata/influxdb-client';
 
 export interface Alert {
   type: 'error' | 'warning' | 'info';
@@ -13,6 +13,7 @@ export interface Alert {
   message: string;
   timestamp: Date;
   component?: string;
+  chainId?: number;
 }
 
 export interface WeeklyAlertReport {
@@ -34,12 +35,32 @@ export interface WeeklyAlertReport {
     }
   >;
   alertsByType: Record<string, number>;
+  alertsByChain: {
+    mainnet: {
+      total: number;
+      error: number;
+      warning: number;
+      info: number;
+    };
+    testnet: {
+      total: number;
+      error: number;
+      warning: number;
+      info: number;
+    };
+    other: {
+      total: number;
+      error: number;
+      warning: number;
+      info: number;
+    };
+  };
   alerts: Alert[];
 }
 
 @Injectable()
-export class AlertsService implements OnModuleInit {
-  private readonly logger = new Logger(AlertsService.name);
+export class AlertService implements OnModuleInit {
+  private readonly logger = new Logger(AlertService.name);
   private alerts: Alert[] = [];
   private alertThrottling: Record<string, number> = {};
   private weeklyReports: WeeklyAlertReport[] = [];
@@ -121,6 +142,7 @@ export class AlertsService implements OnModuleInit {
           value: string;
           _time: string;
           component: string;
+          chainId: number | undefined;
         };
 
         // Only add if it has the required properties
@@ -131,6 +153,7 @@ export class AlertsService implements OnModuleInit {
             message: typedRow.value || '',
             timestamp: new Date(typedRow._time),
             component: typedRow.component || 'system',
+            chainId: typedRow.chainId || undefined,
           });
         }
       }
@@ -190,7 +213,7 @@ export class AlertsService implements OnModuleInit {
   /**
    * Send weekly report to configured channels
    */
-  private async sendWeeklyReport(report: WeeklyAlertReport): Promise<void> {
+  public async sendWeeklyReport(report: WeeklyAlertReport): Promise<void> {
     const alertConfig = this.configService.getMonitoringConfig().alertNotifications;
 
     // Format report for sending
@@ -207,6 +230,8 @@ export class AlertsService implements OnModuleInit {
 
     try {
       // Send to Telegram if configured
+      // Weekly reports are intentionally sent to the main thread (without chainId)
+      // since they summarize alerts across all chains
       if (alertConfig.enableTelegram && alertConfig.telegramBotToken && alertConfig.telegramChatId) {
         await this.sendToTelegram(message);
       }
@@ -232,43 +257,111 @@ export class AlertsService implements OnModuleInit {
   }
 
   /**
+   * Get the formatted weekly report message
+   * This returns the same text that would be sent to Telegram
+   */
+  public getFormattedWeeklyReportMessage(report: WeeklyAlertReport): string {
+    return this.formatWeeklyReportMessage(report);
+  }
+
+  /**
+   * Format a severity table for the weekly report
+   */
+  private formatSeverityTable(counts: { error: number; warning: number; info: number }, title: string): string {
+    let message = `<b>${title}:</b>\n`;
+    message += `<pre>`;
+    message += `+--------------+--------+\n`;
+    message += `| Severity     | Count  |\n`;
+    message += `+--------------+--------+\n`;
+
+    if (counts.error > 0 || counts.warning > 0 || counts.info > 0) {
+      message += `| Errors       | ${String(counts.error).padEnd(6)} |\n`;
+      message += `| Warnings     | ${String(counts.warning).padEnd(6)} |\n`;
+      message += `| Info         | ${String(counts.info).padEnd(6)} |\n`;
+    } else {
+      message += `| No alerts    | -      |\n`;
+    }
+
+    message += `+--------------+--------+\n`;
+    message += `</pre>\n\n`;
+
+    return message;
+  }
+
+  /**
    * Format weekly report into a readable message
    */
   private formatWeeklyReportMessage(report: WeeklyAlertReport): string {
     const startDate = report.startDate.toLocaleDateString();
     const endDate = report.endDate.toLocaleDateString();
 
-    let message = `📊 *Weekly Alert Report*\n`;
+    let message = `📊 <b>Weekly Alert Report</b>\n`;
     message += `Period: ${startDate} to ${endDate}\n\n`;
 
     // Total alerts
-    message += `*Total Alerts:* ${report.totalAlerts}\n`;
+    message += `<b>Total Alerts:</b> ${report.totalAlerts}\n\n`;
 
-    // Alert counts by severity
-    message += `\n*Alert Counts:*\n`;
-    message += `🚨 Errors: ${report.alertCounts.error}\n`;
-    message += `⚠️ Warnings: ${report.alertCounts.warning}\n`;
-    message += `ℹ️ Info: ${report.alertCounts.info}\n`;
+    // Overall alert statistics
+    message += this.formatSeverityTable(report.alertCounts, 'Overall Alert Statistics');
 
-    // Alerts by component
-    message += `\n*Alerts by Component:*\n`;
-    Object.entries(report.alertsByComponent).forEach(([component, counts]) => {
-      message += `\n${component}:\n`;
-      message += `  Total: ${counts.total}\n`;
-      message += `  Errors: ${counts.error}\n`;
-      message += `  Warnings: ${counts.warning}\n`;
-      message += `  Info: ${counts.info}\n`;
-    });
+    // MAINNET SECTION
+    message += `\n🔷 <b>MAINNET ALERTS</b> (Total: ${report.alertsByChain.mainnet.total})\n\n`;
+
+    // Mainnet severity breakdown
+    message += this.formatSeverityTable(report.alertsByChain.mainnet, 'Mainnet Alert Breakdown');
+
+    // Get Mainnet components
+    const mainnetComponents = this.getComponentCounts(report.alerts, alert => this.isMainnetAlert(alert));
+    message += this.formatComponentsTable(mainnetComponents, 'Mainnet Components');
+
+    // TESTNET SECTION
+    message += `\n🔶 <b>TESTNET ALERTS</b> (Total: ${report.alertsByChain.testnet.total})\n\n`;
+
+    // Testnet severity breakdown
+    message += this.formatSeverityTable(report.alertsByChain.testnet, 'Testnet Alert Breakdown');
+
+    // Get Testnet components
+    const testnetComponents = this.getComponentCounts(report.alerts, alert => this.isTestnetAlert(alert));
+    message += this.formatComponentsTable(testnetComponents, 'Testnet Components');
+
+    // OTHER ALERTS SECTION (if any)
+    if (report.alertsByChain.other.total > 0) {
+      message += `\n⚪ <b>OTHER ALERTS</b> (Total: ${report.alertsByChain.other.total})\n\n`;
+
+      // Other severity breakdown
+      message += this.formatSeverityTable(report.alertsByChain.other, 'General Alert Breakdown');
+
+      // Get Other components
+      const otherComponents = this.getComponentCounts(
+        report.alerts,
+        alert => !this.isMainnetAlert(alert) && !this.isTestnetAlert(alert),
+      );
+      message += this.formatComponentsTable(otherComponents, 'Other Components');
+    }
 
     // Most frequent alert types
-    message += `\n*Most Frequent Alert Types:*\n`;
+    message += `\n<b>Most Frequent Alert Types:</b>\n`;
+    message += `<pre>`;
+    message += `+-------------------------------------------------+--------+\n`;
+    message += `| Alert Type                                      | Count  |\n`;
+    message += `+-------------------------------------------------+--------+\n`;
+
     const sortedTypes = Object.entries(report.alertsByType)
       .sort(([, a], [, b]) => b - a)
       .slice(0, 5);
 
-    sortedTypes.forEach(([type, count]) => {
-      message += `${type}: ${count}\n`;
-    });
+    if (sortedTypes.length > 0) {
+      sortedTypes.forEach(([type, count]) => {
+        // For consistent table width, we pad strings with spaces
+        const typeStr = type.length > 47 ? type.substring(0, 44) + '...' : type;
+        message += `| ${typeStr.padEnd(47)} | ${String(count).padEnd(6)} |\n`;
+      });
+    } else {
+      message += `| No alert types recorded                           | -      |\n`;
+    }
+
+    message += `+-------------------------------------------------+--------+\n`;
+    message += `</pre>\n`;
 
     return message;
   }
@@ -326,10 +419,30 @@ export class AlertsService implements OnModuleInit {
       },
       alertsByComponent: {},
       alertsByType: {},
+      alertsByChain: {
+        mainnet: {
+          total: 0,
+          error: 0,
+          warning: 0,
+          info: 0,
+        },
+        testnet: {
+          total: 0,
+          error: 0,
+          warning: 0,
+          info: 0,
+        },
+        other: {
+          total: 0,
+          error: 0,
+          warning: 0,
+          info: 0,
+        },
+      },
       alerts: alertsInRange,
     };
 
-    // Process alerts
+    // Process each alert to generate statistics
     alertsInRange.forEach(alert => {
       // Count by severity
       report.alertCounts[alert.type]++;
@@ -349,7 +462,26 @@ export class AlertsService implements OnModuleInit {
 
       // Count by alert type (title)
       report.alertsByType[alert.title] = (report.alertsByType[alert.title] || 0) + 1;
+
+      // Determine which chain this alert belongs to
+      if (this.isMainnetAlert(alert)) {
+        report.alertsByChain.mainnet.total++;
+        report.alertsByChain.mainnet[alert.type]++;
+      } else if (this.isTestnetAlert(alert)) {
+        report.alertsByChain.testnet.total++;
+        report.alertsByChain.testnet[alert.type]++;
+      } else {
+        report.alertsByChain.other.total++;
+        report.alertsByChain.other[alert.type]++;
+      }
     });
+
+    // Log component and chain statistics for debugging
+    this.logger.debug(`Weekly report generated with ${alertsInRange.length} alerts`);
+    this.logger.debug(`Components found: ${Object.keys(report.alertsByComponent).length}`);
+    this.logger.debug(
+      `Network breakdown - Mainnet: ${report.alertsByChain.mainnet.total}, Testnet: ${report.alertsByChain.testnet.total}, Other: ${report.alertsByChain.other.total}`,
+    );
 
     // Store the report
     this.weeklyReports.push(report);
@@ -492,6 +624,8 @@ export class AlertsService implements OnModuleInit {
         config: {
           botToken: alertConfig.telegramBotToken,
           chatId: alertConfig.telegramChatId,
+          mainnetTopicId: alertConfig.telegramMainnetTopicId,
+          testnetTopicId: alertConfig.telegramTestnetTopicId,
         },
       });
     }
@@ -589,9 +723,15 @@ export class AlertsService implements OnModuleInit {
       title: alert.title,
       message: alert.message,
       shouldNotify: true,
+      metadata: {
+        chainId: chainId,
+      },
     });
 
     this.metricsService.saveAlert(fullAlert, chainId);
+
+    // Send chat notifications with the chainId
+    await this.sendToChat(fullAlert, chainId);
   }
 
   /**
@@ -631,6 +771,7 @@ export class AlertsService implements OnModuleInit {
       component,
       title: this.formatAlertTitle(alertType),
       message,
+      chainId,
     };
 
     // Add to legacy alerts for backwards compatibility
@@ -652,6 +793,7 @@ export class AlertsService implements OnModuleInit {
       title: this.formatAlertTitle(alertType),
       message,
       shouldNotify: false, // Don't trigger notifications for warnings
+      chainId,
     });
 
     // Save warning to metrics database
@@ -727,17 +869,16 @@ export class AlertsService implements OnModuleInit {
     chainId?: number,
   ): Promise<void> {
     const message = `Current value: ${currentValue}${unit} (Threshold: ${thresholdValue}${unit})`;
-
     switch (severity) {
       case 'error':
-        await this.error('threshold_exceeded', component, `${title} - ${message}`, chainId);
+        await this.error(ALERTS.TYPES.THRESHOLD_EXCEEDED, component, `${title} - ${message}`, chainId);
         break;
       case 'warning':
         // Use warning method - will save alert to database but not send notifications
-        await this.warning('threshold_warning', component, `${title} - ${message}`, chainId);
+        await this.warning(ALERTS.TYPES.THRESHOLD_WARNING, component, `${title} - ${message}`, chainId);
         break;
       case 'info':
-        await this.info('threshold_notification', component, `${title} - ${message}`, chainId);
+        await this.info(ALERTS.TYPES.THRESHOLD_NOTIFICATION, component, `${title} - ${message}`, chainId);
         break;
     }
   }
@@ -753,7 +894,7 @@ export class AlertsService implements OnModuleInit {
   /**
    * Send alert to chat channels (Telegram, webhook, etc.)
    */
-  private async sendToChat(alert: Alert): Promise<void> {
+  private async sendToChat(alert: Alert, chainId?: number): Promise<void> {
     if (
       !this.configService.getMonitoringConfig().alertNotifications.enableWebhook &&
       !this.configService.getMonitoringConfig().alertNotifications.enableTelegram
@@ -769,7 +910,7 @@ export class AlertsService implements OnModuleInit {
         this.configService.getMonitoringConfig().alertNotifications.telegramBotToken &&
         this.configService.getMonitoringConfig().alertNotifications.telegramChatId
       ) {
-        await this.sendToTelegram(message);
+        await this.sendToTelegram(message, chainId);
       }
 
       // Send to webhook if configured
@@ -788,13 +929,13 @@ export class AlertsService implements OnModuleInit {
     const emoji = alert.type === 'error' ? '🚨' : alert.type === 'warning' ? '⚠️' : 'ℹ️';
     const timestamp = alert.timestamp.toISOString();
 
-    return `${emoji} *${alert.title}*\n${alert.message}\n\nComponent: ${alert.component || 'system'}\nTime: ${timestamp}`;
+    return `${emoji} <b>${alert.title}</b>\n${alert.message}\n\n<b>Component:</b> ${alert.component || 'system'}\n<b>Time:</b> ${timestamp}`;
   }
 
   /**
    * Send an alert to Telegram
    */
-  private async sendToTelegram(message: string): Promise<void> {
+  private async sendToTelegram(message: string, chainId?: number): Promise<void> {
     try {
       const alertConfig = this.configService.getMonitoringConfig().alertNotifications;
       const botToken = alertConfig.telegramBotToken;
@@ -805,13 +946,37 @@ export class AlertsService implements OnModuleInit {
         return;
       }
 
+      // Determine topic ID based on chainId
+      let messageThreadId: string | undefined;
+      if (chainId == BLOCKCHAIN.CHAIN_IDS_NUM.MAINNET && alertConfig.telegramMainnetTopicId) {
+        // Mainnet
+        messageThreadId = alertConfig.telegramMainnetTopicId;
+        this.logger.debug(`Using Mainnet topic ID: ${messageThreadId}`);
+      } else if (chainId == BLOCKCHAIN.CHAIN_IDS_NUM.TESTNET && alertConfig.telegramTestnetTopicId) {
+        // Testnet
+        messageThreadId = alertConfig.telegramTestnetTopicId;
+        this.logger.debug(`Using Testnet topic ID: ${messageThreadId}`);
+      }
+
       const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
-      await axios.post(url, {
+      const payload: any = {
         chat_id: chatId,
         text: message,
-        parse_mode: 'Markdown',
-      });
-      this.logger.debug('Alert sent to Telegram');
+        parse_mode: 'HTML',
+      };
+
+      // Add message_thread_id if we have a valid topic ID
+      if (messageThreadId) {
+        payload.message_thread_id = messageThreadId;
+      }
+
+      await axios.post(url, payload);
+
+      if (messageThreadId) {
+        this.logger.debug(`Alert sent to Telegram topic ${messageThreadId}`);
+      } else {
+        this.logger.debug('Alert sent to Telegram main thread');
+      }
     } catch (error) {
       this.logger.error(`Failed to send message to Telegram: ${error.message}`);
     }
@@ -838,5 +1003,100 @@ export class AlertsService implements OnModuleInit {
     } catch (error) {
       this.logger.error(`Failed to send alert to webhook: ${error.message}`);
     }
+  }
+
+  /**
+   * Determine if an alert is for Mainnet based on chainId or content patterns
+   */
+  private isMainnetAlert(alert: Alert): boolean {
+    // First check chainId if available
+    if (alert.chainId === BLOCKCHAIN.CHAIN_IDS_NUM.MAINNET) {
+      return true;
+    }
+
+    // If chainId is not matching, check title and message content
+    const titleAndMessage = `${alert.title} ${alert.message}`.toLowerCase();
+    return (
+      titleAndMessage.includes('mainnet') ||
+      titleAndMessage.includes('chain 50') ||
+      titleAndMessage.includes('chainid 50') ||
+      titleAndMessage.includes('chain id 50')
+    );
+  }
+
+  /**
+   * Determine if an alert is for Testnet based on chainId or content patterns
+   */
+  private isTestnetAlert(alert: Alert): boolean {
+    // First check chainId if available
+    if (alert.chainId === BLOCKCHAIN.CHAIN_IDS_NUM.TESTNET) {
+      return true;
+    }
+
+    // If chainId is not matching, check title and message content
+    const titleAndMessage = `${alert.title} ${alert.message}`.toLowerCase();
+    return (
+      titleAndMessage.includes('testnet') ||
+      titleAndMessage.includes('chain 51') ||
+      titleAndMessage.includes('chainid 51') ||
+      titleAndMessage.includes('chain id 51')
+    );
+  }
+
+  /**
+   * Format a components table for the weekly report
+   */
+  private formatComponentsTable(components: Array<[string, any]>, title: string): string {
+    let message = `<b>${title}:</b>\n`;
+    message += `<pre>`;
+    message += `+-------------------------+--------+--------+--------+--------+\n`;
+    message += `| Component               | Total  | Errors | Warn   | Info   |\n`;
+    message += `+-------------------------+--------+--------+--------+--------+\n`;
+
+    if (components.length > 0) {
+      components.forEach(([component, counts]) => {
+        // For consistent table width, we pad strings with spaces
+        const componentStr = component.length > 23 ? component.substring(0, 20) + '...' : component;
+        message += `| ${componentStr.padEnd(23)} | ${String(counts.total).padEnd(6)} | ${String(counts.error).padEnd(6)} | ${String(counts.warning).padEnd(6)} | ${String(counts.info).padEnd(6)} |\n`;
+      });
+    } else {
+      // No components found - display empty message in table
+      message += `| No components affected  | -      | -      | -      | -      |\n`;
+    }
+
+    message += `+-------------------------+--------+--------+--------+--------+\n`;
+    message += `</pre>\n\n`;
+
+    return message;
+  }
+
+  /**
+   * Get component counts based on alert filter function
+   */
+  private getComponentCounts(alerts: Alert[], filterFn: (alert: Alert) => boolean): Array<[string, any]> {
+    const componentAlerts = {};
+
+    // Process alerts according to filter
+    alerts.forEach(alert => {
+      // Skip alerts without component
+      if (!alert.component || !filterFn(alert)) return;
+
+      // Initialize component counter if needed
+      if (!componentAlerts[alert.component]) {
+        componentAlerts[alert.component] = {
+          total: 0,
+          error: 0,
+          warning: 0,
+          info: 0,
+        };
+      }
+
+      // Count this alert
+      componentAlerts[alert.component].total++;
+      componentAlerts[alert.component][alert.type]++;
+    });
+
+    // Convert to array format
+    return Object.entries(componentAlerts);
   }
 }

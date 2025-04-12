@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Logger, Post, Query } from '@nestjs/common';
-import { AlertsService } from '@monitoring/alerts.service';
+import { AlertService } from './alert.service';
 
 interface GrafanaAlertPayload {
   // Grafana specific fields
@@ -33,7 +33,7 @@ interface GrafanaAlertPayload {
 export class NotificationController {
   private readonly logger = new Logger(NotificationController.name);
 
-  constructor(private readonly alertsService: AlertsService) {}
+  constructor(private readonly alertService: AlertService) {}
 
   @Post('telegram')
   async sendTelegramNotification(@Body() payload: GrafanaAlertPayload) {
@@ -73,7 +73,7 @@ export class NotificationController {
     }
 
     // Create an alert and send notification through the alerting service
-    await this.alertsService.addAlert({
+    await this.alertService.addAlert({
       type,
       title,
       message,
@@ -98,7 +98,7 @@ export class NotificationController {
     const type =
       severity === 'critical' || severity === 'error' ? 'error' : severity === 'warning' ? 'warning' : 'info';
 
-    await this.alertsService.addAlert({
+    await this.alertService.addAlert({
       type,
       title,
       message,

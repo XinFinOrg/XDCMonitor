@@ -1,7 +1,8 @@
 import { ConfigService } from '@config/config.service';
 import { InfluxDB, Point, WriteApi } from '@influxdata/influxdb-client';
-import { Alert } from '@monitoring/alerts.service';
+import { Alert } from '@alerts/alert.service';
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { MinerRecord, MinerStatus } from '@types';
 
 /**
  * InfluxDB Metrics Service
@@ -461,10 +462,307 @@ export class MetricsService implements OnModuleInit {
   }
 
   /**
+   * Record validator nodes summary data
+   *
+   * @param chainId The chain ID
+   * @param epoch Current epoch number
+   * @param masternodeCount Number of active masternodes
+   * @param standbyCount Number of standby nodes
+   * @param penaltyCount Number of nodes in penalty
+   * @param blockNumber Current block number
+   * @param round Current consensus round
+   */
+  recordValidatorSummary(
+    chainId: number,
+    epoch: number,
+    masternodeCount: number,
+    standbyCount: number,
+    penaltyCount: number,
+    blockNumber: number,
+    round: number,
+  ): void {
+    this.writePoint(
+      new Point('validator_summary')
+        .tag('chainId', chainId.toString())
+        .tag('epoch', epoch.toString())
+        .intField('masternode_count', masternodeCount)
+        .intField('standbynode_count', standbyCount)
+        .intField('penalty_count', penaltyCount)
+        .intField('block_number', blockNumber)
+        .intField('round', round),
+    );
+  }
+
+  /**
+   * Record validator node details
+   *
+   * @param chainId The chain ID
+   * @param epoch Current epoch number
+   * @param address Node address
+   * @param status Node status (masternode, standby, penalty)
+   * @param index Node index in the list (optional)
+   */
+  recordValidatorDetail(
+    chainId: number,
+    epoch: number,
+    blockNumber: number,
+    round: number,
+    address: string,
+    status: MinerStatus,
+    index?: number,
+  ): void {
+    this.writePoint(
+      new Point('validator_nodes')
+        .tag('chainId', chainId.toString())
+        .tag('epoch', epoch.toString())
+        .tag('block_number', blockNumber.toString())
+        .tag('round', round.toString())
+        .tag('address', address.toLowerCase())
+        .tag('status', status)
+        .intField('index', index ?? 0),
+    );
+  }
+
+  /**
    * Get the InfluxDB client instance for other services to use
    * NOTE: This should be used carefully to prevent bypassing error handling and queue mechanisms
    */
   getInfluxClient(): InfluxDB | null {
     return this.connected ? this.influxClient : null;
+  }
+
+  /**
+   * Record a missed round event
+   *
+   * @param chainId The chain ID
+   * @param blockNumber The block number where the missed round was detected
+   * @param round The round number that was missed
+   * @param epoch The epoch number
+   * @param epochRound The round number start of the epoch
+   * @param epochBlock The block number start of the epoch
+   * @param expectedMiner The address of the miner that missed its turn
+   * @param actualMiner The address of the miner that actually mined the block
+   * @param missedMinersCount Number of consecutive miners that missed their turn
+   */
+  recordMissedRound(
+    chainId: number,
+    blockNumber: number,
+    round: number,
+    epoch: number,
+    epochRound: number,
+    epochBlock: number,
+    expectedMiner: string,
+    actualMiner: string,
+    missedMinersCount: number = 1,
+  ): void {
+    this.writePoint(
+      new Point('consensus_missed_rounds')
+        .tag('chainId', chainId.toString())
+        .tag('expected_miner', expectedMiner.toLowerCase())
+        .tag('actual_miner', actualMiner.toLowerCase())
+        .intField('block_number', blockNumber)
+        .intField('round', round)
+        .intField('epoch', epoch)
+        .intField('epoch_round', epochRound)
+        .intField('epoch_block', epochBlock)
+        .intField('missed_miners_count', missedMinersCount)
+        .timestamp(new Date()),
+    );
+
+    this.logger.debug(
+      `Recorded missed round: chainId=${chainId}, block=${blockNumber}, round=${round}, ` +
+        `expectedMiner=${expectedMiner}, actualMiner=${actualMiner}, missedMiners=${missedMinersCount}`,
+    );
+  }
+
+  /**
+   * Record a timeout period for a missed round
+   *
+   * @param chainId The chain ID
+   * @param blockNumber The block number where timeout occurred
+   * @param round The round number where timeout occurred
+   * @param epoch The epoch number
+   * @param epochRound The round number start of the epoch
+   * @param epochBlock The block number start of the epoch
+   * @param timeoutPeriod The actual timeout period in seconds
+   * @param expectedTimeoutPerMiner The expected timeout period per missed miner (normally ~10s)
+   * @param missedMiners The number of miners that were missed
+   */
+  recordTimeoutPeriod(
+    chainId: number,
+    blockNumber: number,
+    round: number,
+    epoch: number,
+    epochRound: number,
+    epochBlock: number,
+    timeoutPeriod: number,
+    expectedTimeoutPerMiner: number = 10,
+    missedMiners: number = 1,
+  ): void {
+    const expectedTimeout = expectedTimeoutPerMiner * missedMiners;
+    const variance = Math.abs(timeoutPeriod - expectedTimeout);
+    const isConsistent = variance <= 2; // Within 2 seconds of expected timeout
+
+    this.writePoint(
+      new Point('consensus_timeout_periods')
+        .tag('chainId', chainId.toString())
+        .tag('is_consistent', isConsistent ? 'true' : 'false')
+        .intField('block_number', blockNumber)
+        .intField('round', round)
+        .intField('epoch', epoch)
+        .intField('epoch_round', epochRound)
+        .intField('epoch_block', epochBlock)
+        .floatField('timeout_period', timeoutPeriod)
+        .floatField('expected_timeout', expectedTimeout)
+        .intField('missed_miners', missedMiners)
+        .floatField('variance', variance)
+        .timestamp(new Date()),
+    );
+
+    this.logger.debug(
+      `Recorded timeout period: chainId=${chainId}, block=${blockNumber}, ` +
+        `timeout=${timeoutPeriod}s, expected=${expectedTimeout}s for ${missedMiners} missed miner(s), ` +
+        `variance=${variance}s, consistent=${isConsistent}`,
+    );
+  }
+
+  /**
+   * Record a miner's missed round statistics
+   *
+   * @param chainId The chain ID
+   * @param minerAddress The miner's address
+   * @param missedBlocks The total number of blocks missed by this miner
+   */
+  recordMinerMissedRound(chainId: number, minerAddress: string, missedBlocks: number): void {
+    this.writePoint(
+      new Point('consensus_miner_missed_rounds')
+        .tag('chainId', chainId.toString())
+        .tag('miner', minerAddress.toLowerCase())
+        .intField('missed_blocks', missedBlocks)
+        .timestamp(new Date()),
+    );
+
+    this.logger.debug(
+      `Updated miner missed round stats: chainId=${chainId}, miner=${minerAddress}, ` + `missedBlocks=${missedBlocks}`,
+    );
+  }
+
+  /**
+   * Record comprehensive miner performance metrics
+   *
+   * @param chainId The chain ID
+   * @param minerAddress The miner's address
+   * @param totalBlocksMined Total blocks successfully mined by this validator
+   * @param missedBlocks Total blocks missed by this validator
+   * @param blockNumber The latest block number for this update
+   */
+  recordMinerPerformance(
+    chainId: number,
+    minerAddress: string,
+    totalBlocksMined: number,
+    missedBlocks: number,
+    blockNumber: number,
+  ): void {
+    // Calculate success rate as percentage
+    const totalAttempts = totalBlocksMined + missedBlocks;
+    const successRate = totalAttempts > 0 ? (totalBlocksMined / totalAttempts) * 100 : 100;
+
+    this.writePoint(
+      new Point('consensus_miner_performance')
+        .tag('chainId', chainId.toString())
+        .tag('miner', minerAddress.toLowerCase())
+        .intField('total_blocks_mined', totalBlocksMined)
+        .intField('missed_blocks', missedBlocks)
+        .intField('total_attempts', totalAttempts)
+        .floatField('success_rate', successRate)
+        .intField('last_block', blockNumber)
+        .timestamp(new Date()),
+    );
+
+    this.logger.debug(
+      `Updated miner performance: chainId=${chainId}, miner=${minerAddress}, ` +
+        `totalMined=${totalBlocksMined}, missed=${missedBlocks}, successRate=${successRate.toFixed(2)}%`,
+    );
+  }
+
+  /**
+   * Retrieve historical miner performance data from InfluxDB
+   *
+   * @param chainId The chain ID
+   * @param minerAddresses Array of miner addresses to fetch data for
+   * @returns Object mapping miner addresses to their performance data
+   */
+  async getMinerPerformanceData(
+    chainId: number,
+    minerAddresses: string[],
+  ): Promise<
+    Record<
+      string,
+      {
+        totalBlocksMined: number;
+        missedBlocks: number;
+        lastActiveBlock: number;
+        lastActive: string | null;
+      }
+    >
+  > {
+    if (!this.connected || !this.influxClient) {
+      this.logger.warn('Cannot get miner performance data - InfluxDB not connected');
+      return {};
+    }
+
+    try {
+      const config = this.configService.getInfluxDbConfig();
+      const queryApi = this.influxClient.getQueryApi(config.org);
+
+      // Prepare address list for the query
+      const addressList = minerAddresses.map(addr => `"${addr.toLowerCase()}"`).join(', ');
+
+      // Query to get the latest performance data for each miner
+      const query = `
+        from(bucket: "${config.bucket}")
+          |> range(start: -30d)
+          |> filter(fn: (r) => r._measurement == "consensus_miner_performance")
+          |> filter(fn: (r) => r.chainId == "${chainId}")
+          |> filter(fn: (r) => contains(value: r.miner, set: [${addressList}]))
+          |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
+          |> group(columns: ["miner"])
+          |> last()
+      `;
+
+      const result: Record<
+        string,
+        {
+          totalBlocksMined: number;
+          missedBlocks: number;
+          lastActiveBlock: number;
+          lastActive: string | null;
+        }
+      > = {};
+
+      // Execute query and process results
+      const records = await queryApi.collectRows(query);
+      this.logger.debug(`Retrieved ${records.length} miner performance records from InfluxDB`);
+
+      // Process each record
+      for (const record of records) {
+        // Type cast the record to our expected structure
+        const minerRecord = record as MinerRecord;
+        const minerAddress = minerRecord.miner?.toLowerCase();
+        if (!minerAddress) continue;
+
+        result[minerAddress] = {
+          totalBlocksMined: parseInt(String(minerRecord.total_blocks_mined ?? '0')),
+          missedBlocks: parseInt(String(minerRecord.missed_blocks ?? '0')),
+          lastActiveBlock: parseInt(String(minerRecord.last_block ?? '0')),
+          lastActive: minerRecord._time ?? null,
+        };
+      }
+
+      return result;
+    } catch (error) {
+      this.logger.error(`Failed to retrieve miner performance data: ${error.message}`);
+      return {};
+    }
   }
 }

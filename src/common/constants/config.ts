@@ -5,9 +5,15 @@
 // Blockchain constants
 export const BLOCKCHAIN = {
   // Chain IDs
-  CHAIN_IDS: {
+  CHAIN_IDS_STR: {
     MAINNET: '50',
     TESTNET: '51',
+  },
+
+  // Chain IDs as numbers
+  CHAIN_IDS_NUM: {
+    MAINNET: 50,
+    TESTNET: 51,
   },
 
   // RPC endpoints
@@ -56,6 +62,7 @@ export const FEATURE_FLAGS = {
   ENABLE_RPC_MONITORING: 'ENABLE_RPC_MONITORING',
   ENABLE_PORT_MONITORING: 'ENABLE_PORT_MONITORING',
   ENABLE_METRICS_COLLECTION: 'ENABLE_METRICS_COLLECTION',
+  ENABLE_CONSENSUS_MONITORING: 'ENABLE_CONSENSUS_MONITORING',
 
   // Alert feature flags
   ENABLE_DASHBOARD_ALERTS: 'ENABLE_DASHBOARD_ALERTS',
@@ -115,6 +122,8 @@ export const ENV_VARS = {
   ALERT_WEBHOOK_URL: 'NOTIFICATION_WEBHOOK_URL',
   TELEGRAM_BOT_TOKEN: 'TELEGRAM_BOT_TOKEN',
   TELEGRAM_CHAT_ID: 'TELEGRAM_CHAT_ID',
+  TELEGRAM_MAINNET_TOPIC_ID: 'TELEGRAM_MAINNET_TOPIC_ID',
+  TELEGRAM_TESTNET_TOPIC_ID: 'TELEGRAM_TESTNET_TOPIC_ID',
 
   // Wallet Configuration
   MNEMONIC_WALLET: 'MNEMONIC_WALLET',
@@ -122,6 +131,10 @@ export const ENV_VARS = {
   TESTNET_TEST_PRIVATE_KEY: 'TESTNET_TEST_PRIVATE_KEY',
   TEST_RECEIVER_ADDRESS_50: 'TEST_RECEIVER_ADDRESS_50',
   TEST_RECEIVER_ADDRESS_51: 'TEST_RECEIVER_ADDRESS_51',
+
+  // Consensus monitoring configuration
+  CONSENSUS_MONITORING_CHAIN_IDS: 'CONSENSUS_MONITORING_CHAIN_IDS',
+  CONSENSUS_SCAN_INTERVAL: 'CONSENSUS_SCAN_INTERVAL',
 } as const;
 
 // Network related constants
@@ -243,6 +256,9 @@ export const API_PATHS = {
 export const ALERTS = {
   // Alert types
   TYPES: {
+    THRESHOLD_EXCEEDED: 'threshold_exceeded',
+    THRESHOLD_WARNING: 'threshold_warning',
+    THRESHOLD_NOTIFICATION: 'threshold_notification',
     RPC_ENDPOINT_DOWN: 'rpc_endpoint_down',
     RPC_HIGH_LATENCY: 'rpc_high_latency',
     MISSING_BLOCKS: 'missing_blocks',
@@ -252,6 +268,21 @@ export const ALERTS = {
     LOW_TX_VOLUME: 'low_transaction_volume',
     SYNC_LAG: 'sync_lag',
     WALLET_LOW_BALANCE: 'wallet_low_balance',
+    INSUFFICIENT_WALLET_BALANCE: 'insufficient_wallet_balance',
+    CONSENSUS_FREQUENT_MISSED_ROUNDS: 'consensus_frequent_missed_rounds',
+    CONSENSUS_UNUSUAL_TIMEOUT: 'consensus_unusual_timeout',
+    CONSENSUS_PENALTY_LIST_SIZE_EXCEEDED: 'consensus_penalty_list_size_exceeded',
+    CONSENSUS_FREQUENT_PENALTY_NODES: 'consensus_frequent_penalty_nodes',
+  },
+
+  // Alert components
+  COMPONENTS: {
+    RPC: 'rpc',
+    WEBSOCKET: 'websocket',
+    TRANSACTION: 'transaction',
+    BLOCK: 'block',
+    SYNC: 'sync',
+    CONSENSUS: 'consensus',
   },
 
   // Alert severities

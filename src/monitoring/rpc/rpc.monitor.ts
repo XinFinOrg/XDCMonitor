@@ -3,7 +3,7 @@ import { ALERTS, BLOCKCHAIN, PERFORMANCE } from '@common/constants/config';
 import { RpcRetryClient } from '@common/utils/rpc-retry-client';
 import { ConfigService } from '@config/config.service';
 import { MetricsService } from '@metrics/metrics.service';
-import { AlertsService } from '@monitoring/alerts.service';
+import { AlertService } from '@alerts/alert.service';
 import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { RpcEndpoint, RpcStatus, ServiceStatus, WsStatus, RpcMonitorConfig, EndpointStatus, MonitorType } from '@types';
 import axios from 'axios';
@@ -49,7 +49,7 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
     private readonly blockchainService: BlockchainService,
     private readonly configService: ConfigService,
     private readonly metricsService: MetricsService,
-    private readonly alertsService: AlertsService,
+    private readonly alertService: AlertService,
   ) {}
 
   // #region Lifecycle Methods
@@ -308,7 +308,13 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
       this.config.rpcBatchSize,
       this.monitorRpcEndpoint.bind(this),
       (endpoint, isUp) =>
-        !isUp && this.checkDowntimeNotification(endpoint, this.rpcStatuses, ALERTS.TYPES.RPC_ENDPOINT_DOWN, 'rpc'),
+        !isUp &&
+        this.checkDowntimeNotification(
+          endpoint,
+          this.rpcStatuses,
+          ALERTS.TYPES.RPC_ENDPOINT_DOWN,
+          ALERTS.COMPONENTS.RPC,
+        ),
     );
   }
 
@@ -333,7 +339,12 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
           if (!status?.downSince) {
             this.updateStatus(endpoint, this.wsStatuses, false);
           }
-          return this.checkDowntimeNotification(endpoint, this.wsStatuses, ALERTS.TYPES.RPC_ENDPOINT_DOWN, 'websocket');
+          return this.checkDowntimeNotification(
+            endpoint,
+            this.wsStatuses,
+            ALERTS.TYPES.RPC_ENDPOINT_DOWN,
+            ALERTS.COMPONENTS.WEBSOCKET,
+          );
         }
         return false;
       },
@@ -395,16 +406,18 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
               // Check for latency thresholds (error and warning) for RPC only
               if (isUp && latency > ALERTS.THRESHOLDS.RPC_LATENCY_WARNING_MS) {
                 const isError = latency > ALERTS.THRESHOLDS.RPC_LATENCY_ERROR_MS;
-                this.alertsService[isError ? 'error' : 'warning'](
+                this.alertService[isError ? 'error' : 'warning'](
                   ALERTS.TYPES.RPC_HIGH_LATENCY,
-                  'rpc',
-                  `${isError ? 'High' : 'Elevated'} RPC latency on ${endpoint.name}: ${latency}ms`,
+                  ALERTS.COMPONENTS.RPC,
+                  `${isError ? 'High' : 'Elevated'} RPC latency on ${endpoint.url} for chain ${endpoint.chainId} is :  ${latency / 1000}s`,
                   endpoint.chainId,
                 );
               }
             }
 
-            this.logger.debug(`${endpointTypeStr} endpoint ${endpoint.name} is ${isUp ? 'UP' : 'DOWN'}`);
+            this.logger.debug(
+              `${endpointTypeStr} endpoint ( ${endpoint.url} ) for chain ${endpoint.chainId} is ${isUp ? 'UP' : 'DOWN'}`,
+            );
             if (!isUp && postCheckFn) postCheckFn(endpoint, isUp);
 
             // For WebSocket endpoints, update the WebSocket specific status
@@ -483,17 +496,17 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
       // Check for latency thresholds
       if (isUp) {
         if (latency > ALERTS.THRESHOLDS.RPC_LATENCY_ERROR_MS) {
-          this.alertsService.error(
+          this.alertService.error(
             ALERTS.TYPES.RPC_HIGH_LATENCY,
-            'rpc',
-            `High RPC latency on ${endpoint.name}: ${latency}ms`,
+            ALERTS.COMPONENTS.RPC,
+            `High RPC latency on ${endpoint.url} for chain ${endpoint.chainId} is :  ${latency / 1000}s`,
             endpoint.chainId,
           );
         } else if (latency > ALERTS.THRESHOLDS.RPC_LATENCY_WARNING_MS) {
-          this.alertsService.warning(
+          this.alertService.warning(
             ALERTS.TYPES.RPC_HIGH_LATENCY,
-            'rpc',
-            `Elevated RPC latency on ${endpoint.name}: ${latency}ms`,
+            ALERTS.COMPONENTS.RPC,
+            `Elevated RPC latency on ${endpoint.url} for chain ${endpoint.chainId} is :  ${latency / 1000}s`,
             endpoint.chainId,
           );
         }
@@ -501,7 +514,7 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
 
       return isUp;
     } catch (error) {
-      this.logger.warn(`RPC endpoint ${endpoint.name} is down: ${error.message}`);
+      this.logger.warn(`RPC endpoint ( ${endpoint.url} ) for chain ${endpoint.chainId} is down: ${error.message}`);
       this.updateRpcEndpointStatus(endpoint, false, 0);
       return false;
     }
@@ -559,7 +572,7 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
 
     // Check for downtime alerts
     if (!isUp) {
-      this.checkDowntimeNotification(endpoint, this.rpcStatuses, ALERTS.TYPES.RPC_ENDPOINT_DOWN, 'rpc');
+      this.checkDowntimeNotification(endpoint, this.rpcStatuses, ALERTS.TYPES.RPC_ENDPOINT_DOWN, ALERTS.COMPONENTS.RPC);
     }
   }
 
@@ -594,7 +607,12 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
 
       // Check for downtime notifications if down
       if (!isUp) {
-        this.checkDowntimeNotification(endpoint, this.wsStatuses, ALERTS.TYPES.RPC_ENDPOINT_DOWN, 'websocket');
+        this.checkDowntimeNotification(
+          endpoint,
+          this.wsStatuses,
+          ALERTS.TYPES.RPC_ENDPOINT_DOWN,
+          ALERTS.COMPONENTS.WEBSOCKET,
+        );
       }
 
       return isUp;
@@ -606,7 +624,12 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
       this.blockchainService.updateWsProviderStatus(endpoint.url, false);
 
       // Check for downtime notification
-      this.checkDowntimeNotification(endpoint, this.wsStatuses, ALERTS.TYPES.RPC_ENDPOINT_DOWN, 'websocket');
+      this.checkDowntimeNotification(
+        endpoint,
+        this.wsStatuses,
+        ALERTS.TYPES.RPC_ENDPOINT_DOWN,
+        ALERTS.COMPONENTS.WEBSOCKET,
+      );
 
       return false;
     }
@@ -852,7 +875,12 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
 
         // Check for downtime notifications for WebSocket endpoints
         if (!isUp) {
-          this.checkDowntimeNotification(wsEndpoint, this.wsStatuses, ALERTS.TYPES.RPC_ENDPOINT_DOWN, 'websocket');
+          this.checkDowntimeNotification(
+            wsEndpoint,
+            this.wsStatuses,
+            ALERTS.TYPES.RPC_ENDPOINT_DOWN,
+            ALERTS.COMPONENTS.WEBSOCKET,
+          );
         }
       } else {
         // Handle WebSocket endpoints not found in configuration
@@ -893,7 +921,12 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
             type: 'websocket' as const,
             chainId,
           };
-          this.checkDowntimeNotification(tempEndpoint, this.wsStatuses, ALERTS.TYPES.RPC_ENDPOINT_DOWN, 'websocket');
+          this.checkDowntimeNotification(
+            tempEndpoint,
+            this.wsStatuses,
+            ALERTS.TYPES.RPC_ENDPOINT_DOWN,
+            ALERTS.COMPONENTS.WEBSOCKET,
+          );
         }
       }
 
@@ -969,10 +1002,10 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
       const minutes = Math.floor((downtimeMs % (60 * 60 * 1000)) / (60 * 1000));
 
       // Send alert
-      this.alertsService.error(
+      this.alertService.error(
         alertType,
         endpointType,
-        `${endpointType.charAt(0).toUpperCase() + endpointType.slice(1)} endpoint ${endpoint.name} - ${endpoint.url} has been down for ${hours}h ${minutes}m`,
+        `${endpointType.charAt(0).toUpperCase() + endpointType.slice(1)} endpoint ( ${endpoint.url} ) for chain ${endpoint.chainId} has been down for ${hours}h ${minutes}m`,
         endpoint.chainId,
       );
 

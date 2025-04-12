@@ -9,6 +9,7 @@ A comprehensive Node.js-based monitoring system for the XDC Network. This applic
 - **RPC Port Monitoring**: HTTP/HTTPS port checks, WebSocket port checks
 - **Block Propagation Monitoring**: Block time tracking, slow block detection
 - **Transaction Monitoring**: Automated transaction testing, smart contract deployment testing
+- **Consensus Monitoring**: Masternode performance tracking, epoch transitions, validator penalties
 - **Alert System**: Dashboard alerts, Telegram notifications, webhook notifications
 - **Metrics Collection**: InfluxDB time-series database, Grafana dashboards
 
@@ -22,6 +23,7 @@ The XDC Monitor has been optimized with a modular, maintainable architecture:
 - **Enhanced Queue System**: Resilient job processing with retry, timeout, and prioritization
 - **Time-Series Data Management**: Efficient time window data structures for metrics
 - **Modular Services**: Clean separation of concerns with specialized service modules
+- **Consensus Monitoring**: Specialized monitors for miners, epochs, and rewards
 
 ### Performance Optimizations
 
@@ -29,6 +31,9 @@ The XDC Monitor has been optimized with a modular, maintainable architecture:
 - **Priority-based Queue**: Critical operations (like mainnet block processing) get priority
 - **Efficient Memory Usage**: Time-window data structures automatically clean up old data
 - **Smart Error Handling**: Automatic retry with exponential backoff for transient failures
+- **Code Optimization**: Helper methods reduce duplication and improve maintainability
+- **DRY Principle**: Don't Repeat Yourself approach for alert classification and formatting
+- **Sliding Window Data**: Memory-efficient approach for tracking recent state without database overhead
 
 ### Technical Details
 
@@ -81,10 +86,24 @@ The system monitors the following conditions:
    - Threshold: 3 consecutive failures
 
 6. **Test Wallet Balance**
+
    - Alerts when test wallet balance falls below the required minimum (0.01 XDC)
    - Severity: Warning
    - Component: wallet
    - Threshold: 0.01 XDC
+
+7. **Penalty List Size**
+
+   - Alerts when the validator penalty list exceeds a configured threshold
+   - Severity: Warning
+   - Component: consensus
+   - Threshold: 20 validators
+
+8. **Frequently Penalized Nodes**
+   - Alerts when validators appear in the penalty list too frequently
+   - Severity: Warning
+   - Component: consensus
+   - Threshold: Penalized in 70% or more of recent epochs
 
 ### Alert Delivery
 
@@ -107,6 +126,8 @@ ENABLE_CHAT_NOTIFICATIONS=true
 # Telegram configuration
 TELEGRAM_BOT_TOKEN="your-telegram-bot-token-here"
 TELEGRAM_CHAT_ID="your-telegram-chat-id-here"
+TELEGRAM_MAINNET_TOPIC_ID="topic-id-for-mainnet-alerts"
+TELEGRAM_TESTNET_TOPIC_ID="topic-id-for-testnet-alerts"
 
 # Webhook configuration
 NOTIFICATION_WEBHOOK_URL="https://hooks.slack.com/services/XXX/YYY/ZZZ"
@@ -221,7 +242,12 @@ ENABLE_RPC_MONITORING=true
 ENABLE_PORT_MONITORING=true
 ENABLE_BLOCK_MONITORING=true
 ENABLE_TRANSACTION_MONITORING=true
+ENABLE_CONSENSUS_MONITORING=true
 BLOCK_TIME_THRESHOLD=3.0
+
+# Consensus monitoring configuration
+CONSENSUS_MONITORING_CHAIN_IDS=50,51
+CONSENSUS_SCAN_INTERVAL=15000
 
 # Alert configuration
 ENABLE_DASHBOARD_ALERTS=true
@@ -231,6 +257,8 @@ NOTIFICATION_WEBHOOK_URL=
 # Telegram notification configuration
 TELEGRAM_BOT_TOKEN="your-telegram-bot-token-here"
 TELEGRAM_CHAT_ID="your-telegram-chat-id-here"
+TELEGRAM_MAINNET_TOPIC_ID="topic-id-for-mainnet-alerts"
+TELEGRAM_TESTNET_TOPIC_ID="topic-id-for-testnet-alerts"
 
 # Logging configuration
 LOG_LEVEL=info
@@ -355,6 +383,10 @@ chmod +x run.sh
 - **Simulate RPC Down**: `/api/testing/simulate-rpc-down?endpoint=URL` - Simulate an RPC endpoint being down
 - **Simulate RPC Latency**: `/api/testing/simulate-rpc-latency?endpoint=URL&latency=500` - Simulate high RPC latency
 - **Run Transaction Test**: `/api/testing/run-transaction-test?chainId=50&type=normal` - Manually trigger a transaction test
+- **Test Telegram Topics**: `/api/testing/test-telegram-topics` - Test sending alerts to different Telegram topics (Mainnet/Testnet/General)
+- **Generate Weekly Report**: `/api/testing/generate-weekly-report?startDays=7&endDays=0` - Generate a detailed weekly alert report as JSON
+- **Get Weekly Report Message**: `/api/testing/weekly-report-message?startDays=7&endDays=0` - Get the formatted message that would be sent to Telegram
+- **Send Weekly Report**: `/api/testing/send-weekly-report?startDays=7&endDays=0` - Generate and send a weekly report to all configured channels
 
 ## Metrics Collected
 
@@ -372,6 +404,11 @@ The application stores the following metrics in InfluxDB:
 - `transaction_monitor` - Transaction test results, tagged with `type`, `chainId`, and `rpc`
 - `transaction_monitor_confirmation_time` - Transaction confirmation time in ms, tagged with `type`, `chainId`, and `rpc`
 - `wallet_balance` - Test wallet balances, tagged with `chainId`, with a field for sufficient balance
+- `validator_summary` - Summary metrics for validators, tagged with `chainId`
+- `validator_nodes` - Count of masternodes, standbynodes, and penalty nodes
+- `consensus_missed_rounds` - Tracks missed mining rounds with detailed information
+- `consensus_timeout_periods` - Records timeout periods between blocks with duration and miners skipped
+- `consensus_miner_performance` - Complete mining performance data by validator
 
 ## Transaction Monitoring
 
@@ -394,6 +431,94 @@ To use transaction monitoring, you need:
 3. **Receiver addresses** for test transactions
 
 Test transactions are executed every 5 minutes by default, with metrics being recorded in InfluxDB and visualized in Grafana.
+
+## Alert System and Reporting
+
+The application features a comprehensive alert and reporting system for monitoring blockchain health.
+
+### Alert Features
+
+- **Multi-level Severity**: Alerts are categorized as `error`, `warning`, or `info`
+- **Network-specific Alerting**: Alerts can be associated with specific chains (Mainnet or Testnet)
+- **Component Attribution**: Alerts include the source component that triggered them
+- **Multi-channel Delivery**: Supports sending alerts to Telegram, webhooks, and the dashboard
+- **Intelligent Throttling**: Prevents alert floods by limiting frequency of similar alerts
+- **Smart Alert Classification**: Automatically determines network association through chainId and content pattern matching
+
+### Telegram Integration
+
+- **Topic-based Routing**:
+  - Alerts for Mainnet (chainId=50) route to a dedicated Mainnet topic
+  - Alerts for Testnet (chainId=51) route to a dedicated Testnet topic
+  - General alerts go to the main conversation thread
+- **Formatted Messages**: Clear, well-formatted messages with emoji indicators and detailed information
+- **HTML Formatting**: Uses HTML formatting with monospace tables and Unicode box-drawing characters for bordered tables
+
+### Weekly Reports
+
+The system automatically generates weekly alert reports that provide insights into system health:
+
+- **Comprehensive Statistics**:
+  - Total alert counts by severity (error/warning/info)
+  - Breakdown by network (Mainnet/Testnet/Other)
+  - Component-specific analytics
+  - Most frequent alert types
+- **Manual Report Generation**:
+
+  - Generate reports for custom date ranges
+  - Get formatted messages for communication channels
+  - Trigger immediate report delivery to configured channels
+
+- **Report Archiving**:
+  - System maintains the last 4 weeks of reports
+  - Data is stored in both memory and InfluxDB for reliability
+
+### Alert Classification System
+
+The system uses a robust approach to classify alerts by network:
+
+1. **Primary Classification**: Uses the chainId field when available (chainId=50 for Mainnet, chainId=51 for Testnet)
+
+2. **Pattern-Based Classification**: For legacy alerts or those without chainId, analyzes alert title and message content for patterns:
+
+   - Mainnet indicators: "mainnet", "chain 50", "chainId 50"
+   - Testnet indicators: "testnet", "chain 51", "chainId 51"
+
+3. **Fallback Category**: Alerts that can't be classified as either Mainnet or Testnet are categorized as "Other"
+
+This approach ensures accurate network classification for all alerts, regardless of how they were created.
+
+### Report Formatting
+
+Weekly reports are displayed using a modular, optimized structure:
+
+- **Network-Specific Sections**: Dedicated sections for Mainnet, Testnet, and Other alerts
+- **Severity Tables**: Clear breakdown of errors, warnings, and info alerts per network
+- **Component Tables**: Details of affected components with alert counts by severity
+- **Bordered Tables**: All tables use Unicode box-drawing characters for clear visual structure
+- **Most Frequent Alerts**: Summary of the most common alert types across all networks
+
+### Alert Types
+
+The system monitors for various alert conditions:
+
+1. **Block Time Alerts**: Warnings when block time exceeds thresholds
+2. **Transaction Error Alerts**: Notifications of high transaction error rates
+3. **RPC Response Time Alerts**: Alerts for slow or non-responsive RPC endpoints
+4. **High Transaction Volume Alerts**: Notifications of unusual transaction activity
+5. **Consensus Alerts**: Notifications about consensus issues like missed rounds and validator penalties
+
+### Testing Alert System
+
+You can test the alert system using the testing endpoints:
+
+- Manually trigger individual alerts with `/api/testing/trigger-manual-alert`
+- Test all alert types at once with `/api/testing/trigger-all-alerts`
+- Test specific alert categories with `/api/testing/trigger-alert/{type}`
+- Test network-specific routing with `/api/testing/test-telegram-topics`
+- Generate and view weekly reports with `/api/testing/generate-weekly-report`
+- Get formatted report messages with `/api/testing/weekly-report-message`
+- Send weekly reports to all channels with `/api/testing/send-weekly-report`
 
 ## InfluxDB and Grafana Integration
 
@@ -492,20 +617,29 @@ src/
 │   │   ├── config.ts        # Core configuration constants
 │   │   ├── endpoints.ts     # Network endpoints definitions
 │   │   └── monitoring.ts    # Monitoring thresholds and settings
-│   ├── interfaces/          # Shared TypeScript interfaces
-│   │   ├── monitoring.ts    # Monitoring configuration interfaces
-│   │   ├── rpc.interface.ts # RPC endpoints and configuration
-│   │   └── blockchain.ts    # Blockchain data structures
 │   └── utils/               # Utility classes and helper functions
+├── types/                   # TypeScript type definitions
+│   ├── blockchain/          # Blockchain data structures
+│   ├── monitoring/          # Monitoring configuration interfaces
+│   └── rpc/                 # RPC endpoints and configuration
 ├── config/                  # Configuration module and service
 │   ├── config.module.ts     # Configuration module definition
 │   └── config.service.ts    # Service for accessing configuration
 ├── blockchain/              # Blockchain interaction services
 ├── monitoring/              # Core monitoring services
 │   ├── alerts.service.ts    # Alert configuration and delivery
-│   └── transaction.monitor.ts # Transaction monitoring implementation
-├── metrics/                 # Metrics collection and reporting
-└── models/                  # Data models and interfaces
+│   ├── blocks.monitor.ts    # Block monitoring implementation
+│   ├── rpc.monitor.ts       # RPC endpoint monitoring
+│   ├── transaction.monitor.ts # Transaction monitoring implementation
+│   ├── consensus/           # Consensus monitoring services
+│   │   ├── consensus.monitor.ts # Main consensus orchestration service
+│   │   ├── miner/           # Masternode mining monitoring
+│   │   ├── epoch/           # Epoch and penalty tracking
+│   │   └── reward/          # Reward distribution monitoring
+│   ├── monitoring.controller.ts # API endpoints for monitoring data
+│   ├── notification.controller.ts # Notification endpoints
+│   └── testing.controller.ts # Testing endpoints
+└── metrics/                 # Metrics collection and reporting
 ```
 
 ### Key Configuration Components
@@ -547,9 +681,24 @@ The application includes several powerful utilities:
    - Memory-efficient storage
 
 3. **AlertManager**: Centralized alert management
+
    - Multiple delivery channels (Telegram, webhook, dashboard)
    - Alert throttling to prevent notification storms
    - Severity-based prioritization
+   - Network classification for targeted routing
+
+4. **Modular Helpers**: Optimized code structure with reusable components
+
+   - Smart network detection for Mainnet/Testnet classification
+   - Standardized table formatting for consistent display
+   - Component aggregation for detailed reporting
+   - Runtime optimization through code reuse
+
+5. **ConsensusMonitor**: Orchestration for consensus monitoring
+   - Coordinated initialization of component monitors
+   - Centralized validator data management
+   - Complete round-trip monitoring for consensus violations
+   - Sliding window approach for memory-efficient state tracking
 
 ## Contributing
 

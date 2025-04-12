@@ -1,29 +1,27 @@
 import { BlockchainModule } from '@blockchain/blockchain.module';
-import { AlertManager } from '@common/utils/alert-manager';
 import { MetricsManager } from '@common/utils/metrics-manager';
 import { ConfigModule } from '@config/config.module';
 import { MetricsModule } from '@metrics/metrics.module';
-import { AlertsService } from '@monitoring/alerts.service';
-import { BlocksMonitorService } from '@monitoring/blocks.monitor';
+import { AlertModule } from '@alerts/alert.module';
+import { BlocksMonitorService } from '@monitoring/blocks/blocks.monitor';
+import { ConsensusModule } from '@monitoring/consensus/consensus.module';
 import { MonitoringController } from '@monitoring/monitoring.controller';
-import { NotificationController } from '@monitoring/notification.controller';
-import { RpcMonitorService } from '@monitoring/rpc.monitor';
-import { TestingController } from '@monitoring/testing.controller';
-import { TransactionMonitorService } from '@monitoring/transaction.monitor';
-import { Module } from '@nestjs/common';
+import { RpcMonitorService } from '@monitoring/rpc/rpc.monitor';
+import { TransactionMonitorService } from '@monitoring/transaction/transaction.monitor';
+import { Module, forwardRef } from '@nestjs/common';
 import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
-  imports: [ScheduleModule.forRoot(), BlockchainModule, ConfigModule, MetricsModule],
-  providers: [
-    BlocksMonitorService,
-    RpcMonitorService,
-    AlertsService,
-    TransactionMonitorService,
-    AlertManager,
-    MetricsManager,
+  imports: [
+    ScheduleModule.forRoot(),
+    BlockchainModule,
+    ConfigModule,
+    MetricsModule,
+    ConsensusModule,
+    forwardRef(() => AlertModule),
   ],
-  controllers: [MonitoringController, NotificationController, TestingController],
-  exports: [BlocksMonitorService, RpcMonitorService, AlertsService, TransactionMonitorService],
+  providers: [BlocksMonitorService, RpcMonitorService, TransactionMonitorService, MetricsManager],
+  controllers: [MonitoringController],
+  exports: [BlocksMonitorService, RpcMonitorService, TransactionMonitorService, ConsensusModule],
 })
 export class MonitoringModule {}
