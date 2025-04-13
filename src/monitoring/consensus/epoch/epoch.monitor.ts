@@ -13,8 +13,9 @@ export class EpochMonitor {
   private readonly logger = new Logger(EpochMonitor.name);
   private readonly penaltyThresholdPercentage = 70; // Alert if node is penalized >= 70% of epochs
   private readonly maxPenaltyListSize = 20; // Alert if penalty list exceeds this size
-  private readonly monitoringIntervalMs = 300000; // 5 minutes
+  private readonly monitoringIntervalMs = 60000; // 1 minute
   private readonly slidingWindowSize = 10; // Track the last 10 epochs
+  private lastEpochChecked: number; // Last epoch checked
 
   // { chainId: { epoch: [addresses] } }
   private penaltyHistory: Record<number, Record<number, string[]>> = {};
@@ -41,9 +42,12 @@ export class EpochMonitor {
 
       const { masternodeList, currentEpoch } = validatorData;
 
-      this.updatePenaltyData(chainId, masternodeList.penalty, currentEpoch);
-      await this.checkPenaltyListSize(chainId, masternodeList.penalty);
-      await this.checkFrequentlyPenalizedNodes(chainId);
+      if (currentEpoch !== this.lastEpochChecked) {
+        this.updatePenaltyData(chainId, masternodeList.penalty, currentEpoch);
+        await this.checkPenaltyListSize(chainId, masternodeList.penalty);
+        await this.checkFrequentlyPenalizedNodes(chainId);
+        this.lastEpochChecked = currentEpoch;
+      }
 
       this.logger.debug(
         `Monitored: chain=${chainId}, epoch=${currentEpoch}, penalties=${masternodeList.penalty.length}`,
