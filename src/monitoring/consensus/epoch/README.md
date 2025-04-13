@@ -85,12 +85,12 @@ The Epoch Monitor generates the following detailed alerts:
 
 The Epoch Monitor has the following hardcoded configuration values:
 
-| Configuration              | Description                                 | Value          |
-| -------------------------- | ------------------------------------------- | -------------- |
-| penaltyThresholdPercentage | Percentage threshold for frequent penalties | 70%            |
-| maxPenaltyListSize         | Maximum allowed penalty list size           | 20             |
-| monitoringIntervalMs       | Monitoring interval in milliseconds         | 300000 (5 min) |
-| slidingWindowSize          | Number of epochs to keep in sliding window  | 10             |
+| Configuration              | Description                                 | Value         |
+| -------------------------- | ------------------------------------------- | ------------- |
+| penaltyThresholdPercentage | Percentage threshold for frequent penalties | 70%           |
+| maxPenaltyListSize         | Maximum allowed penalty list size           | 20            |
+| monitoringIntervalMs       | Monitoring interval in milliseconds         | 60000 (1 min) |
+| slidingWindowSize          | Number of epochs to keep in sliding window  | 10            |
 
 ## Integration Points
 
