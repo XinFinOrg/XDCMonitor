@@ -48,12 +48,6 @@ export interface WeeklyAlertReport {
       warning: number;
       info: number;
     };
-    other: {
-      total: number;
-      error: number;
-      warning: number;
-      info: number;
-    };
   };
   alerts: Alert[];
 }
@@ -214,8 +208,6 @@ export class AlertService implements OnModuleInit {
    * Send weekly report to configured channels
    */
   public async sendWeeklyReport(report: WeeklyAlertReport): Promise<void> {
-    const alertConfig = this.configService.getMonitoringConfig().alertNotifications;
-
     // Format report for sending
     const message = this.formatWeeklyReportMessage(report);
 
@@ -229,23 +221,15 @@ export class AlertService implements OnModuleInit {
     }
 
     try {
-      // Send to Telegram if configured
-      // Weekly reports are intentionally sent to the main thread (without chainId)
-      // since they summarize alerts across all chains
-      if (alertConfig.enableTelegram && alertConfig.telegramBotToken && alertConfig.telegramChatId) {
-        await this.sendToTelegram(message);
-      }
-
-      // Send to webhook if configured
-      if (alertConfig.enableWebhook && alertConfig.webhookUrl) {
-        await this.sendToWebhook({
-          type: 'info',
-          title: 'Weekly Alert Report',
-          message: message,
-          timestamp: new Date(),
-          component: 'system',
-        });
-      }
+      // Use AlertManager to send report
+      this.alertManager.addAlert({
+        severity: AlertSeverity.INFO,
+        category: AlertCategory.SYSTEM,
+        component: 'system',
+        title: 'Weekly Alert Report',
+        message: message,
+        shouldNotify: true,
+      });
 
       // Mark this report as sent
       this.alertThrottling[reportKey] = Date.now();
@@ -323,21 +307,6 @@ export class AlertService implements OnModuleInit {
     // Get Testnet components
     const testnetComponents = this.getComponentCounts(report.alerts, alert => this.isTestnetAlert(alert));
     message += this.formatComponentsTable(testnetComponents, 'Testnet Components');
-
-    // OTHER ALERTS SECTION (if any)
-    if (report.alertsByChain.other.total > 0) {
-      message += `\n⚪ <b>OTHER ALERTS</b> (Total: ${report.alertsByChain.other.total})\n\n`;
-
-      // Other severity breakdown
-      message += this.formatSeverityTable(report.alertsByChain.other, 'General Alert Breakdown');
-
-      // Get Other components
-      const otherComponents = this.getComponentCounts(
-        report.alerts,
-        alert => !this.isMainnetAlert(alert) && !this.isTestnetAlert(alert),
-      );
-      message += this.formatComponentsTable(otherComponents, 'Other Components');
-    }
 
     // Most frequent alert types
     message += `\n<b>Most Frequent Alert Types:</b>\n`;
@@ -432,12 +401,6 @@ export class AlertService implements OnModuleInit {
           warning: 0,
           info: 0,
         },
-        other: {
-          total: 0,
-          error: 0,
-          warning: 0,
-          info: 0,
-        },
       },
       alerts: alertsInRange,
     };
@@ -464,15 +427,13 @@ export class AlertService implements OnModuleInit {
       report.alertsByType[alert.title] = (report.alertsByType[alert.title] || 0) + 1;
 
       // Determine which chain this alert belongs to
-      if (this.isMainnetAlert(alert)) {
-        report.alertsByChain.mainnet.total++;
-        report.alertsByChain.mainnet[alert.type]++;
-      } else if (this.isTestnetAlert(alert)) {
+      if (this.isTestnetAlert(alert)) {
         report.alertsByChain.testnet.total++;
         report.alertsByChain.testnet[alert.type]++;
       } else {
-        report.alertsByChain.other.total++;
-        report.alertsByChain.other[alert.type]++;
+        // All non-testnet alerts are assigned to mainnet by default
+        report.alertsByChain.mainnet.total++;
+        report.alertsByChain.mainnet[alert.type]++;
       }
     });
 
@@ -480,7 +441,7 @@ export class AlertService implements OnModuleInit {
     this.logger.debug(`Weekly report generated with ${alertsInRange.length} alerts`);
     this.logger.debug(`Components found: ${Object.keys(report.alertsByComponent).length}`);
     this.logger.debug(
-      `Network breakdown - Mainnet: ${report.alertsByChain.mainnet.total}, Testnet: ${report.alertsByChain.testnet.total}, Other: ${report.alertsByChain.other.total}`,
+      `Network breakdown - Mainnet: ${report.alertsByChain.mainnet.total}, Testnet: ${report.alertsByChain.testnet.total}`,
     );
 
     // Store the report
@@ -704,6 +665,7 @@ export class AlertService implements OnModuleInit {
     const fullAlert: Alert = {
       ...alert,
       timestamp: new Date(),
+      chainId,
     };
 
     // Add to legacy alerts for backwards compatibility
@@ -729,9 +691,6 @@ export class AlertService implements OnModuleInit {
     });
 
     this.metricsService.saveAlert(fullAlert, chainId);
-
-    // Send chat notifications with the chainId
-    await this.sendToChat(fullAlert, chainId);
   }
 
   /**
@@ -766,6 +725,7 @@ export class AlertService implements OnModuleInit {
 
     this.logger.warn(`WARNING ALERT: ${alertType} - ${message} (${chainId || 'unknown'})`);
 
+    // Create warning alert with shouldNotify: false
     const alert: Omit<Alert, 'timestamp'> = {
       type: 'warning',
       component,
@@ -774,36 +734,33 @@ export class AlertService implements OnModuleInit {
       chainId,
     };
 
-    // Add to legacy alerts for backwards compatibility
-    this.alerts.push({
+    // Add to legacy alerts
+    const fullAlert = {
       ...alert,
       timestamp: new Date(),
-    });
+    };
+    this.alerts.push(fullAlert);
 
     // Limit stored alerts to prevent memory issues
     if (this.alerts.length > 100) {
       this.alerts.shift();
     }
 
-    // Use the AlertManager for warnings but with shouldNotify false
+    // Use the AlertManager with shouldNotify false
     this.alertManager.addAlert({
       severity: AlertSeverity.WARNING,
       category: AlertCategory.BLOCKCHAIN,
       component: component || 'system',
       title: this.formatAlertTitle(alertType),
       message,
-      shouldNotify: false, // Don't trigger notifications for warnings
-      chainId,
+      shouldNotify: false,
+      metadata: {
+        chainId,
+      },
     });
 
-    // Save warning to metrics database
-    this.metricsService.saveAlert(
-      {
-        ...alert,
-        timestamp: new Date(),
-      },
-      chainId,
-    );
+    // Save to metrics database
+    this.metricsService.saveAlert(fullAlert, chainId);
   }
 
   /**
@@ -884,128 +841,6 @@ export class AlertService implements OnModuleInit {
   }
 
   /**
-   * Send alert to dashboard
-   */
-  private sendToDashboard(alert: Alert): void {
-    this.logger.debug(`Sending alert to dashboard: ${alert.title}`);
-    // In a real implementation, this might use a WebSocket or other mechanism
-  }
-
-  /**
-   * Send alert to chat channels (Telegram, webhook, etc.)
-   */
-  private async sendToChat(alert: Alert, chainId?: number): Promise<void> {
-    if (
-      !this.configService.getMonitoringConfig().alertNotifications.enableWebhook &&
-      !this.configService.getMonitoringConfig().alertNotifications.enableTelegram
-    ) {
-      return;
-    }
-
-    try {
-      const message = this.formatChatMessage(alert);
-
-      // Send to Telegram if configured
-      if (
-        this.configService.getMonitoringConfig().alertNotifications.telegramBotToken &&
-        this.configService.getMonitoringConfig().alertNotifications.telegramChatId
-      ) {
-        await this.sendToTelegram(message, chainId);
-      }
-
-      // Send to webhook if configured
-      if (this.configService.getMonitoringConfig().alertNotifications.webhookUrl) {
-        await this.sendToWebhook(alert);
-      }
-    } catch (error) {
-      this.logger.error(`Failed to send alert to chat: ${error.message}`);
-    }
-  }
-
-  /**
-   * Format alert for chat message
-   */
-  private formatChatMessage(alert: Alert): string {
-    const emoji = alert.type === 'error' ? '🚨' : alert.type === 'warning' ? '⚠️' : 'ℹ️';
-    const timestamp = alert.timestamp.toISOString();
-
-    return `${emoji} <b>${alert.title}</b>\n${alert.message}\n\n<b>Component:</b> ${alert.component || 'system'}\n<b>Time:</b> ${timestamp}`;
-  }
-
-  /**
-   * Send an alert to Telegram
-   */
-  private async sendToTelegram(message: string, chainId?: number): Promise<void> {
-    try {
-      const alertConfig = this.configService.getMonitoringConfig().alertNotifications;
-      const botToken = alertConfig.telegramBotToken;
-      const chatId = alertConfig.telegramChatId;
-
-      if (!botToken || !chatId) {
-        this.logger.warn('Missing Telegram configuration');
-        return;
-      }
-
-      // Determine topic ID based on chainId
-      let messageThreadId: string | undefined;
-      if (chainId == BLOCKCHAIN.CHAIN_IDS_NUM.MAINNET && alertConfig.telegramMainnetTopicId) {
-        // Mainnet
-        messageThreadId = alertConfig.telegramMainnetTopicId;
-        this.logger.debug(`Using Mainnet topic ID: ${messageThreadId}`);
-      } else if (chainId == BLOCKCHAIN.CHAIN_IDS_NUM.TESTNET && alertConfig.telegramTestnetTopicId) {
-        // Testnet
-        messageThreadId = alertConfig.telegramTestnetTopicId;
-        this.logger.debug(`Using Testnet topic ID: ${messageThreadId}`);
-      }
-
-      const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
-      const payload: any = {
-        chat_id: chatId,
-        text: message,
-        parse_mode: 'HTML',
-      };
-
-      // Add message_thread_id if we have a valid topic ID
-      if (messageThreadId) {
-        payload.message_thread_id = messageThreadId;
-      }
-
-      await axios.post(url, payload);
-
-      if (messageThreadId) {
-        this.logger.debug(`Alert sent to Telegram topic ${messageThreadId}`);
-      } else {
-        this.logger.debug('Alert sent to Telegram main thread');
-      }
-    } catch (error) {
-      this.logger.error(`Failed to send message to Telegram: ${error.message}`);
-    }
-  }
-
-  /**
-   * Send an alert to a webhook
-   */
-  private async sendToWebhook(alert: Alert): Promise<void> {
-    try {
-      const webhookUrl = this.configService.getMonitoringConfig().alertNotifications.webhookUrl;
-      if (!webhookUrl) {
-        return;
-      }
-
-      await axios.post(webhookUrl, {
-        type: alert.type,
-        title: alert.title,
-        message: alert.message,
-        timestamp: alert.timestamp,
-        component: alert.component || 'system',
-      });
-      this.logger.debug('Alert sent to webhook');
-    } catch (error) {
-      this.logger.error(`Failed to send alert to webhook: ${error.message}`);
-    }
-  }
-
-  /**
    * Determine if an alert is for Mainnet based on chainId or content patterns
    */
   private isMainnetAlert(alert: Alert): boolean {
@@ -1014,13 +849,16 @@ export class AlertService implements OnModuleInit {
       return true;
     }
 
-    // If chainId is not matching, check title and message content
+    // If chainId is not matching or missing, check title and message content
     const titleAndMessage = `${alert.title} ${alert.message}`.toLowerCase();
     return (
       titleAndMessage.includes('mainnet') ||
       titleAndMessage.includes('chain 50') ||
       titleAndMessage.includes('chainid 50') ||
-      titleAndMessage.includes('chain id 50')
+      titleAndMessage.includes('chain id 50') ||
+      // If it's neither obviously mainnet nor obviously testnet (see isTestnetAlert),
+      // default to mainnet for priority alerts like errors
+      (alert.type === 'error' && !this.isTestnetAlert(alert))
     );
   }
 
@@ -1033,7 +871,7 @@ export class AlertService implements OnModuleInit {
       return true;
     }
 
-    // If chainId is not matching, check title and message content
+    // If chainId is not matching or missing, check title and message content
     const titleAndMessage = `${alert.title} ${alert.message}`.toLowerCase();
     return (
       titleAndMessage.includes('testnet') ||
