@@ -270,7 +270,6 @@ export class TestingController {
           byNetwork: {
             mainnet: report.alertsByChain.mainnet,
             testnet: report.alertsByChain.testnet,
-            other: report.alertsByChain.other,
           },
           topAlertTypes: Object.entries(report.alertsByType)
             .sort(([, a], [, b]) => b - a)

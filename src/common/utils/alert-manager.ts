@@ -64,11 +64,20 @@ export class AlertManager {
   }
 
   /**
+   * Generate a unique ID for an alert
+   */
+  private generateAlertId(options: AlertOptions, timestamp: number): string {
+    // Replace deprecated substr with substring and use more reliable random ID
+    const randomId = Math.random().toString(36).substring(2, 7);
+    return `${timestamp}-${options.category}-${options.component}-${randomId}`;
+  }
+
+  /**
    * Add an alert to the system
    */
   addAlert(options: AlertOptions): Alert {
     const timestamp = options.timestamp || Date.now();
-    const id = `${timestamp}-${options.category}-${options.component}-${Math.random().toString(36).substr(2, 5)}`;
+    const id = this.generateAlertId(options, timestamp);
 
     const alert: Alert = {
       id,
