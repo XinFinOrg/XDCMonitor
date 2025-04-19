@@ -7,6 +7,7 @@ import { BlocksMonitorService } from '@monitoring/blocks/blocks.monitor';
 import { ConsensusModule } from '@monitoring/consensus/consensus.module';
 import { MonitoringController } from '@monitoring/monitoring.controller';
 import { RpcMonitorService } from '@monitoring/rpc/rpc.monitor';
+import { PeerCountMonitor } from '@monitoring/rpc/peer-count.monitor';
 import { TransactionMonitorService } from '@monitoring/transaction/transaction.monitor';
 import { Module, forwardRef } from '@nestjs/common';
 import { ScheduleModule } from '@nestjs/schedule';
@@ -20,7 +21,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     ConsensusModule,
     forwardRef(() => AlertModule),
   ],
-  providers: [BlocksMonitorService, RpcMonitorService, TransactionMonitorService, MetricsManager],
+  providers: [BlocksMonitorService, RpcMonitorService, TransactionMonitorService, MetricsManager, PeerCountMonitor],
   controllers: [MonitoringController],
   exports: [BlocksMonitorService, RpcMonitorService, TransactionMonitorService, ConsensusModule],
 })

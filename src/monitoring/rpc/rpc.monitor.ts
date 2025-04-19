@@ -1,11 +1,12 @@
+import { AlertService } from '@alerts/alert.service';
 import { BlockchainService } from '@blockchain/blockchain.service';
 import { ALERTS, BLOCKCHAIN, PERFORMANCE } from '@common/constants/config';
 import { RpcRetryClient } from '@common/utils/rpc-retry-client';
 import { ConfigService } from '@config/config.service';
 import { MetricsService } from '@metrics/metrics.service';
-import { AlertService } from '@alerts/alert.service';
-import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
-import { RpcEndpoint, RpcStatus, ServiceStatus, WsStatus, RpcMonitorConfig, EndpointStatus, MonitorType } from '@types';
+import { PeerCountMonitor } from '@monitoring/rpc/peer-count.monitor';
+import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { EndpointStatus, MonitorType, RpcEndpoint, RpcMonitorConfig, ServiceStatus } from '@types';
 import axios from 'axios';
 import WebSocket from 'ws';
 
@@ -42,7 +43,7 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
   private rpcClients = new Map<string, RpcRetryClient>();
   private intervals: Record<MonitorType, NodeJS.Timeout> = {} as any;
 
-  // Configuration
+  // Configuration settings
   private config: RpcMonitorConfig = DEFAULT_CONFIG;
 
   constructor(
@@ -50,6 +51,7 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
     private readonly configService: ConfigService,
     private readonly metricsService: MetricsService,
     private readonly alertService: AlertService,
+    private readonly peerCountMonitor: PeerCountMonitor,
   ) {}
 
   // #region Lifecycle Methods
@@ -89,9 +91,9 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
 
     // Staggered monitoring initialization to prevent resource spikes
     this.scheduleMonitor('rpc', 0, () => this.monitorAllRpcEndpoints());
+    this.scheduleMonitor('ws', 0, () => this.monitorAllWsEndpoints());
     this.scheduleMonitor('port', 5000, () => this.monitorAllRpcPorts());
     this.scheduleMonitor('service', 10000, () => this.monitorAllServices());
-    this.scheduleMonitor('ws', 15000, () => this.monitorAllWsEndpoints());
     this.scheduleMonitor('sync', 20000, () => this.syncWithBlockchainService());
   }
 
@@ -322,7 +324,7 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
    * Monitor all WebSocket endpoints
    */
   async monitorAllWsEndpoints() {
-    if (this.configService.get('ENABLE_WEBSOCKET_MONITORING', 'true') !== 'true' || !WebSocket) {
+    if (this.configService.enableRpcMonitoring !== true) {
       return;
     }
 
@@ -372,61 +374,24 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
 
       this.logger.debug(`Processing endpoint batch ${batchNumber}/${totalBatches}`);
 
-      // Process batch in parallel
+      // Process batch in parallel with individual error handling for each endpoint
       await Promise.all(
         batch.map(async endpoint => {
           try {
             // Determine the type of endpoint we're checking (RPC or WebSocket)
-            const isWebSocket = endpoint.url.startsWith('ws://') || endpoint.url.startsWith('wss://');
+            const isWebSocket = this.isWebSocketEndpoint(endpoint);
             const endpointTypeStr = isWebSocket ? 'WebSocket' : 'RPC';
 
-            let isUp = false;
-            let latency = 0;
-
-            // Use the appropriate checking method based on endpoint type
-            if (isWebSocket) {
-              // For WebSocket endpoints
-              isUp = await this.testWebSocketConnection(endpoint);
-            } else {
-              // For HTTP RPC endpoints
-              const startTime = Date.now();
-
-              // Try provider first, then direct RPC call
-              if (await this.tryBlockchainServiceProvider(endpoint)) {
-                isUp = true;
-              } else {
-                isUp = await this.tryDirectRpcCall(endpoint);
-              }
-
-              latency = Date.now() - startTime;
-
-              // Update RPC metrics including latency
-              this.updateRpcEndpointStatus(endpoint, isUp, latency);
-
-              // Check for latency thresholds (error and warning) for RPC only
-              if (isUp && latency > ALERTS.THRESHOLDS.RPC_LATENCY_WARNING_MS) {
-                const isError = latency > ALERTS.THRESHOLDS.RPC_LATENCY_ERROR_MS;
-                this.alertService[isError ? 'error' : 'warning'](
-                  ALERTS.TYPES.RPC_HIGH_LATENCY,
-                  ALERTS.COMPONENTS.RPC,
-                  `${isError ? 'High' : 'Elevated'} RPC latency on ${endpoint.url} for chain ${endpoint.chainId} is :  ${latency / 1000}s`,
-                  endpoint.chainId,
-                );
-              }
-            }
-
+            // Use the provided check function to check this endpoint
+            const isUp = await checkFn(endpoint);
+            
             this.logger.debug(
               `${endpointTypeStr} endpoint ( ${endpoint.url} ) for chain ${endpoint.chainId} is ${isUp ? 'UP' : 'DOWN'}`,
             );
+            
+            // If down and postCheckFn provided, call it
             if (!isUp && postCheckFn) postCheckFn(endpoint, isUp);
-
-            // For WebSocket endpoints, update the WebSocket specific status
-            if (isWebSocket) {
-              this.updateStatus(endpoint, this.wsStatuses, isUp);
-              this.metricsService.setWebsocketStatus(endpoint.url, isUp, endpoint.chainId);
-              this.blockchainService.updateWsProviderStatus(endpoint.url, isUp);
-            }
-
+            
             return { endpoint, isUp };
           } catch (error) {
             this.logger.error(`Error checking endpoint ${endpoint.name}: ${error.message}`);
@@ -467,11 +432,18 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * Check if an endpoint is a WebSocket endpoint
+   */
+  private isWebSocketEndpoint(endpoint: RpcEndpoint): boolean {
+    return endpoint.url.startsWith('ws://') || endpoint.url.startsWith('wss://');
+  }
+  
+  /**
    * Monitor a specific RPC endpoint (HTTP only, not WebSocket)
    */
   async monitorRpcEndpoint(endpoint: RpcEndpoint): Promise<boolean> {
     // Verify this is a HTTP endpoint, not a WebSocket
-    if (endpoint.url.startsWith('ws://') || endpoint.url.startsWith('wss://')) {
+    if (this.isWebSocketEndpoint(endpoint)) {
       this.logger.warn(`Attempted to monitor WebSocket endpoint ${endpoint.name} with RPC monitor`);
       return false;
     }
@@ -555,25 +527,55 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
   /**
    * Update RPC endpoint status and metrics (for HTTP RPC endpoints only)
    */
-  private updateRpcEndpointStatus(endpoint: RpcEndpoint, isUp: boolean, latency: number): void {
-    // Verify this is an HTTP endpoint
-    if (endpoint.url.startsWith('ws://') || endpoint.url.startsWith('wss://')) {
-      this.logger.warn(`Attempted to update WebSocket endpoint ${endpoint.name} status using RPC status method`);
-      return;
-    }
-
-    // Update status in RPC statuses map only (not WebSocket statuses)
-    const current = this.updateStatus(endpoint, this.rpcStatuses, isUp, { latency });
-
-    // Update provider status and metrics for HTTP RPC
-    this.blockchainService.updateProviderStatus(endpoint.url, isUp);
+  private async updateRpcEndpointStatus(endpoint: RpcEndpoint, isUp: boolean, latency: number): Promise<void> {
+    this.updateStatus(endpoint, this.rpcStatuses, isUp, { latency });
     this.metricsService.setRpcStatus(endpoint.url, isUp, endpoint.chainId);
     this.metricsService.recordRpcLatency(endpoint.url, latency, endpoint.chainId);
 
-    // Check for downtime alerts
-    if (!isUp) {
+    // If endpoint is up, check peer count; otherwise check for downtime
+    if (isUp) {
+      this.monitorRpcPeerCount(endpoint);
+    } else {
       this.checkDowntimeNotification(endpoint, this.rpcStatuses, ALERTS.TYPES.RPC_ENDPOINT_DOWN, ALERTS.COMPONENTS.RPC);
     }
+  }
+
+  /**
+   * Monitor peer count for any endpoint with improved error handling
+   */
+  private monitorPeerCount(endpoint: RpcEndpoint, isWebSocket: boolean): void {
+    const endpointType = isWebSocket ? 'WebSocket' : 'RPC';
+    const monitorFn = isWebSocket ? 
+      this.peerCountMonitor.monitorWsPeerCount.bind(this.peerCountMonitor) :
+      this.peerCountMonitor.monitorRpcPeerCount.bind(this.peerCountMonitor);
+    
+    try {
+      // Make sure we don't have any issues blocking the entire monitoring process
+      Promise.resolve().then(async () => {
+        try {
+          await monitorFn(endpoint);
+          this.logger.debug(`Successfully monitored ${endpointType} peer count for ${endpoint.url}`);
+        } catch (error) {
+          this.logger.debug(`Failed to monitor peer count for ${endpointType} ${endpoint.url}: ${error.message}`);
+        }
+      });
+    } catch (error) {
+      this.logger.debug(`Error setting up ${endpointType} peer count monitoring for ${endpoint.url}: ${error.message}`);
+    }
+  }
+
+  /**
+   * Monitor peer count for an RPC endpoint
+   */
+  private monitorRpcPeerCount(endpoint: RpcEndpoint): void {
+    this.monitorPeerCount(endpoint, false);
+  }
+
+  /**
+   * Monitor peer count for a WebSocket endpoint
+   */
+  private monitorWsPeerCount(endpoint: RpcEndpoint): void {
+    this.monitorPeerCount(endpoint, true);
   }
 
   /**
@@ -581,32 +583,28 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
    */
   async monitorWsEndpoint(endpoint: RpcEndpoint): Promise<boolean> {
     // Verify this is a WebSocket endpoint
-    if (!endpoint.url.startsWith('ws://') && !endpoint.url.startsWith('wss://')) {
+    if (!this.isWebSocketEndpoint(endpoint)) {
       this.logger.warn(`Attempted to monitor HTTP endpoint ${endpoint.name} with WebSocket monitor`);
       return false;
     }
 
     try {
+      let isUp = false;
+
       // First check if already active in BlockchainService
       const wsProvider = this.blockchainService.getWsProviderByUrl(endpoint.url);
-
       if (wsProvider) {
-        // Update WebSocket status only
-        this.updateStatus(endpoint, this.wsStatuses, true);
-        this.metricsService.setWebsocketStatus(endpoint.url, true, endpoint.chainId);
-        return true;
+        isUp = true;
+      } else {
+        // Attempt direct WebSocket connection
+        isUp = await this.testWebSocketConnection(endpoint);
+        // BlockchainService status is already updated within testWebSocketConnection
       }
 
-      // Attempt direct WebSocket connection
-      const isUp = await this.testWebSocketConnection(endpoint);
-
-      // Update status whether it's up or down
-      this.updateStatus(endpoint, this.wsStatuses, isUp);
-      this.metricsService.setWebsocketStatus(endpoint.url, isUp, endpoint.chainId);
-      this.blockchainService.updateWsProviderStatus(endpoint.url, isUp);
-
-      // Check for downtime notifications if down
-      if (!isUp) {
+      // If WebSocket is up, check peer count; otherwise check for downtime alerts
+      if (isUp) {
+        this.monitorWsPeerCount(endpoint);
+      } else {
         this.checkDowntimeNotification(
           endpoint,
           this.wsStatuses,
@@ -618,7 +616,8 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
       return isUp;
     } catch (error) {
       this.logger.error(`Error monitoring WebSocket endpoint ${endpoint.name}: ${error.message}`);
-      // Update WebSocket status to down
+
+      // Update status to down
       this.updateStatus(endpoint, this.wsStatuses, false);
       this.metricsService.setWebsocketStatus(endpoint.url, false, endpoint.chainId);
       this.blockchainService.updateWsProviderStatus(endpoint.url, false);
@@ -635,62 +634,89 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  // Original monitorWsPeerCount implementation removed - using common implementation from above
+
   /**
    * Test a WebSocket connection
+   * 
+   * Optimized with better error handling and cleanup to prevent memory leaks
    */
   private testWebSocketConnection(endpoint: RpcEndpoint): Promise<boolean> {
     return new Promise(resolve => {
       try {
         // Validate URL
-        if (!endpoint.url.startsWith('ws://') && !endpoint.url.startsWith('wss://')) {
+        if (!this.isWebSocketEndpoint(endpoint)) {
           this.logger.warn(`Invalid WebSocket URL: ${endpoint.url}`);
-          this.updateStatus(endpoint, this.wsStatuses, false);
-          this.metricsService.setWebsocketStatus(endpoint.url, false, endpoint.chainId);
+          this.handleWsConnectionFailure(endpoint, null, 'Invalid WebSocket URL');
           resolve(false);
           return;
         }
 
-        // Create connection
+        // Create connection with timeout
         const socket = new WebSocket(endpoint.url, {
           handshakeTimeout: 5000,
           followRedirects: true,
         });
 
-        let connectionSuccessful = false;
+        let resolved = false;
+        
+        // Helper function to prevent multiple resolves and handle cleanup
+        const safeResolve = (success: boolean, reason: string = '') => {
+          if (resolved) return;
+          
+          resolved = true;
+          
+          // Update statuses based on connection result
+          if (success) {
+            this.updateStatus(endpoint, this.wsStatuses, true);
+            this.metricsService.setWebsocketStatus(endpoint.url, true, endpoint.chainId);
+            this.blockchainService.updateWsProviderStatus(endpoint.url, true);
+          } else {
+            this.handleWsConnectionFailure(endpoint, socket, reason || 'Connection failed');
+          }
+          
+          resolve(success);
+        };
 
         // Set timeout for connection
         const timeout = setTimeout(() => {
-          if (!connectionSuccessful) {
-            this.handleWsConnectionFailure(endpoint, socket, 'Connection timed out');
-            resolve(false);
-          }
+          this.logger.warn(`WebSocket connection timeout for ${endpoint.name}`);
+          safeResolve(false, 'Connection timeout');
         }, 5000);
 
         // Handle successful connection
         socket.on('open', () => {
-          connectionSuccessful = true;
-          clearTimeout(timeout);
-
           this.logger.debug(`WebSocket connection to ${endpoint.name} successful`);
-          this.updateStatus(endpoint, this.wsStatuses, true);
-          this.metricsService.setWebsocketStatus(endpoint.url, true, endpoint.chainId);
-          this.blockchainService.updateWsProviderStatus(endpoint.url, true);
-
-          socket.close();
-          resolve(true);
+          clearTimeout(timeout);
+          safeResolve(true);
+          
+          // Clean close of the socket
+          try {
+            socket.close(1000, 'Normal closure');
+          } catch (e) {
+            // Ignore error on close
+          }
         });
 
         // Handle connection errors
         socket.on('error', error => {
           this.logger.warn(`WebSocket connection error for ${endpoint.name}: ${error.message}`);
-          this.handleWsConnectionFailure(endpoint, socket, error.message);
           clearTimeout(timeout);
-          resolve(false);
+          safeResolve(false, error.message);
+        });
+
+        // Handle connection close
+        socket.on('close', () => {
+          this.logger.debug(`WebSocket connection to ${endpoint.name} closed`);
+          clearTimeout(timeout);
+          if (!resolved) {
+            // If we get here without resolution, the connection closed unexpectedly
+            safeResolve(false, 'Connection closed unexpectedly');
+          }
         });
       } catch (error) {
         this.logger.error(`Error setting up WebSocket connection for ${endpoint.name}: ${error.message}`);
-        this.updateStatus(endpoint, this.wsStatuses, false);
-        this.metricsService.setWebsocketStatus(endpoint.url, false, endpoint.chainId);
+        this.handleWsConnectionFailure(endpoint, null, error.message);
         resolve(false);
       }
     });
@@ -699,15 +725,17 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
   /**
    * Handle WebSocket connection failure
    */
-  private handleWsConnectionFailure(endpoint: RpcEndpoint, socket: WebSocket, reason: string) {
+  private handleWsConnectionFailure(endpoint: RpcEndpoint, socket: WebSocket | null, reason: string) {
     this.updateStatus(endpoint, this.wsStatuses, false);
     this.metricsService.setWebsocketStatus(endpoint.url, false, endpoint.chainId);
     this.blockchainService.updateWsProviderStatus(endpoint.url, false);
 
-    try {
-      socket.terminate();
-    } catch (e) {
-      // Ignore termination errors
+    if (socket) {
+      try {
+        socket.terminate();
+      } catch (e) {
+        // Ignore termination errors
+      }
     }
   }
 
@@ -729,16 +757,26 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * Helper function to parse URL for port monitoring
+   */
+  private parseEndpointUrl(endpoint: RpcEndpoint): { url: URL; domain: string; port: string } {
+    const url = new URL(endpoint.url);
+    const domain = url.hostname;
+    const isHttps = url.protocol === 'https:' || url.protocol === 'wss:';
+    const port = url.port || (isHttps ? '443' : '80');
+    
+    return { url, domain, port };
+  }
+
+  /**
    * Monitor an RPC port
    */
   async monitorRpcPort(endpoint: RpcEndpoint) {
     try {
-      const rpcUrl = new URL(endpoint.url);
-      const domain = rpcUrl.hostname;
-      const port = rpcUrl.port || (rpcUrl.protocol === 'https:' ? '443' : '80');
+      const { url, domain, port } = this.parseEndpointUrl(endpoint);
 
       try {
-        await axios.get(`${rpcUrl.protocol}//${domain}:${port}`, { timeout: 5000 });
+        await axios.get(`${url.protocol}//${domain}:${port}`, { timeout: 5000 });
         this.logger.debug(`RPC port ${port} is open for ${endpoint.name}`);
       } catch (error) {
         if (error.code === 'ECONNREFUSED') {
@@ -757,10 +795,7 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
    */
   async monitorWsPort(endpoint: RpcEndpoint) {
     try {
-      const wsUrl = new URL(endpoint.url);
-      const domain = wsUrl.hostname;
-      const port = wsUrl.port || (wsUrl.protocol === 'wss:' ? '443' : '80');
-
+      const { port } = this.parseEndpointUrl(endpoint);
       this.logger.debug(`Checking WebSocket port ${port} for ${endpoint.name}`);
 
       // For WebSockets, we rely on the WebSocket connection test

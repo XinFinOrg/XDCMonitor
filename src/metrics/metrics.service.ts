@@ -361,6 +361,25 @@ export class MetricsService implements OnModuleInit {
   }
 
   /**
+   * Record peer count for an endpoint
+   * 
+   * @param endpoint The RPC/WebSocket endpoint URL
+   * @param peerCount Number of peers connected to the node
+   * @param endpointType Type of endpoint (rpc/websocket)
+   * @param chainId Chain ID (50 for mainnet, 51 for testnet)
+   */
+  setPeerCount(endpoint: string, peerCount: number, endpointType: 'rpc' | 'websocket', chainId: number = 50): void {
+    this.writePoint(
+      new Point('peer_count')
+        .tag('endpoint', endpoint)
+        .tag('type', endpointType)
+        .tag('chainId', chainId.toString())
+        .intField('value', peerCount)
+    );
+    this.logger.debug(`Recorded peer count for ${endpointType} ${endpoint} (chain ${chainId}): ${peerCount} peers`);
+  }
+
+  /**
    * Record block time
    */
   setBlockTime(seconds: number, chainId: number = 50): void {
