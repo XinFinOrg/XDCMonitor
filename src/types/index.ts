@@ -10,6 +10,7 @@ export * from './blockchain/processor';
 export * from './rpc/endpoint';
 export * from './rpc/providers';
 export * from './rpc/status';
+export * from './rpc/baseline';
 
 // Monitoring types
 export * from './monitoring/alerts';

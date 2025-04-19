@@ -4,14 +4,42 @@
 
 The RPC Monitor service monitors the health and performance of XDC RPC endpoints, WebSocket connections, and related services. It implements sophisticated testing strategies including port monitoring, latency tracking, and adaptive check frequencies based on endpoint health.
 
+### RPC Monitor Service
+
+The `RpcMonitorService` handles both HTTP/HTTPS RPC endpoints and WebSocket endpoints through a centralized, optimized monitoring architecture:
+
+- Uses a generic `monitorEndpoints` function to handle both types of endpoints with the same core logic
+- Employs utility functions like `isWebSocketEndpoint` and `parseEndpointUrl` to reduce code duplication
+- Features improved WebSocket testing with comprehensive error handling and cleanup
+- Implements a unified peer count monitoring system through the `monitorPeerCount` utility
+
 ## Core Workflows
 
-1. **RPC Endpoint Monitoring**: Tests HTTP/HTTPS JSON-RPC endpoints through direct RPC calls (`eth_chainId`) and validates responses
-2. **WebSocket Monitoring**: Establishes and verifies WebSocket connections with subscription tests
-3. **Port Monitoring**: Verifies endpoint port availability through TCP connection tests
+1. **RPC Endpoint Monitoring**: Tests HTTP/HTTPS JSON-RPC endpoints through direct RPC calls (`eth_chainId`) and validates responses through multiple methods:
+   - Primary: Using BlockchainService's providers for efficient validation
+   - Fallback: Direct RPC calls through RpcRetryClient with configurable retry mechanisms
+   - Latency measurement and threshold alerting
+
+2. **WebSocket Monitoring**: Establishes and verifies WebSocket connections using an optimized connection handling system:
+   - Efficient WebSocket validation with proper resource cleanup
+   - Timeout handling to prevent hanging connections
+   - Multiple verification strategies (active connection and BlockchainService integration)
+   - SafeResolve pattern to prevent memory leaks and duplicate state transitions
+
+3. **Port Monitoring**: Verifies endpoint port availability through TCP connection tests with unified URL parsing logic
+
 4. **Explorer & Faucet Monitoring**: Checks related infrastructure services through HTTP requests
-5. **Adaptive Monitoring**: Dynamically adjusts check frequency based on endpoint health status (increases frequency for problematic endpoints)
-6. **Batch Processing**: Processes endpoint checks in configurable batches with delays to prevent resource spikes
+
+5. **Adaptive Monitoring**: Dynamically adjusts check frequency based on endpoint health status:
+   - Health factor calculation based on endpoint availability
+   - Frequency scaling from min/max interval bounds
+   - More frequent checks for problematic endpoints
+
+6. **Batch Processing**: Processes endpoint checks in configurable batches with delays to prevent resource spikes:
+   - Parallelized batch processing with individual error handling
+   - Prioritized endpoint ordering (down endpoints checked first)
+   - Configurable batch sizes and delays
+
 7. **Priority-Based Checking**: Prioritizes checking of down endpoints to detect recovery faster
 
 ## Configuration Options
@@ -67,3 +95,42 @@ The RPC Monitor service monitors the health and performance of XDC RPC endpoints
 - **Automatic Client Management**: Creates and manages RPC clients with retry capabilities
 - **Health Factor Calculation**: Provides overall health percentage for monitoring dashboards
 - **Priority-Based Recovery Detection**: Checks down endpoints more frequently to detect recovery
+- **Optimized Code Structure**: Utilizes helper functions to reduce duplication and improve maintainability
+- **Memory Leak Prevention**: Properly cleans up resources, particularly in WebSocket connections
+
+## Peer Count Monitoring
+
+The `PeerCountMonitor` is a specialized service that works alongside `RpcMonitorService` to track peer counts across the network and detect anomalies:
+
+### Approach
+
+- **Adaptive Baselines**: Calculates dynamic peer count baselines based on historical data
+- **Multi-Factor Analysis**: Uses both relative and absolute threshold calculations
+- **Consecutive Zero Detection**: Identifies and alerts on consecutive zero-peer readings
+- **Exponential Backoff**: Implements alert backoff periods to prevent alert storms
+- **Network Classification**: Differentiates between high-peer and low-peer endpoints
+
+### Key Features
+
+- **Dynamic Threshold Calculation**: Proportional thresholds that scale with network size
+- **Statistical Anomaly Detection**: Identifies significant deviations from established baselines
+- **Historical High Value Tracking**: Maintains record of highest observed peer counts
+- **Critical Issue Detection**: Special handling for zero-peer situations or major drops
+- **Relative & Absolute Measurement**: Considers both percentage-based and absolute number drops
+- **Alert Frequency Control**: Exponential backoff mechanism for repeated alerts
+- **Telegram Integration**: Dedicated notifications for critical peer count issues
+
+### Configuration
+
+- Multiple threshold factors for different severity levels (significant vs. critical drops)
+- Configurable sampling requirements for baseline establishment
+- Customizable alert backoff periods and reset conditions
+- Network-specific threshold adjustment based on node importance
+
+### Integration with RpcMonitorService
+
+The RPC monitor triggers peer count checks when an endpoint is found to be active. The integration is handled through dedicated methods:
+- `monitorRpcPeerCount`: For HTTP/HTTPS endpoints
+- `monitorWsPeerCount`: For WebSocket endpoints
+
+Both utilize a shared `monitorPeerCount` utility to ensure consistent handling.

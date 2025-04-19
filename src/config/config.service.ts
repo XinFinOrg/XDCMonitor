@@ -303,10 +303,7 @@ export class ConfigService {
    * Get all WebSocket endpoints
    */
   getWsEndpoints(): RpcEndpoint[] {
-    // Filter out conditional WS endpoints if not enabled
-    return WS_ENDPOINTS.filter(
-      endpoint => (endpoint as any).conditional !== true || this.getBoolean('ENABLE_ADDITIONAL_WS_ENDPOINTS', false),
-    );
+    return WS_ENDPOINTS;
   }
 
   /**

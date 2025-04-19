@@ -845,12 +845,426 @@
       "type": "state-timeline"
     },
     {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb"
+      },
+      "description": "Number of peers connected to each RPC https node. Higher peer counts indicate better network connectivity.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "line"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 5
+              },
+              {
+                "color": "green",
+                "value": 10
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 13,
+        "x": 0,
+        "y": 24
+      },
+      "id": 200,
+      "options": {
+        "legend": {
+          "calcs": ["lastNotNull", "max", "mean"],
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "10.2.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb"
+          },
+          "editorMode": "code",
+          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"peer_count\" and r.chainId == \"50\" and r.type == \"rpc\")\n  |> filter(fn: (r) => r._field == \"value\")\n  |> group(columns: [\"endpoint\", \"type\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
+          "refId": "A"
+        }
+      ],
+      "title": "Node Peer Counts ( RPCs https )",
+      "transformations": [
+        {
+          "id": "labelsToFields",
+          "options": {
+            "mode": "columns",
+            "valueLabel": "endpoint"
+          }
+        },
+        {
+          "id": "renameByRegex",
+          "options": {
+            "regex": ".*endpoint=\"([^\"]+).*",
+            "renamePattern": "$1"
+          }
+        }
+      ],
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb"
+      },
+      "description": "Baseline and current peer counts for each endpoint with threshold indicators.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "continuous-RdYlGr"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 11,
+        "x": 13,
+        "y": 24
+      },
+      "id": 201,
+      "options": {
+        "displayMode": "lcd",
+        "minVizHeight": 10,
+        "minVizWidth": 0,
+        "namePlacement": "auto",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "showUnfilled": true,
+        "valueMode": "color"
+      },
+      "pluginVersion": "10.2.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb"
+          },
+          "editorMode": "code",
+          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"peer_count\" and r.chainId == \"50\" and r.type == \"rpc\")\n  |> filter(fn: (r) => r._field == \"value\")\n  |> last()\n  |> group(columns: [\"endpoint\", \"type\"])",
+          "refId": "A"
+        }
+      ],
+      "title": "Current Peer Count by Endpoint ( RPCs https )",
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "_field": true,
+              "_measurement": true,
+              "_start": true,
+              "_stop": true,
+              "chainId": true
+            },
+            "indexByName": {},
+            "renameByName": {
+              "_time": "Last Updated",
+              "_value": "Peer Count",
+              "endpoint": "Endpoint",
+              "type": "Type"
+            }
+          }
+        },
+        {
+          "id": "renameByRegex",
+          "options": {
+            "regex": ".*endpoint=\"([^\"]+).*",
+            "renamePattern": "$1"
+          }
+        }
+      ],
+      "type": "bargauge"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb"
+      },
+      "description": "Number of peers connected to each RPC websocket node. Higher peer counts indicate better network connectivity.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "line"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 5
+              },
+              {
+                "color": "green",
+                "value": 10
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 13,
+        "x": 0,
+        "y": 31
+      },
+      "id": 1017,
+      "options": {
+        "legend": {
+          "calcs": ["lastNotNull", "max", "mean"],
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "10.2.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb"
+          },
+          "editorMode": "code",
+          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"peer_count\" and r.chainId == \"50\" and r.type == \"websocket\")\n  |> filter(fn: (r) => r._field == \"value\")\n  |> group(columns: [\"endpoint\", \"type\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
+          "refId": "A"
+        }
+      ],
+      "title": "Node Peer Counts ( RPCs Websocket )",
+      "transformations": [
+        {
+          "id": "labelsToFields",
+          "options": {
+            "mode": "columns",
+            "valueLabel": "endpoint"
+          }
+        },
+        {
+          "id": "renameByRegex",
+          "options": {
+            "regex": ".*endpoint=\"([^\"]+).*",
+            "renamePattern": "$1"
+          }
+        }
+      ],
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb"
+      },
+      "description": "Baseline and current peer counts for each endpoint with threshold indicators.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "continuous-RdYlGr"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 11,
+        "x": 13,
+        "y": 31
+      },
+      "id": 1018,
+      "options": {
+        "displayMode": "lcd",
+        "minVizHeight": 10,
+        "minVizWidth": 0,
+        "namePlacement": "auto",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "showUnfilled": true,
+        "valueMode": "color"
+      },
+      "pluginVersion": "10.2.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb"
+          },
+          "editorMode": "code",
+          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"peer_count\" and r.chainId == \"50\" and r.type == \"websocket\")\n  |> filter(fn: (r) => r._field == \"value\")\n  |> last()\n  |> group(columns: [\"endpoint\", \"type\"])",
+          "refId": "A"
+        }
+      ],
+      "title": "Current Peer Count by Endpoint ( RPCs websocket )",
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "_field": true,
+              "_measurement": true,
+              "_start": true,
+              "_stop": true,
+              "chainId": true
+            },
+            "indexByName": {},
+            "renameByName": {
+              "_time": "Last Updated",
+              "_value": "Peer Count",
+              "endpoint": "Endpoint",
+              "type": "Type"
+            }
+          }
+        },
+        {
+          "id": "renameByRegex",
+          "options": {
+            "regex": ".*endpoint=\"([^\"]+).*",
+            "renamePattern": "$1"
+          }
+        }
+      ],
+      "type": "bargauge"
+    },
+    {
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 24
+        "y": 37
       },
       "id": 108,
       "panels": [],
@@ -930,7 +1344,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 25
+        "y": 38
       },
       "id": 109,
       "options": {
@@ -1025,7 +1439,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green"
+                "color": "green",
+                "value": null
               }
             ]
           }
@@ -1075,7 +1490,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 33
+        "y": 46
       },
       "id": 120,
       "options": {
@@ -1192,7 +1607,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 41
+        "y": 54
       },
       "id": 111,
       "panels": [],
@@ -1250,7 +1665,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green"
+                "color": "green",
+                "value": null
               }
             ]
           },
@@ -1262,7 +1678,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 42
+        "y": 55
       },
       "id": 115,
       "options": {
@@ -1343,7 +1759,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green"
+                "color": "green",
+                "value": null
               },
               {
                 "color": "yellow",
@@ -1363,7 +1780,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 42
+        "y": 55
       },
       "id": 116,
       "options": {
@@ -1507,7 +1924,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 50
+        "y": 63
       },
       "id": 112,
       "options": {
@@ -1620,7 +2037,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 50
+        "y": 63
       },
       "id": 113,
       "options": {
@@ -1659,7 +2076,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 58
+        "y": 71
       },
       "id": 140,
       "panels": [],
@@ -1744,7 +2161,7 @@
         "h": 6,
         "w": 12,
         "x": 0,
-        "y": 59
+        "y": 72
       },
       "id": 156,
       "options": {
@@ -1867,7 +2284,7 @@
         "h": 6,
         "w": 12,
         "x": 12,
-        "y": 59
+        "y": 72
       },
       "id": 157,
       "options": {
@@ -1983,7 +2400,7 @@
         "h": 7,
         "w": 12,
         "x": 0,
-        "y": 65
+        "y": 78
       },
       "id": 158,
       "options": {
@@ -2106,7 +2523,7 @@
         "h": 7,
         "w": 12,
         "x": 12,
-        "y": 65
+        "y": 78
       },
       "id": 159,
       "options": {
@@ -2180,7 +2597,7 @@
         "h": 3,
         "w": 12,
         "x": 0,
-        "y": 72
+        "y": 85
       },
       "id": 144,
       "options": {
@@ -2229,7 +2646,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 75
+        "y": 88
       },
       "id": 1000,
       "panels": [],
@@ -2264,7 +2681,7 @@
         "h": 3,
         "w": 4,
         "x": 0,
-        "y": 76
+        "y": 89
       },
       "id": 1010,
       "options": {
@@ -2321,7 +2738,7 @@
         "h": 3,
         "w": 4,
         "x": 4,
-        "y": 76
+        "y": 89
       },
       "id": 1011,
       "options": {
@@ -2378,7 +2795,7 @@
         "h": 3,
         "w": 4,
         "x": 8,
-        "y": 76
+        "y": 89
       },
       "id": 1012,
       "options": {
@@ -2484,7 +2901,7 @@
         "h": 12,
         "w": 12,
         "x": 12,
-        "y": 76
+        "y": 89
       },
       "id": 1013,
       "options": {
@@ -2596,7 +3013,7 @@
         "h": 9,
         "w": 12,
         "x": 0,
-        "y": 79
+        "y": 92
       },
       "id": 1014,
       "options": {
@@ -2810,7 +3227,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 88
+        "y": 101
       },
       "id": 1015,
       "options": {
@@ -3019,7 +3436,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 96
+        "y": 109
       },
       "id": 1008,
       "options": {
@@ -3178,7 +3595,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 104
+        "y": 117
       },
       "id": 1016,
       "options": {
@@ -3254,7 +3671,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 112
+        "y": 125
       },
       "id": 114,
       "panels": [
@@ -3374,7 +3791,12 @@
                   "_measurement": true,
                   "_start": true,
                   "_stop": true,
-                  "component": false
+                  "_time": 0,
+                  "chainId": 4,
+                  "component": 5,
+                  "title": 1,
+                  "type": 3,
+                  "value": 2
                 },
                 "indexByName": {
                   "_measurement": 8,
@@ -3410,13 +3832,13 @@
     "list": []
   },
   "time": {
-    "from": "now-10h",
+    "from": "now-9h",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "",
   "title": "XDC Network Unified Dashboard",
   "uid": "xdc-unified-dashboard",
-  "version": 247,
+  "version": 258,
   "weekStart": ""
 }

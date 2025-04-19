@@ -261,6 +261,8 @@ export const ALERTS = {
     THRESHOLD_NOTIFICATION: 'threshold_notification',
     RPC_ENDPOINT_DOWN: 'rpc_endpoint_down',
     RPC_HIGH_LATENCY: 'rpc_high_latency',
+    RPC_NO_PEERS: 'rpc_no_peers',
+    RPC_LOW_PEERS: 'rpc_low_peers',
     MISSING_BLOCKS: 'missing_blocks',
     HIGH_BLOCK_TIME: 'high_block_time',
     TX_FAILURE: 'transaction_failure',
