@@ -201,6 +201,6 @@ jobs:
           rm env_staging
 
           echo "Pulling latest images and restarting services..."
-          ssh $STAGING_HOST "cd $DEPLOY_PATH && git pull origin staging && docker-compose pull && chmod +x run.sh && yarn build && ./run.sh grafana-import && ./run.sh rebuild"
+          ssh $STAGING_HOST "cd $DEPLOY_PATH && git pull origin staging && docker-compose pull && chmod +x run.sh && (command -v yarn || npm install -g yarn) && yarn build && ./run.sh grafana-import && ./run.sh rebuild"
 
           echo "Deployment to staging completed successfully!"
