@@ -279,8 +279,8 @@ export class AlertService implements OnModuleInit {
     const startDate = report.startDate.toLocaleDateString();
     const endDate = report.endDate.toLocaleDateString();
 
-    let message = `📊 <b>Weekly Alert Report</b>\n`;
-    message += `Period: ${startDate} to ${endDate}\n\n`;
+    let message = `🔵 <b>Weekly Alert Report</b>\n`;
+    message += `<b>Period:</b> ${startDate} to ${endDate}\n\n`;
 
     // Total alerts
     message += `<b>Total Alerts:</b> ${report.totalAlerts}\n\n`;

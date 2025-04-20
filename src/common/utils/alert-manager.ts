@@ -272,9 +272,22 @@ export class AlertManager {
     const severityEmoji =
       alert.severity === AlertSeverity.CRITICAL ? '🔴' : alert.severity === AlertSeverity.WARNING ? '⚠️' : '🔵';
 
-    const message = `${severityEmoji} *${alert.title}*\n\n${alert.message}\n\n📱 *Component:* ${
-      alert.component
-    }\n🔍 *Category:* ${alert.category}\n⏰ *Time:* ${new Date(alert.timestamp).toLocaleString()}`;
+    // Check if the message contains HTML tags
+    const containsHtml = /<[a-z][\s\S]*>/i.test(alert.message);
+    
+    // If the message content has HTML, use HTML formatting for the entire message
+    let message;
+    if (containsHtml) {
+      // Use HTML formatting
+      message = `${severityEmoji} <b>${alert.title}</b>\n\n${alert.message}\n\n📱 <b>Component:</b> ${
+        alert.component
+      }\n🔍 <b>Category:</b> ${alert.category}\n⏰ <b>Time:</b> ${new Date(alert.timestamp).toLocaleString()}`;
+    } else {
+      // Use Markdown formatting
+      message = `${severityEmoji} *${alert.title}*\n\n${alert.message}\n\n📱 *Component:* ${
+        alert.component
+      }\n🔍 *Category:* ${alert.category}\n⏰ *Time:* ${new Date(alert.timestamp).toLocaleString()}`;
+    }
 
     try {
       // Create a new bot instance with polling disabled
@@ -304,10 +317,15 @@ export class AlertManager {
         this.logger.debug(`Using Testnet topic ID: ${messageThreadId}`);
       }
 
+      // Check if the message contains HTML tags
+      const containsHtml = /<[a-z][\s\S]*>/i.test(alert.message);
+      
       // Create options object with optional message_thread_id
       const options: TelegramBot.SendMessageOptions = {
-        parse_mode: 'Markdown',
+        parse_mode: containsHtml ? 'HTML' : 'Markdown',
       };
+      
+      this.logger.debug(`Detected ${containsHtml ? 'HTML' : 'Markdown'} content, using ${options.parse_mode} parse mode`);
 
       if (messageThreadId) {
         options.message_thread_id = parseInt(messageThreadId, 10);
@@ -367,8 +385,16 @@ export class AlertManager {
     try {
       this.logger.debug('Attempting to send message using fallback HTTP method');
 
-      // Simple text cleanup
-      const cleanText = text.replace(/\*/g, '');
+      // Check if the message contains HTML tags
+      const containsHtml = /<[a-z][\s\S]*>/i.test(text);
+      
+      // If HTML is detected, don't remove formatting markers
+      const cleanText = containsHtml ? text : text.replace(/\*/g, '');
+      
+      // Set the correct parse mode based on content
+      const effectiveParseMode = containsHtml ? 'HTML' : parseMode;
+      
+      this.logger.debug(`Fallback method using parse mode: ${effectiveParseMode || 'none'}`);
 
       // Create the request URL
       const apiUrl = `https://api.telegram.org/bot${botToken}/sendMessage`;
@@ -379,10 +405,10 @@ export class AlertManager {
         text: cleanText,
         disable_web_page_preview: true,
       };
-
-      // Only add parse_mode if specified
-      if (parseMode) {
-        data.parse_mode = parseMode;
+      
+      // Set parse_mode - HTML detection takes precedence over provided parseMode
+      if (effectiveParseMode) {
+        data.parse_mode = effectiveParseMode;
       }
 
       // Add message_thread_id if specified
