@@ -1,0 +1,123 @@
+# XDC Node Configuration Security Rules
+# These rules define best practices for secure XDC node configuration
+
+rules:
+  # RPC Security Rules
+  rpc:
+    # HTTP RPC should be disabled or properly secured
+    - name: http_rpc_exposure
+      description: HTTP RPC endpoint should not be exposed to the internet
+      severity: critical
+      check:
+        type: config
+        condition: rpc.http.enabled == true && rpc.http.addr == "0.0.0.0"
+      recommendation: |
+        Disable HTTP RPC or bind to localhost only:
+        --http.addr 127.0.0.1
+        
+    # CORS settings should be restrictive
+    - name: rpc_cors_policy
+      description: CORS policy should be restrictive
+      severity: high
+      check:
+        type: config
+        condition: rpc.http.cors == "*"
+      recommendation: |
+        Set specific domains for CORS:
+        --http.corsdomain "https://your-domain.com"
+        
+    # Admin API should not be exposed
+    - name: admin_api_exposure
+      description: Admin API methods should not be exposed
+      severity: critical
+      check:
+        type: config
+        condition: rpc.http.api contains "admin"
+      recommendation: |
+        Remove admin from exposed APIs:
+        --http.api eth,net,web3
+
+  # Authentication Rules
+  auth:
+    # JWT authentication should be enabled for important APIs
+    - name: jwt_authentication
+      description: JWT authentication should be enabled for important endpoints
+      severity: high
+      check:
+        type: config
+        condition: rpc.http.jwtSecret == "" && rpc.http.api contains "admin"
+      recommendation: |
+        Enable JWT authentication:
+        --http.jwt-secret /path/to/jwt-secret
+        
+  # Network Rules
+  network:
+    # Node discovery limits
+    - name: peer_limit
+      description: Maximize allowed peers for better resilience
+      severity: medium
+      check:
+        type: config
+        condition: maxpeers < 50
+      recommendation: |
+        Increase maximum peers:
+        --maxpeers 100
+        
+    # Port exposure
+    - name: p2p_port_restriction
+      description: P2P port should be properly secured
+      severity: medium
+      check:
+        type: config
+        condition: port == 30303 && nat == "any"
+      recommendation: |
+        Configure firewall rules to restrict access to P2P port
+
+  # Crypto Security Rules
+  crypto:
+    # Keystore security
+    - name: keystore_location
+      description: Keystore should be in a secure location
+      severity: critical
+      check:
+        type: file
+        condition: keystore in ["/home", "/tmp", "/var/www"]
+      recommendation: |
+        Move keystore to a secure, encrypted location
+
+  # Resource Management Rules
+  resources:
+    # Cache settings
+    - name: cache_size
+      description: Cache size should be appropriate for hardware
+      severity: low
+      check:
+        type: config
+        condition: cache < 512 && cache > 4096
+      recommendation: |
+        Set appropriate cache size:
+        --cache 1024 (adjust based on available RAM)
+        
+    # Database settings
+    - name: db_settings
+      description: Database settings should be optimized for security
+      severity: medium
+      check:
+        type: config
+        condition: db.engine != "leveldb"
+      recommendation: |
+        Use LevelDB for better security:
+        --db.engine leveldb
+
+  # Logging Rules
+  logging:
+    # Logging level
+    - name: logging_level
+      description: Logging level should be appropriate
+      severity: low
+      check:
+        type: config
+        condition: verbosity > 3
+      recommendation: |
+        Reduce logging verbosity:
+        --verbosity 2

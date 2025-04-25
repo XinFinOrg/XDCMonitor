@@ -1,0 +1,7 @@
+# Dependencies
+node_modules/
+
+# Environment files (contain sensitive credentials)
+.env
+.env.*
+!.env.example

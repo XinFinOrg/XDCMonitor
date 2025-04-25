@@ -1,0 +1,31 @@
+{
+  "name": "xdc-network-security-scanner",
+  "version": "1.0.0",
+  "description": "Security scanning system for XDC Network nodes and infrastructure",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "network-scan": "node scanners/network-scanner.js --targets config/targets.txt",
+    "config-audit": "node scanners/config-auditor.js --dir ../config",
+    "comprehensive": "node index.js --comprehensive --targets config/targets.txt --config-dir ../config",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "xdc",
+    "blockchain",
+    "security",
+    "scanner",
+    "vulnerability"
+  ],
+  "author": "XDC Network Monitor Team",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^0.27.2",
+    "js-yaml": "^4.1.0",
+    "node-nmap": "^4.0.0"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}
