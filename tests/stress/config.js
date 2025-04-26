@@ -102,19 +102,19 @@ export const STAGES = {
 export const THRESHOLDS = {
   // Basic thresholds for API endpoints
   API: {
-    'failed_requests': ['rate<0.1'],
+    'http_req_failed': ['rate<0.1'],
     'http_req_duration': ['p(95)<5000'],
   },
   
   // Stricter thresholds for critical components
   CRITICAL: {
-    'failed_requests': ['rate<0.05'],
+    'http_req_failed': ['rate<0.05'],
     'http_req_duration': ['p(95)<3000', 'p(99)<5000'],
   },
   
   // Relaxed thresholds for heavy operations
   HEAVY: {
-    'failed_requests': ['rate<0.15'],
+    'http_req_failed': ['rate<0.15'],
     'http_req_duration': ['p(95)<8000'],
   },
 };

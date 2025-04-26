@@ -20,7 +20,7 @@ The stress testing framework implements a multi-tier approach:
 
 ### Prerequisites
 
-- [k6](https://k6.io/docs/getting-started/installation/) (required)
+- [k6](https://grafana.com/docs/k6/latest/set-up/install-k6/) (required)
 - Running XDC Monitor instance (local/test environment recommended)
 - Node.js (for configuration editing)
 
@@ -94,18 +94,6 @@ export const CHAINS = [
 - **Safety:** Only enable Mainnet after Testnet validation to avoid production impact.
 - **You can add custom chains** by extending the `CHAINS` array.
 
----
-
-## Documentation & Workflow References
-
-- **Stress Test Design Workflow:** [.windsurf/memory_bank/wf_stress_test_design.md](../../.windsurf/memory_bank/wf_stress_test_design.md)
-- **Long-term Project Logic:** [.windsurf/memory_bank/long_term.md](../../.windsurf/memory_bank/long_term.md)
-- **Configuration Reference:** `config.js` in this directory
-
-These documents detail the design, rationale, and implementation plan for the stress testing system. All updates are tracked per project workflow rules.
-
----
-
 ## Test Suite
 
 The following stress tests are included and run against all enabled chains:
@@ -130,6 +118,19 @@ k6 run tests/stress/rpc-endpoint-stress.js
 
 ```bash
 k6 run tests/stress/transaction-processing-stress.js
+```
+
+### Alert System
+
+- Alert storm simulation with varying severity levels
+- Concurrent alert generation and delivery testing
+- **Alerting Latency Under Load**: Measures if alerts are delivered within SLAs during extreme conditions
+- Critical alert prioritization verification
+- End-to-end alert latency measurement from detection to delivery
+- Chain-specific alert metrics with severity tagging
+
+```bash
+k6 run tests/stress/alerts/alerts-system-stress.js
 ```
 
 ---
