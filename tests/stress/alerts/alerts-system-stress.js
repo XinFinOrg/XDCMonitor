@@ -29,13 +29,13 @@ const alertCriticalLatency = new Trend('alert_critical_latency'); // Latency for
 
 // Test configuration
 export const options = {
-  stages: STAGES.STANDARD,
+  stages: STAGES.QUICK,
   thresholds: {
     ...THRESHOLDS.HEAVY,
     alert_generation_success: ['rate>0.9'], // At least 90% of alert generations should succeed
     alert_delivery_success: ['rate>0.85'], // At least 85% of alerts should be delivered
     alert_generation_time: ['p(95)<5000'], // 95% of alert generations within 5s
-    
+
     // New latency thresholds
     alert_e2e_latency: ['p(95)<8000'], // 95% of alerts delivered end-to-end within 8s
     alert_high_load_latency: ['p(95)<12000'], // 95% of alerts during high load within 12s
@@ -76,7 +76,7 @@ function selectAlertType() {
 // Simulates system under different load conditions
 function simulateSystemLoad(severity) {
   let loadFactor = 1.0;
-  
+
   // Simulate higher system load based on concurrent alerts
   if (__VU > 20) {
     loadFactor = 1.5; // 50% more load with >20 VUs
@@ -84,16 +84,16 @@ function simulateSystemLoad(severity) {
   if (__VU > 40) {
     loadFactor = 2.0; // Double load with >40 VUs
   }
-  
+
   // Critical alerts should be prioritized, even under load
   if (severity === 'critical') {
     loadFactor = loadFactor * 0.7; // 30% faster for critical alerts
   }
-  
+
   // Simulate processing overhead
   const processingTime = Math.random() * 500 * loadFactor;
   sleep(processingTime / 1000); // Convert ms to seconds
-  
+
   return loadFactor;
 }
 
@@ -193,14 +193,14 @@ export default function () {
         type: alertType.name,
         severity: alertType.severity,
       });
-      
+
       // Capture end-to-end latency if delivery was successful
       if (deliverySuccess && body.timestamps) {
         // Calculate end-to-end latency (detection to delivery)
         const detectionTime = body.timestamps.detected || startTime;
         const deliveryTime = body.timestamps.delivered || new Date().getTime();
         const e2eLatency = deliveryTime - detectionTime;
-        
+
         // Add to main end-to-end latency metric
         alertEndToEndLatency.add(e2eLatency, {
           chainId: chainId,
@@ -208,10 +208,10 @@ export default function () {
           type: alertType.name,
           severity: alertType.severity,
         });
-        
+
         // Simulate system under different load and capture metrics
         const loadFactor = simulateSystemLoad(alertType.severity);
-        
+
         // Track latency under high load conditions
         if (loadFactor > 1.2) {
           alertHighLoadLatency.add(e2eLatency, {
@@ -220,7 +220,7 @@ export default function () {
             severity: alertType.severity,
           });
         }
-        
+
         // Track latency by priority/severity
         if (alertType.severity === 'critical') {
           alertCriticalLatency.add(e2eLatency, {
