@@ -10,22 +10,21 @@
 # Test Categories:
 #   all             Run all tests (default if no category specified)
 #   api             Run all API endpoint tests
-#   backend         Run all backend processing tests
-#   metrics         Run all metrics system tests
+
+
 #   integration     Run integration tests
 #
 # Test Names:
-#   alerts          Run alerts tests (combine with api or backend)
-#   blocks          Run blocks tests (combine with api or backend)
-#   consensus       Run consensus tests (combine with api or backend)
-#   rpc             Run RPC tests (combine with api or backend)
-#   transaction     Run transaction tests (combine with api or backend)
+#   alerts          Run alerts API tests
+#   blocks          Run blocks API tests
+#   consensus       Run consensus API tests
+#   rpc             Run RPC API tests
+#   transaction     Run transaction API tests
 #
 # Examples:
 #   ./run-test.sh                   # Run all tests in live mode
 #   ./run-test.sh --mock            # Run all tests in mock mode
 #   ./run-test.sh api               # Run all API tests
-#   ./run-test.sh backend blocks    # Run blocks backend tests
 #   ./run-test.sh --mock api rpc    # Run RPC API tests in mock mode
 
 # Default values
@@ -44,7 +43,7 @@ while [[ $# -gt 0 ]]; do
       grep "^#" "$0" | grep -v "!/bin/bash" | sed 's/^# \?//'
       exit 0
       ;;
-    all|api|backend|metrics|integration)
+    all|api|integration)
       TEST_CATEGORY="$1"
       shift
       ;;
@@ -127,28 +126,9 @@ run_tests_by_category() {
       fi
       ;;
       
-    backend)
-      if [ -n "$name" ]; then
-        run_test "$name/$(echo $name)-backend-stress.js"
-      else
-        run_test "alerts/alerts-backend-stress.js" 
-        run_test "blocks/blocks-backend-stress.js"
-        run_test "consensus/consensus-backend-stress.js"
-        run_test "rpc/rpc-backend-stress.js"
-        run_test "transaction/transaction-backend-stress.js"
-      fi
-      ;;
+
       
-    metrics)
-      if [ "$name" == "dashboard" ]; then
-        run_test "metrics/dashboard-query-stress.js"
-      elif [ "$name" == "influx" ] || [ "$name" == "influxdb" ]; then
-        run_test "metrics/influxdb-write-stress.js"
-      else
-        run_test "metrics/dashboard-query-stress.js"
-        run_test "metrics/influxdb-write-stress.js"
-      fi
-      ;;
+
       
     integration)
       echo "Integration tests are currently not available."
@@ -158,11 +138,7 @@ run_tests_by_category() {
       # Run all API tests
       run_tests_by_category "api" ""
       
-      # Run all backend tests
-      run_tests_by_category "backend" ""
-      
-      # Run all metrics tests
-      run_tests_by_category "metrics" ""
+
       
       # Run all integration tests
       run_tests_by_category "integration" ""

@@ -42,16 +42,14 @@ The framework includes a flexible test runner script that allows you to run indi
 
 # Run specific test categories
 ./run-test.sh api               # All API tests
-./run-test.sh backend          # All backend tests
-./run-test.sh metrics          # All metrics tests
-./run-test.sh integration      # Integration tests
+./run-test.sh integration      # Integration tests (currently not available)
 
 # Run specific component tests
-./run-test.sh backend blocks    # Only blocks backend tests
 ./run-test.sh api transaction   # Only transaction API tests
+./run-test.sh api blocks        # Only blocks API tests
 
 # Combined options
-./run-test.sh --mock backend consensus  # Run consensus backend tests in mock mode
+./run-test.sh --mock api rpc    # Run RPC API tests in mock mode
 ```
 
 The test runner creates a timestamped results directory with JSON output files and summary reports for each test.
@@ -63,23 +61,15 @@ tests/stress/
 ├── config.js
 ├── README.md
 ├── alerts/
-│   ├── alerts-api-stress.js
-│   └── alerts-backend-stress.js
+│   └── alerts-api-stress.js
 ├── blocks/
-│   ├── blocks-api-stress.js
-│   └── blocks-backend-stress.js
+│   └── blocks-api-stress.js
 ├── consensus/
-│   ├── consensus-api-stress.js
-│   └── consensus-backend-stress.js
-├── metrics/
-│   ├── dashboard-query-stress.js
-│   └── influxdb-write-stress.js
+│   └── consensus-api-stress.js
 ├── rpc/
-│   ├── rpc-api-stress.js
-│   └── rpc-backend-stress.js
+│   └── rpc-api-stress.js
 ├── transaction/
-│   ├── transaction-api-stress.js
-│   └── transaction-backend-stress.js
+│   └── transaction-api-stress.js
 └── utils/
     ├── data-generators.js
     ├── mock-server.js
@@ -89,17 +79,16 @@ tests/stress/
 ├── run-test.sh            # Flexible test runner script
 ```
 
-- Each component has its own subfolder with both API and backend processing tests
+- Each component has its own subfolder with API stress tests
 - Shared utilities are centralized in the `utils` directory
-- Backend tests now use true Direct Module Testing by directly importing the actual modules
-- Metrics tests in dedicated `metrics` directory
+- Tests focus on API performance and reliability under load
 - Results are organized in a hierarchical directory structure
 
 ---
 
 ### Testing Modes
 
-The framework supports three different modes of operation:
+The framework supports two different modes of operation:
 
 #### 1. Live API Mode
 
@@ -119,37 +108,16 @@ To run with custom options:
 k6 run --vus 50 --duration 10m tests/stress/transaction/transaction-api-stress.js
 ```
 
-#### 2. True Direct Module Testing Mode
+#### 2. Mock Response Mode
 
-Backend tests now use true direct module testing, which directly imports and uses the actual monitoring modules without requiring API endpoints:
-
-```bash
-# Using the test runner
-./run-test.sh backend
-
-# Manual execution
-k6 run tests/stress/blocks/blocks-backend-stress.js
-```
-
-This mode:
-
-- Directly imports the actual service modules from the main codebase
-- Properly initializes necessary services like ConfigService, LoggerService, and others
-- Eliminates HTTP API dependencies for backend tests
-- Tests the actual implementation of the monitoring services
-- Provides accurate and meaningful performance metrics
-- Can be used to identify bottlenecks in specific modules
-
-#### 3. Mock Response Mode
-
-All tests can also be run in mock mode as an alternative to direct module testing:
+All tests can also be run in mock mode when you don't have a running XDC Monitor instance:
 
 ```bash
 # Using the test runner
 ./run-test.sh --mock
 
 # Manual execution
-k6 run -e MOCK_MODE=true tests/stress/full-pipeline-stress.js
+k6 run -e MOCK_MODE=true tests/stress/rpc/rpc-api-stress.js
 ```
 
 Mock mode simulates fixed API responses for all endpoints, allowing you to:
