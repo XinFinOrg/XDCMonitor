@@ -1,28 +1,13 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { ConfigService } from '@config/config.service';
-import { NetworkScannerService, ScanResult } from './scanners/network-scanner.service';
-import { ConfigAuditorService, AuditResult } from './scanners/config-auditor.service';
 import { AlertService } from '@alerts/alert.service';
+import { ConfigService } from '@config/config.service';
 import { MetricsService } from '@metrics/metrics.service';
-import { SeverityLevel } from '@common/constants/security';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { ConfigAuditorService } from '@security/scanners/config-auditor.service';
+import { NetworkScannerService } from '@security/scanners/network-scanner.service';
+import { AuditResult, ScanResult, SecuritySummary, SeverityLevel, VulnerabilityFilter } from '@types';
 import * as fs from 'fs';
 import * as path from 'path';
-
-export interface SecuritySummary {
-  vulnerableTargets: number;
-  criticalIssues: number;
-  highIssues: number;
-  mediumIssues: number;
-  lowIssues: number;
-  lastScanTime: Date;
-  status: 'ok' | 'warning' | 'critical';
-}
-
-export interface VulnerabilityFilter {
-  severity?: string;
-  type?: string;
-}
 
 @Injectable()
 export class SecurityService implements OnModuleInit {
@@ -36,9 +21,9 @@ export class SecurityService implements OnModuleInit {
     mediumIssues: 0,
     lowIssues: 0,
     lastScanTime: new Date(),
-    status: 'ok'
+    status: 'ok',
   };
-  
+
   constructor(
     private readonly configService: ConfigService,
     private readonly networkScannerService: NetworkScannerService,
@@ -53,8 +38,6 @@ export class SecurityService implements OnModuleInit {
     setTimeout(() => this.runScheduledSecurityScan(), 5000);
   }
 
-
-
   // Get security status information including last scan time and current security posture
   getSecurityStatus() {
     return {
@@ -63,33 +46,35 @@ export class SecurityService implements OnModuleInit {
       securityPosture: this.securitySummary.status,
       vulnerableTargets: this.securitySummary.vulnerableTargets,
       criticalIssues: this.securitySummary.criticalIssues,
-      highIssues: this.securitySummary.highIssues
+      highIssues: this.securitySummary.highIssues,
     };
   }
 
   // Run only network security scan
   async runNetworkScan(options: any): Promise<ScanResult[]> {
     this.logger.log('Running network security scan');
-    
+
     try {
       const testnetRPC = this.configService.get('testnetRPC') || [];
-      const testnetTargets: string[] = typeof testnetRPC === 'string' ? [testnetRPC] : (Array.isArray(testnetRPC) ? testnetRPC : []);
-      
+      const testnetTargets: string[] =
+        typeof testnetRPC === 'string' ? [testnetRPC] : Array.isArray(testnetRPC) ? testnetRPC : [];
+
       // Add custom targets if provided
       const customTargets: string[] = options.targets || [];
-      
+
       // By default, do not scan mainnet unless explicitly enabled
       const scanMainnet = options.scanMainnet === true || this.configService.get('securityScanMainnet') === 'true';
-      const mainnetRPC = scanMainnet ? (this.configService.get('mainnetRPC') || []) : [];
-      const mainnetTargets: string[] = typeof mainnetRPC === 'string' ? [mainnetRPC] : (Array.isArray(mainnetRPC) ? mainnetRPC : []);
-      
+      const mainnetRPC = scanMainnet ? this.configService.get('mainnetRPC') || [] : [];
+      const mainnetTargets: string[] =
+        typeof mainnetRPC === 'string' ? [mainnetRPC] : Array.isArray(mainnetRPC) ? mainnetRPC : [];
+
       const allTargets: string[] = [...customTargets, ...testnetTargets, ...mainnetTargets];
-      
+
       if (allTargets.length === 0) {
         this.logger.warn('No targets specified for network scan');
         return [];
       }
-      
+
       // Run the network scan
       return await this.networkScannerService.scanTargets(allTargets);
     } catch (err) {
@@ -101,12 +86,12 @@ export class SecurityService implements OnModuleInit {
   // Run only configuration audit
   async runConfigAudit(options: any): Promise<AuditResult[]> {
     this.logger.log('Running configuration audit');
-    
+
     try {
       if (!options.configDir) {
         throw new Error('No configuration directory specified');
       }
-      
+
       return await this.configAuditorService.auditConfigDir(options.configDir);
     } catch (err) {
       this.logger.error(`Configuration audit failed: ${err.message}`);
@@ -121,20 +106,20 @@ export class SecurityService implements OnModuleInit {
       this.logger.log('Security scan already in progress, skipping scheduled scan');
       return;
     }
-    
+
     this.logger.log('Running scheduled security scan');
     this.securityStatus = 'scanning';
     this.lastScanDate = new Date();
-    
+
     try {
       // Run network scan
       const networkResults = await this.runNetworkScan({});
-      
+
       // Run config audit if a config directory is specified
       // Default to 'config' directory if exists
       const configDir = this.configService.get('securityConfigDir') || path.join(process.cwd(), 'config');
       let configResults = [];
-      
+
       try {
         const dirPath = configDir as string; // Cast to string to fix PathLike type issue
         if (fs.existsSync(dirPath)) {
@@ -143,16 +128,16 @@ export class SecurityService implements OnModuleInit {
       } catch (error) {
         this.logger.warn(`Failed to audit config directory ${configDir}: ${error.message}`);
       }
-      
+
       // Process the results and update metrics
       await this.processSecurityResults(networkResults, configResults);
-      
+
       this.logger.log('Scheduled security scan completed successfully');
       this.securityStatus = 'idle';
     } catch (err) {
       this.logger.error(`Scheduled security scan failed: ${err.message}`);
       this.securityStatus = 'error';
-      
+
       // Send alert for scan failure
       this.alertService.addAlert({
         type: 'error',
@@ -175,15 +160,15 @@ export class SecurityService implements OnModuleInit {
     let highIssues = 0;
     let mediumIssues = 0;
     let lowIssues = 0;
-    
+
     // Process network vulnerabilities
     if (networkResults && networkResults.length > 0) {
       vulnerableTargets += networkResults.length;
-      
+
       // Count vulnerabilities by severity
       for (const result of networkResults) {
         if (!result.vulnerabilities) continue;
-        
+
         for (const vuln of result.vulnerabilities) {
           switch (vuln.severity) {
             case SeverityLevel.CRITICAL:
@@ -202,12 +187,12 @@ export class SecurityService implements OnModuleInit {
         }
       }
     }
-    
+
     // Process configuration audit findings
     if (configResults && configResults.length > 0) {
       for (const result of configResults) {
         if (!result.findings) continue;
-        
+
         // Count by severity
         for (const finding of result.findings) {
           switch (finding.severity) {
@@ -227,7 +212,7 @@ export class SecurityService implements OnModuleInit {
         }
       }
     }
-    
+
     // Update the security summary
     this.securitySummary = {
       vulnerableTargets,
@@ -236,24 +221,18 @@ export class SecurityService implements OnModuleInit {
       mediumIssues,
       lowIssues,
       lastScanTime: new Date(),
-      status: this.determineSecurityStatus(criticalIssues, highIssues)
+      status: this.determineSecurityStatus(criticalIssues, highIssues),
     };
-    
+
     // Record metrics
-    this.metricsService.recordSecurityScan(
-      vulnerableTargets,
-      criticalIssues,
-      highIssues,
-      mediumIssues,
-      lowIssues
-    );
-    
+    this.metricsService.recordSecurityScan(vulnerableTargets, criticalIssues, highIssues, mediumIssues, lowIssues);
+
     // Send alerts for critical issues
     if (criticalIssues > 0 || highIssues > 0) {
       this.sendSecurityAlert(networkResults, configResults);
     }
   }
-  
+
   /**
    * Determine security status based on issue counts
    */
@@ -266,20 +245,20 @@ export class SecurityService implements OnModuleInit {
       return 'ok';
     }
   }
-  
+
   /**
    * Send security alert for critical issues
    */
   private sendSecurityAlert(networkResults: ScanResult[], configResults: AuditResult[]) {
     const criticalCount = this.securitySummary.criticalIssues;
     const highCount = this.securitySummary.highIssues;
-    
+
     // Determine alert type
     const alertType = criticalCount > 0 ? 'error' : 'warning';
-    
+
     // Create alert message
     let message = `Security scan detected ${criticalCount} critical and ${highCount} high severity issues.`;
-    
+
     // Add top vulnerabilities
     const networkVulns = this.getTopNetworkVulnerabilities(networkResults, 3);
     if (networkVulns.length > 0) {
@@ -288,7 +267,7 @@ export class SecurityService implements OnModuleInit {
         message += `\n- ${this.getSeverityLabel(vuln.severity)}: ${vuln.message} on ${vuln.target || 'unknown target'}`;
       }
     }
-    
+
     // Add top config findings
     const configFindings = this.getTopConfigFindings(configResults, 3);
     if (configFindings.length > 0) {
@@ -297,7 +276,7 @@ export class SecurityService implements OnModuleInit {
         message += `\n- ${this.getSeverityLabel(finding.severity)}: ${finding.description}`;
       }
     }
-    
+
     // Add alert
     this.alertService.addAlert({
       type: alertType,
@@ -310,48 +289,50 @@ export class SecurityService implements OnModuleInit {
   /**
    * Get top configuration findings sorted by severity
    */
-  private getTopConfigFindings(results: AuditResult[], limit: number): Array<{ severity: number; description: string }> {
+  private getTopConfigFindings(
+    results: AuditResult[],
+    limit: number,
+  ): Array<{ severity: number; description: string }> {
     const allFindings: Array<{ severity: number; description: string }> = [];
-    
+
     for (const result of results) {
       if (!result.findings) continue;
-      
+
       for (const finding of result.findings) {
         allFindings.push({
           severity: finding.severity,
-          description: finding.description
+          description: finding.description,
         });
       }
     }
-    
+
     // Sort by severity (highest first)
-    return allFindings
-      .sort((a, b) => b.severity - a.severity)
-      .slice(0, limit);
+    return allFindings.sort((a, b) => b.severity - a.severity).slice(0, limit);
   }
 
   /**
    * Get top network vulnerabilities sorted by severity
    */
-  private getTopNetworkVulnerabilities(results: ScanResult[], limit: number): Array<{ severity: number; message: string; target?: string }> {
+  private getTopNetworkVulnerabilities(
+    results: ScanResult[],
+    limit: number,
+  ): Array<{ severity: number; message: string; target?: string }> {
     const allVulns: Array<{ severity: number; message: string; target?: string }> = [];
-    
+
     for (const result of results) {
       if (!result.vulnerabilities) continue;
-      
+
       for (const vuln of result.vulnerabilities) {
         allVulns.push({
           severity: vuln.severity,
           message: vuln.message,
-          target: result.target
+          target: result.target,
         });
       }
     }
-    
+
     // Sort by severity (highest first)
-    return allVulns
-      .sort((a, b) => b.severity - a.severity)
-      .slice(0, limit);
+    return allVulns.sort((a, b) => b.severity - a.severity).slice(0, limit);
   }
 
   /**
@@ -381,11 +362,11 @@ export class SecurityService implements OnModuleInit {
     try {
       // Run a scan to get the latest vulnerabilities
       const networkResults = await this.runNetworkScan({});
-      
+
       // Get config directory from configService
       const configDir = this.configService.get('securityConfigDir') || path.join(process.cwd(), 'config');
       let configResults = [];
-      
+
       // Try to run config audit if directory exists
       try {
         const dirPath = configDir as string; // Cast to string to fix PathLike type issue
@@ -395,14 +376,14 @@ export class SecurityService implements OnModuleInit {
       } catch (error) {
         this.logger.warn(`Failed to audit config directory ${configDir}: ${error.message}`);
       }
-      
+
       const vulnerabilities = [];
       let vulnCounter = 0;
-      
+
       // Process network vulnerabilities
       for (const result of networkResults) {
         if (!result.vulnerabilities) continue;
-        
+
         for (const vuln of result.vulnerabilities) {
           // Apply filtering if specified
           if (filter.severity && this.getSeverityLabel(vuln.severity) !== filter.severity.toUpperCase()) {
@@ -411,7 +392,7 @@ export class SecurityService implements OnModuleInit {
           if (filter.type && vuln.type !== filter.type) {
             continue;
           }
-          
+
           vulnerabilities.push({
             id: `vuln-${++vulnCounter}`,
             target: result.target,
@@ -421,15 +402,15 @@ export class SecurityService implements OnModuleInit {
             severityLabel: this.getSeverityLabel(vuln.severity),
             message: vuln.message,
             details: vuln.details,
-            source: 'network'
+            source: 'network',
           });
         }
       }
-      
+
       // Process config findings
       for (const result of configResults) {
         if (!result.findings) continue;
-        
+
         for (const finding of result.findings) {
           // Apply filtering if specified
           if (filter.severity && this.getSeverityLabel(finding.severity) !== filter.severity.toUpperCase()) {
@@ -438,7 +419,7 @@ export class SecurityService implements OnModuleInit {
           if (filter.type && finding.type !== filter.type) {
             continue;
           }
-          
+
           vulnerabilities.push({
             id: `vuln-${++vulnCounter}`,
             target: result.file,
@@ -448,11 +429,11 @@ export class SecurityService implements OnModuleInit {
             severityLabel: this.getSeverityLabel(finding.severity),
             message: finding.description,
             details: finding.context,
-            source: 'config'
+            source: 'config',
           });
         }
       }
-      
+
       // Sort by severity (highest first)
       return vulnerabilities.sort((a, b) => b.severity - a.severity);
     } catch (error) {
@@ -467,16 +448,16 @@ export class SecurityService implements OnModuleInit {
   private recordSecurityMetrics(summary: any): void {
     try {
       if (!summary) return;
-      
+
       // Use SecurityMetricsService to record the scan summary metrics
       this.metricsService.recordSecurityScan(
         summary.vulnerableTargets,
         summary.criticalIssues,
         summary.highIssues,
         summary.mediumIssues,
-        summary.lowIssues
+        summary.lowIssues,
       );
-      
+
       this.logger.log('Recorded security scan metrics successfully');
     } catch (err) {
       this.logger.error(`Failed to record security metrics: ${err.message}`);
