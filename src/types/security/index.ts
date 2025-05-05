@@ -10,6 +10,14 @@ import {
 } from '@common/constants/security';
 export { ConfigVulnerabilityType, SECURITY_METRICS, SeverityLevel, VulnerabilityType };
 
+// Chain configuration for security scanning
+export interface ChainConfig {
+  enabled: boolean;
+  chainId: number;
+  name: string;
+  endpoints: string[];
+}
+
 // Security rule definition for configuration auditing
 export interface SecurityRule {
   id: string;

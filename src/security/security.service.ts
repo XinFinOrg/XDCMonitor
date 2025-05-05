@@ -3,6 +3,7 @@ import { ConfigService } from '@config/config.service';
 import { MetricsService } from '@metrics/metrics.service';
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { CHAINS } from '@security/config/chains.config';
 import { ConfigAuditorService } from '@security/scanners/config-auditor.service';
 import { NetworkScannerService } from '@security/scanners/network-scanner.service';
 import { AuditResult, ScanResult, SecuritySummary, SeverityLevel, VulnerabilityFilter } from '@types';
@@ -50,25 +51,77 @@ export class SecurityService implements OnModuleInit {
     };
   }
 
+  // Get all available chains and their status
+  getAvailableChains() {
+    return CHAINS.map(chain => ({
+      name: chain.name,
+      chainId: chain.chainId,
+      enabled: chain.enabled,
+      endpointCount: chain.endpoints.length,
+    }));
+  }
+
+  // Run a security scan on a specific chain by name
+  async scanSpecificChain(chainName: string): Promise<ScanResult[]> {
+    this.logger.log(`Running targeted security scan for chain: ${chainName}`);
+
+    const chain = CHAINS.find(c => c.name.toLowerCase() === chainName.toLowerCase());
+    if (!chain) {
+      this.logger.error(`Chain not found: ${chainName}`);
+      throw new Error(`Chain not found: ${chainName}`);
+    }
+
+    const scanOptions = {
+      [`scan${chain.name}`]: true, // Enable this specific chain
+    };
+
+    // Use the existing scanning logic but with options to enable only this chain
+    return await this.runNetworkScan(scanOptions);
+  }
+
   // Run only network security scan
   async runNetworkScan(options: any): Promise<ScanResult[]> {
     this.logger.log('Running network security scan');
 
     try {
-      const testnetRPC = this.configService.get('testnetRPC') || [];
-      const testnetTargets: string[] =
-        typeof testnetRPC === 'string' ? [testnetRPC] : Array.isArray(testnetRPC) ? testnetRPC : [];
+      // Get targets from CHAINS configuration
+      const allTargets: string[] = [];
 
       // Add custom targets if provided
       const customTargets: string[] = options.targets || [];
+      if (customTargets.length > 0) {
+        allTargets.push(...customTargets);
+      }
 
-      // By default, do not scan mainnet unless explicitly enabled
-      const scanMainnet = options.scanMainnet === true || this.configService.get('securityScanMainnet') === 'true';
-      const mainnetRPC = scanMainnet ? this.configService.get('mainnetRPC') || [] : [];
-      const mainnetTargets: string[] =
-        typeof mainnetRPC === 'string' ? [mainnetRPC] : Array.isArray(mainnetRPC) ? mainnetRPC : [];
+      // Process chains based on their enabled status
+      for (const chain of CHAINS) {
+        // Skip disabled chains unless explicitly enabled for this scan
+        if (!chain.enabled && !options[`scan${chain.name}`]) {
+          this.logger.debug(`Skipping disabled chain: ${chain.name}`);
+          continue;
+        }
 
-      const allTargets: string[] = [...customTargets, ...testnetTargets, ...mainnetTargets];
+        // Skip chains explicitly disabled for this scan
+        if (options[`skip${chain.name}`]) {
+          this.logger.debug(`Explicitly skipping chain: ${chain.name}`);
+          continue;
+        }
+
+        this.logger.log(`Adding targets from chain: ${chain.name}`);
+        allTargets.push(...chain.endpoints);
+      }
+
+      // Fallback to config service values if no CHAINS are configured
+      if (allTargets.length === 0 && customTargets.length === 0) {
+        // Use the proper ConfigService methods for getting RPC endpoints
+        const testnetTargets = this.configService.getTestnetRpcEndpoints();
+
+        // By default, do not scan mainnet unless explicitly enabled
+        const scanMainnet = options.scanMainnet === true;
+        const mainnetTargets = scanMainnet ? this.configService.getMainnetRpcEndpoints() : [];
+
+        allTargets.push(...testnetTargets, ...mainnetTargets);
+      }
 
       if (allTargets.length === 0) {
         this.logger.warn('No targets specified for network scan');
@@ -99,8 +152,8 @@ export class SecurityService implements OnModuleInit {
     }
   }
 
-  // Run regular security scans (weekly by default)
-  @Cron(CronExpression.EVERY_WEEK)
+  // Run regular security scans (daily by default)
+  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
   async runScheduledSecurityScan() {
     if (this.securityStatus === 'scanning') {
       this.logger.log('Security scan already in progress, skipping scheduled scan');
@@ -112,18 +165,30 @@ export class SecurityService implements OnModuleInit {
     this.lastScanDate = new Date();
 
     try {
-      // Run network scan
+      // Get enabled chains from configuration
+      const enabledChains = CHAINS.filter(chain => chain.enabled);
+      this.logger.log(`Found ${enabledChains.length} enabled chains in configuration`);
+
+      // Log which chains will be scanned
+      if (enabledChains.length > 0) {
+        enabledChains.forEach(chain => {
+          this.logger.log(`Will scan ${chain.name} chain with ${chain.endpoints.length} endpoints`);
+        });
+      } else {
+        this.logger.warn('No chains are enabled in configuration, will use fallback values');
+      }
+
+      // Run network scan using the chain configuration
       const networkResults = await this.runNetworkScan({});
 
-      // Run config audit if a config directory is specified
-      // Default to 'config' directory if exists
-      const configDir = this.configService.get('securityConfigDir') || path.join(process.cwd(), 'config');
+      // Run config audit if a config directory exists
+      // Default to 'config' directory in project root
+      const configDir = path.join(process.cwd(), 'config');
       let configResults = [];
 
       try {
-        const dirPath = configDir as string; // Cast to string to fix PathLike type issue
-        if (fs.existsSync(dirPath)) {
-          configResults = await this.runConfigAudit({ configDir: dirPath });
+        if (fs.existsSync(configDir)) {
+          configResults = await this.runConfigAudit({ configDir });
         }
       } catch (error) {
         this.logger.warn(`Failed to audit config directory ${configDir}: ${error.message}`);
@@ -363,15 +428,14 @@ export class SecurityService implements OnModuleInit {
       // Run a scan to get the latest vulnerabilities
       const networkResults = await this.runNetworkScan({});
 
-      // Get config directory from configService
-      const configDir = this.configService.get('securityConfigDir') || path.join(process.cwd(), 'config');
+      // Use config directory in project root
+      const configDir = path.join(process.cwd(), 'config');
       let configResults = [];
 
       // Try to run config audit if directory exists
       try {
-        const dirPath = configDir as string; // Cast to string to fix PathLike type issue
-        if (fs.existsSync(dirPath)) {
-          configResults = await this.runConfigAudit({ configDir: dirPath });
+        if (fs.existsSync(configDir)) {
+          configResults = await this.runConfigAudit({ configDir });
         }
       } catch (error) {
         this.logger.warn(`Failed to audit config directory ${configDir}: ${error.message}`);

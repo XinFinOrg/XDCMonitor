@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Logger, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Logger, Param, Post, Query } from '@nestjs/common';
 import { SecurityService } from '@security/security.service';
 
 @Controller('api/security')
@@ -41,5 +41,33 @@ export class SecurityController {
     this.logger.log(`Triggering config audit with options: ${JSON.stringify(options)}`);
     const results = await this.securityService.runConfigAudit(options);
     return { success: true, findings: results.length, results };
+  }
+  
+  @Get('chains')
+  async getAvailableChains() {
+    return { 
+      chains: this.securityService.getAvailableChains(),
+      message: 'Use POST /api/security/scan/chain/:chainName to scan a specific chain'
+    };
+  }
+  
+  @Post('scan/chain/:chainName')
+  async scanSpecificChain(@Param('chainName') chainName: string) {
+    this.logger.log(`Triggering chain-specific scan for: ${chainName}`);
+    try {
+      const results = await this.securityService.scanSpecificChain(chainName);
+      return { 
+        success: true, 
+        chain: chainName,
+        vulnerabilities: results.length, 
+        results 
+      };
+    } catch (error) {
+      return { 
+        success: false, 
+        chain: chainName,
+        error: error.message 
+      };
+    }
   }
 }

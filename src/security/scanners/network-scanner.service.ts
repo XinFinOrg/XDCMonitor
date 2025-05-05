@@ -174,26 +174,9 @@ export class NetworkScannerService {
           message: `Exposed JSON-RPC endpoint: ${endpoint}`,
           details: { responseTime },
         });
-
-        // Check response time
-        if (responseTime > XDC_SECURITY_CONFIG.THRESHOLDS.MAX_RESPONSE_TIME_MS) {
-          vulnerabilities.push({
-            type: VulnerabilityType.PERFORMANCE,
-            severity: SeverityLevel.MEDIUM,
-            message: `Slow RPC response time: ${responseTime}ms`,
-            details: { responseTime },
-          });
-        }
-
-        // Check for extremely fast response times (possible lack of validation)
-        if (responseTime < XDC_SECURITY_CONFIG.THRESHOLDS.MIN_RESPONSE_TIME_MS) {
-          vulnerabilities.push({
-            type: VulnerabilityType.PERFORMANCE,
-            severity: SeverityLevel.LOW,
-            message: `Suspiciously fast response time: ${responseTime}ms (possible lack of validation)`,
-            details: { responseTime },
-          });
-        }
+        
+        // Note: We're not checking for performance/latency issues here
+        // as these are already monitored by the XDCMonitor monitoring system
 
         // Check for exposed headers
         const headers = response.headers;

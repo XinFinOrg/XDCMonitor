@@ -68,7 +68,7 @@ Reviews configuration files for security issues:
 ## Key Features
 
 - **Real-time Monitoring**: Continuous integration with metrics system
-- **Scheduled Scanning**: Weekly automatic security assessment (customizable)
+- **Scheduled Scanning**: Daily automatic security assessment (customizable)
 - **Vulnerability Tracking**: Classification and prioritization of issues
 - **Intelligent Alerting**: Severity-based notification system
 - **API Access**: Endpoints for triggering scans and retrieving vulnerability data
@@ -105,14 +105,18 @@ All endpoints available under `/api/security`:
 | `/vulnerabilities` | GET | Get all detected vulnerabilities (optional filtering) |
 | `/scan/network` | POST | Run only a network security scan |
 | `/scan/config` | POST | Run only a configuration audit |
+| `/chains` | GET | List all configured chains and their status |
+| `/scan/chain/:chainName` | POST | Run security scan for a specific chain (Mainnet, Testnet, etc.) |
 
 ## Configuration
 
 The security module is configured through environment variables and the ConfigService:
 
 - `securityConfigDir`: Directory to scan for configuration files (default: './config')
-- `securityScanMainnet`: Whether to include mainnet nodes in scans (default: false)
-- `securityScanInterval`: Cron expression for scan frequency (default: weekly)
+
+- Use chain configuration file (chains.config.ts) to enable/disable specific chains
+
+- Security scan frequency is configurable (default: daily at midnight)
 
 ## Integration
 
@@ -141,4 +145,14 @@ curl http://localhost:3000/api/security/vulnerabilities?severity=critical
 curl -X POST http://localhost:3000/api/security/scan/config \
   -H "Content-Type: application/json" \
   -d '{"configDir": "/path/to/configs"}'
+```
+
+### Chain-Specific Security Scan
+
+```bash
+# List all available chains
+curl http://localhost:3000/api/security/chains
+
+# Scan a specific chain (e.g., Mainnet)
+curl -X POST http://localhost:3000/api/security/scan/chain/Mainnet
 ```
