@@ -174,12 +174,7 @@ The CI workflow consists of three jobs:
    - Runs on pull requests to `main` and `staging` branches
    - Checks code, builds the application, and verifies the Docker image
 
-2. **Security Scan**: Checks for vulnerabilities
-
-   - Runs npm audit and Trivy vulnerability scanner
-   - Focuses on high and critical vulnerabilities
-
-3. **Publish**: Publishes Docker images
+2. **Publish**: Publishes Docker images
    - Triggered only on pushes to `main` and `staging`
    - Publishes to GitHub Container Registry with appropriate tags
 
