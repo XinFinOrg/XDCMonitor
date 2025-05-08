@@ -19,7 +19,12 @@ export const RPC_ENDPOINTS = [
   { url: 'https://rpc.xdcrpc.com', name: 'XDCRPC RPC', type: 'rpc' as const, chainId: MAINNET_CHAIN_ID },
   { url: 'https://rpc1.xinfin.network', name: 'XDC Mainnet RPC1', type: 'rpc' as const, chainId: MAINNET_CHAIN_ID },
   { url: 'https://rpc.ankr.com/xdc', name: 'Ankr XDC RPC', type: 'rpc' as const, chainId: MAINNET_CHAIN_ID },
-  { url: 'https://xdc-mainnet.gateway.tatum.io', name: 'Tatum Gateway', type: 'rpc' as const, chainId: MAINNET_CHAIN_ID },
+  {
+    url: 'https://xdc-mainnet.gateway.tatum.io',
+    name: 'Tatum Gateway',
+    type: 'rpc' as const,
+    chainId: MAINNET_CHAIN_ID,
+  },
   { url: 'https://rpc.xdc.org', name: 'XDC.org RPC', type: 'rpc' as const, chainId: MAINNET_CHAIN_ID },
   {
     url: 'http://173.212.233.170:8989',
@@ -42,7 +47,12 @@ export const RPC_ENDPOINTS = [
     type: 'erpc' as const,
     chainId: TESTNET_CHAIN_ID,
   },
-  { url: 'https://rpc.ankr.com/xdc_testnet', name: 'Ankr Apothem RPC', type: 'rpc' as const, chainId: TESTNET_CHAIN_ID },
+  {
+    url: 'https://rpc.ankr.com/xdc_testnet',
+    name: 'Ankr Apothem RPC',
+    type: 'rpc' as const,
+    chainId: TESTNET_CHAIN_ID,
+  },
   { url: 'https://apothem.xdcrpc.com', name: 'Apothem XDCRPC', type: 'rpc' as const, chainId: TESTNET_CHAIN_ID },
   {
     url: 'http://157.173.195.189:8555',
@@ -168,6 +178,6 @@ export const FAUCET_ENDPOINTS = [
 ];
 
 export const PRIMARY_RPC_URLS = {
-  [MAINNET_CHAIN_ID]: 'https://rpc.xinfin.network',
-  [TESTNET_CHAIN_ID]: 'https://rpc.apothem.network',
+  [MAINNET_CHAIN_ID]: 'http://173.212.233.170:8989',
+  [TESTNET_CHAIN_ID]: 'http://157.173.195.189:8555',
 };
