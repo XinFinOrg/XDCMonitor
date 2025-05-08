@@ -12,7 +12,6 @@ export enum AlertCategory {
   BLOCKCHAIN = 'blockchain',
   SYSTEM = 'system',
   PERFORMANCE = 'performance',
-  SECURITY = 'security',
   INFRASTRUCTURE = 'infrastructure',
 }
 
