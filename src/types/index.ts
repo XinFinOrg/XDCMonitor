@@ -19,6 +19,9 @@ export * from './monitoring/status';
 export * from './monitoring/services';
 export * from './monitoring/endpoint-monitoring';
 
+// Security types
+export * from './security';
+
 // Block monitoring types
 export * from './monitoring/block-monitoring';
 

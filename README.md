@@ -4,9 +4,14 @@ A comprehensive Node.js-based monitoring system for the XDC Network. This applic
 
 ## Features
 
-- **RPC URL Monitoring**: Mainnet and Testnet endpoint monitoring, downtime detection, latency measurement
-- **Multi-RPC Monitoring**: Monitor multiple endpoints simultaneously, compare response times
-- **RPC Port Monitoring**: HTTP/HTTPS port checks, WebSocket port checks
+- **RPC URL Monitoring**: Mainnet and Testnet endpoint monitoring, downtime detection, latency measurement, peer count analysis
+- **Multi-RPC Monitoring**: Monitor multiple endpoints simultaneously, compare response times, adaptive monitoring frequency
+- **Advanced Connection Point Checks**: HTTP/HTTPS port checks, WebSocket port checks, subscription testing, batch processing
+- **Intelligent Endpoint Management**:
+  - Priority-based recovery detection for faster reaction to endpoint issues
+  - Dynamic frequency adjustment based on endpoint health
+  - Peer count monitoring with dynamic baselines and anomaly detection
+  - Multi-method verification with primary and fallback strategies
 - **Block Propagation Monitoring**: Block time tracking, slow block detection
 - **Transaction Monitoring**: Automated transaction testing, smart contract deployment testing
 - **Consensus Monitoring**: Masternode performance tracking, epoch transitions, validator penalties
