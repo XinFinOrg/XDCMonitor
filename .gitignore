@@ -70,5 +70,4 @@ influxdb_data/
 # windsurf
 .windsurfrules
 .Windsurf/
-# Stress test results
-tests/stress/results/
+

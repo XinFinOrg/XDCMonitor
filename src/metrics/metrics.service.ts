@@ -3,7 +3,6 @@ import { InfluxDB, Point, WriteApi } from '@influxdata/influxdb-client';
 import { Alert } from '@alerts/alert.service';
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { MinerRecord, MinerStatus } from '@types';
-import { SECURITY_METRICS, SeverityLevel } from '@common/constants/security';
 
 /**
  * InfluxDB Metrics Service
@@ -784,106 +783,5 @@ export class MetricsService implements OnModuleInit {
       this.logger.error(`Failed to retrieve miner performance data: ${error.message}`);
       return {};
     }
-  }
-
-  /**
-   * Record a security scan event
-   * 
-   * @param vulnerableTargets Number of targets with vulnerabilities
-   * @param criticalIssues Number of critical severity issues
-   * @param highIssues Number of high severity issues
-   * @param mediumIssues Number of medium severity issues
-   * @param lowIssues Number of low severity issues
-   */
-  recordSecurityScan(vulnerableTargets: number, criticalIssues: number, highIssues: number, 
-                     mediumIssues: number, lowIssues: number): void {
-    const point = new Point(SECURITY_METRICS.SECURITY_SCAN)
-      .intField('vulnerable_targets', vulnerableTargets)
-      .intField('critical_issues', criticalIssues)
-      .intField('high_issues', highIssues)
-      .intField('medium_issues', mediumIssues)
-      .intField('low_issues', lowIssues)
-      .intField('total_issues', criticalIssues + highIssues + mediumIssues + lowIssues);
-      
-    this.writePoint(point);
-  }
-
-  /**
-   * Record network scan metrics
-   * 
-   * @param scannedEndpoints Number of endpoints scanned
-   * @param vulnerableTargets Number of targets with vulnerabilities
-   * @param criticalVulns Number of critical vulnerabilities
-   * @param highVulns Number of high vulnerabilities
-   * @param mediumVulns Number of medium vulnerabilities
-   * @param lowVulns Number of low vulnerabilities
-   */
-  recordNetworkScanMetrics(scannedEndpoints: number, vulnerableTargets: number, 
-                           criticalVulns: number, highVulns: number, mediumVulns: number, lowVulns: number): void {
-    const point = new Point(SECURITY_METRICS.NETWORK_SCAN)
-      .intField('scanned_endpoints', scannedEndpoints)
-      .intField('vulnerable_targets', vulnerableTargets)
-      .intField('critical_vulnerabilities', criticalVulns)
-      .intField('high_vulnerabilities', highVulns)
-      .intField('medium_vulnerabilities', mediumVulns)
-      .intField('low_vulnerabilities', lowVulns);
-      
-    this.writePoint(point);
-  }
-
-  /**
-   * Record vulnerability types distribution
-   * 
-   * @param typeCounts Record of vulnerability types and their counts
-   */
-  recordVulnerabilityTypes(typeCounts: Record<string, number>): void {
-    const point = new Point(SECURITY_METRICS.VULNERABILITY);
-    
-    // Add each vulnerability type as a field
-    for (const [type, count] of Object.entries(typeCounts)) {
-      point.intField(type, count);
-    }
-    
-    this.writePoint(point);
-  }
-
-  /**
-   * Record configuration audit metrics
-   * 
-   * @param configsAudited Number of configurations audited
-   * @param configsWithIssues Number of configurations with issues
-   * @param criticalFindings Number of critical findings
-   * @param highFindings Number of high findings
-   * @param mediumFindings Number of medium findings
-   * @param lowFindings Number of low findings
-   */
-  recordConfigAuditMetrics(configsAudited: number, configsWithIssues: number, 
-                           criticalFindings: number, highFindings: number, 
-                           mediumFindings: number, lowFindings: number): void {
-    const point = new Point(SECURITY_METRICS.CONFIG_AUDIT)
-      .intField('configs_audited', configsAudited)
-      .intField('configs_with_issues', configsWithIssues)
-      .intField('critical_findings', criticalFindings)
-      .intField('high_findings', highFindings)
-      .intField('medium_findings', mediumFindings)
-      .intField('low_findings', lowFindings);
-      
-    this.writePoint(point);
-  }
-
-  /**
-   * Record finding types distribution
-   * 
-   * @param typeCounts Record of finding types and their counts
-   */
-  recordFindingTypes(typeCounts: Record<string, number>): void {
-    const point = new Point(SECURITY_METRICS.CONFIG_FINDING);
-    
-    // Add each finding type as a field
-    for (const [type, count] of Object.entries(typeCounts)) {
-      point.intField(type, count);
-    }
-    
-    this.writePoint(point);
   }
 }
