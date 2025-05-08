@@ -1,5 +1,5 @@
 import { Controller, Get } from '@nestjs/common';
-import { HealthService, HealthStatus } from './health.service';
+import { HealthService, HealthStatus } from '@health/health.service';
 
 @Controller('health')
 export class HealthController {
@@ -9,7 +9,7 @@ export class HealthController {
    * GET /api/health
    * Returns the health status of the application
    * Used by monitoring services like UptimeRobot to check if the application is running
-   * 
+   *
    * @returns HealthStatus object with application status information
    * - status: 'ok' if the application is running properly
    * - version: current application version
