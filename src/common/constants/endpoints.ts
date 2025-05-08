@@ -16,6 +16,10 @@ export const RPC_ENDPOINTS = [
   { url: 'https://rpc.primenumbers.xyz', name: 'PrimeNumbers RPC', type: 'rpc' as const, chainId: MAINNET_CHAIN_ID },
   { url: 'https://erpc.xdcrpc.com', name: 'XDCRPC eRPC', type: 'erpc' as const, chainId: MAINNET_CHAIN_ID },
   { url: 'https://xdcrpc.com', name: 'XDCRPC', type: 'rpc' as const, chainId: MAINNET_CHAIN_ID },
+  { url: 'https://rpc.xdcrpc.com', name: 'XDCRPC RPC', type: 'rpc' as const, chainId: MAINNET_CHAIN_ID },
+  { url: 'https://rpc1.xinfin.network', name: 'XDC Mainnet RPC1', type: 'rpc' as const, chainId: MAINNET_CHAIN_ID },
+  { url: 'https://rpc.ankr.com/xdc', name: 'Ankr XDC RPC', type: 'rpc' as const, chainId: MAINNET_CHAIN_ID },
+  { url: 'https://xdc-mainnet.gateway.tatum.io', name: 'Tatum Gateway', type: 'rpc' as const, chainId: MAINNET_CHAIN_ID },
   { url: 'https://rpc.xdc.org', name: 'XDC.org RPC', type: 'rpc' as const, chainId: MAINNET_CHAIN_ID },
   {
     url: 'http://173.212.233.170:8989',
@@ -32,6 +36,13 @@ export const RPC_ENDPOINTS = [
     type: 'erpc' as const,
     chainId: TESTNET_CHAIN_ID,
   },
+  {
+    url: 'https://earpc.apothem.network',
+    name: 'Apothem Testnet Archive eRPC',
+    type: 'erpc' as const,
+    chainId: TESTNET_CHAIN_ID,
+  },
+  { url: 'https://rpc.ankr.com/xdc_testnet', name: 'Ankr Apothem RPC', type: 'rpc' as const, chainId: TESTNET_CHAIN_ID },
   { url: 'https://apothem.xdcrpc.com', name: 'Apothem XDCRPC', type: 'rpc' as const, chainId: TESTNET_CHAIN_ID },
   {
     url: 'http://157.173.195.189:8555',
@@ -86,6 +97,24 @@ export const WS_ENDPOINTS = [
     chainId: MAINNET_CHAIN_ID,
   },
   {
+    url: 'wss://rpc.xdcrpc.com/ws',
+    name: 'XDCRPC WebSocket',
+    type: 'websocket' as const,
+    chainId: MAINNET_CHAIN_ID,
+  },
+  {
+    url: 'wss://erpc.xdcrpc.com/ws',
+    name: 'XDCRPC eRPC WebSocket',
+    type: 'websocket' as const,
+    chainId: MAINNET_CHAIN_ID,
+  },
+  {
+    url: 'wss://ews.xinfin.network/ws',
+    name: 'XDC Mainnet eWebSocket Path',
+    type: 'websocket' as const,
+    chainId: MAINNET_CHAIN_ID,
+  },
+  {
     url: 'ws://173.212.233.170:8888',
     name: 'mst1-Custom Mainnet WebSocket',
     type: 'websocket' as const,
@@ -96,6 +125,12 @@ export const WS_ENDPOINTS = [
   {
     url: 'wss://ws.apothem.network/ws',
     name: 'Apothem Testnet WebSocket',
+    type: 'websocket' as const,
+    chainId: TESTNET_CHAIN_ID,
+  },
+  {
+    url: 'wss://eaws.apothem.network',
+    name: 'Apothem Testnet Archive eWebSocket',
     type: 'websocket' as const,
     chainId: TESTNET_CHAIN_ID,
   },
