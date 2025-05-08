@@ -29,6 +29,7 @@
       "@alerts/*": ["src/alerts/*"],
       "@types": ["src/types"],
       "@types/*": ["src/types/*"],
+      "@health/*": ["src/health/*"],
       "@/*": ["src/*"]
     }
   },

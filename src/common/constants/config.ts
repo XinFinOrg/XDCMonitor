@@ -135,6 +135,10 @@ export const ENV_VARS = {
   // Consensus monitoring configuration
   CONSENSUS_MONITORING_CHAIN_IDS: 'CONSENSUS_MONITORING_CHAIN_IDS',
   CONSENSUS_SCAN_INTERVAL: 'CONSENSUS_SCAN_INTERVAL',
+
+  // Healthchecks.io configuration
+  HEALTHCHECKS_IO_URL: 'HEALTHCHECKS_IO_URL',
+  HEALTHCHECKS_IO_INTERVAL: 'HEALTHCHECKS_IO_INTERVAL',
 } as const;
 
 // Network related constants
