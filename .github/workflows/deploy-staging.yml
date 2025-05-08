@@ -135,6 +135,7 @@ jobs:
           TESTNET_TEST_PRIVATE_KEY: ${{ secrets.STAGING_TESTNET_TEST_PRIVATE_KEY }}
           TEST_MAINNET_RECEIVER_ADDRESS: ${{ secrets.STAGING_TEST_MAINNET_RECEIVER_ADDRESS }}
           TEST_TESTNET_RECEIVER_ADDRESS: ${{ secrets.STAGING_TEST_TESTNET_RECEIVER_ADDRESS }}
+          HEALTHCHECKS_IO_URL: ${{ secrets.STAGING_HEALTHCHECKS_IO_URL }}
         run: |
           echo "Connecting to staging server..."
           # Using SSH config for simplicity - all options are defined there
@@ -193,6 +194,10 @@ jobs:
           ENABLE_CONSENSUS_MONITORING=true
           CONSENSUS_MONITORING_CHAIN_IDS=50,51
           CONSENSUS_SCAN_INTERVAL=15000
+
+          # Healthchecks.io configuration
+          HEALTHCHECKS_IO_URL=${HEALTHCHECKS_IO_URL}
+          HEALTHCHECKS_IO_INTERVAL=1
           EOF
 
           echo "Copying the generated .env file to staging server..."

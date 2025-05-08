@@ -22,7 +22,7 @@ function show_usage {
   echo "  fix-permissions   Fix permissions for data directories"
   echo "  grafana-export    Export Grafana configs to version-controlled directory"
   echo "  grafana-import    Import Grafana configs from version-controlled directory"
-  echo "  setup-healthcheck  Set up UptimeRobot monitoring for VPS downtime detection"
+
   echo "  help              Show this help message"
   echo ""
 }
@@ -484,55 +484,7 @@ case "$1" in
     echo "If Grafana is running, restart it with: ./run.sh restart grafana"
     ;;
 
-  setup-healthcheck)
-    echo "Setting up UptimeRobot monitoring for VPS downtime detection..."
-    
-    # Get server IP and port
-    SERVER_IP=$(hostname -I | awk '{print $1}')
-    API_PORT=3000
-    
-    # Extract Telegram bot token and chat ID from environment file
-    if [ -f ".env" ]; then
-      TELEGRAM_BOT_TOKEN=$(grep "^TELEGRAM_BOT_TOKEN=" .env | sed 's/^TELEGRAM_BOT_TOKEN=//' | tr -d '"' | tr -d " ")
-      TELEGRAM_CHAT_ID=$(grep "^TELEGRAM_CHAT_ID=" .env | sed 's/^TELEGRAM_CHAT_ID=//' | tr -d '"' | tr -d " ")
-      
-      if [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_CHAT_ID" ]; then
-        echo "⚠️ Warning: Could not find Telegram bot token or chat ID in .env file."
-        echo "Please make sure TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID are set in your .env file."
-      else
-        echo "✅ Found Telegram configuration in .env file."
-      fi
-    else
-      echo "⚠️ Warning: .env file not found. Cannot extract Telegram configuration."
-    fi
-    
-    echo ""
-    echo "📋 UptimeRobot Setup Instructions:"
-    echo "-----------------------------"
-    echo "1. Create an account at https://uptimerobot.com/ if you don't have one"
-    echo "2. Add a new HTTP(s) monitor with these settings:"
-    echo "   - Friendly Name: XDC Monitor VPS"
-    echo "   - URL to monitor: http://$SERVER_IP:$API_PORT"
-    echo "   - Monitoring Interval: 5 minutes (recommended)"
-    echo ""
-    echo "3. Set up Telegram notifications:"
-    echo "   - Go to 'Alert Contacts' → 'Add Alert Contact'"
-    echo "   - Select 'Telegram'"
-    if [ ! -z "$TELEGRAM_BOT_TOKEN" ] && [ ! -z "$TELEGRAM_CHAT_ID" ]; then
-      echo "   - Bot Token: $TELEGRAM_BOT_TOKEN"
-      echo "   - Chat ID: $TELEGRAM_CHAT_ID"
-    else
-      echo "   - Enter your Telegram bot token and chat ID"
-    fi
-    echo "   - Test the integration"
-    echo ""
-    echo "4. Configure your monitor to use this alert contact"
-    echo ""
-    echo "⚠️ Important: This monitoring setup must be performed on UptimeRobot's website."
-    echo "   The script only provides the necessary configuration information."
-    echo "   UptimeRobot will monitor your VPS from external servers and send"
-    echo "   Telegram alerts when your VPS becomes unreachable."
-    ;;
+
 
   help|--help|-h)
     show_usage
