@@ -12,7 +12,7 @@ export const DEFAULT_SCAN_INTERVAL_MS = 15000; // Default: 15 seconds
 export function createRpcClient(configService: ConfigService, chainId: number = 50): RpcRetryClient {
   const rpcUrl =
     configService.getPrimaryRpcUrl(chainId) ||
-    (chainId === 50 ? 'https://rpc.xinfin.network' : 'https://erpc.apothem.network/');
+    (chainId === 50 ? 'http://173.212.233.170:8989' : 'http://157.173.195.189:8555');
 
   return new RpcRetryClient(rpcUrl, {
     maxRetries: 3,
