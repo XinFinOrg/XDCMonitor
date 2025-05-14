@@ -179,5 +179,5 @@ export const FAUCET_ENDPOINTS = [
 
 export const PRIMARY_RPC_URLS = {
   [MAINNET_CHAIN_ID]: 'http://173.212.233.170:8989',
-  [TESTNET_CHAIN_ID]: 'http://157.173.195.189:8555',
+  [TESTNET_CHAIN_ID]: 'https://rpc.apothem.network',
 };
