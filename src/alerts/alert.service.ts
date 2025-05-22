@@ -785,6 +785,11 @@ export class AlertService implements OnModuleInit {
 
   /**
    * Check if an alert should be throttled
+   *
+   * Note: For SYNC_BLOCKS_LAG alerts, this acts as a secondary throttling mechanism.
+   * The primary throttling happens in BlocksMonitorService.checkForBlockHeightLag
+   * which prevents alerts from even reaching this method during the throttle period.
+   * Both use the same config value: ALERTS.NOTIFICATIONS.THROTTLE_SECONDS.SYNC_BLOCKS_LAG
    */
   private shouldThrottle(alertType: string, message?: string): boolean {
     const now = Date.now();
@@ -794,7 +799,7 @@ export class AlertService implements OnModuleInit {
     let throttleSeconds =
       ALERTS.NOTIFICATIONS.THROTTLE_SECONDS[alertType] || ALERTS.NOTIFICATIONS.THROTTLE_SECONDS.DEFAULT;
 
-    // For SYNC_LAG alerts, check if multiple endpoints are affected and use longer throttling
+    // For SYNC_BLOCKS_LAG alerts, check if multiple endpoints are affected and use longer throttling
     if (alertType === ALERTS.TYPES.SYNC_BLOCKS_LAG && message) {
       // Extract number of affected endpoints from the message
       const matchResult = message.match(/(\d+)\s+RPC\s+endpoint/i);
@@ -803,9 +808,9 @@ export class AlertService implements OnModuleInit {
 
         // If many endpoints are affected, use the longer throttle time
         if (endpointCount > 3) {
-          throttleSeconds = ALERTS.NOTIFICATIONS.THROTTLE_SECONDS.SYNC_LAG_MANY_ENDPOINTS;
+          throttleSeconds = ALERTS.NOTIFICATIONS.THROTTLE_SECONDS.SYNC_BLOCKS_LAG_MANY_ENDPOINTS;
           this.logger.debug(
-            `Using extended throttle time (${throttleSeconds}s) for SYNC_LAG alert with ${endpointCount} endpoints`,
+            `Using extended throttle time (${throttleSeconds}s) for SYNC_BLOCKS_LAG alert with ${endpointCount} endpoints`,
           );
         }
       }
