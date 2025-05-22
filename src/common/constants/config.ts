@@ -325,8 +325,8 @@ export const ALERTS = {
       DEFAULT: 300, // 5 minutes
       RPC_ENDPOINT_DOWN: 600, // 10 minutes
       HIGH_BLOCK_TIME: 900, // 15 minutes
-      SYNC_BLOCKS_LAG: 600, // 10 minutes (both AlertService and BlocksMonitorService use this)
-      SYNC_BLOCKS_LAG_MANY_ENDPOINTS: 1800, // 30 minutes (when many endpoints are affected)
+      SYNC_BLOCKS_LAG: 3600, // 1 hour (both AlertService and BlocksMonitorService use this)
+      SYNC_BLOCKS_LAG_MANY_ENDPOINTS: 3600, // 1 hours (when many endpoints are affected)
     },
   },
 };
