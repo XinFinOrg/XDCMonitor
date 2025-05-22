@@ -382,6 +382,9 @@ export class BlocksMonitorService implements OnModuleInit {
 
     // Check all endpoints in parallel
     await Promise.all(allRpcEndpoints.map(endpoint => this.checkEndpointBlockHeight(endpoint, chainId, networkKey)));
+
+    // After collecting all block heights, check for endpoints that are behind
+    this.checkForBlockHeightLag(chainId, networkKey);
   }
 
   private async checkEndpointBlockHeight(endpoint: string, chainId: number, networkKey: string): Promise<void> {
@@ -783,5 +786,109 @@ export class BlocksMonitorService implements OnModuleInit {
     return (
       CHAIN_ID_TO_NETWORK[parsedChainId] || (parsedChainId === MAINNET_CHAIN_ID ? NETWORK_MAINNET : NETWORK_TESTNET)
     );
+  }
+
+  /**
+   * Check for endpoints that are significantly behind in block height
+   * and trigger alerts if they are more than 100 blocks behind the highest
+   */
+  private checkForBlockHeightLag(chainId: number, networkKey: string): void {
+    try {
+      const heights = this.endpointBlockHeights[networkKey];
+      if (!heights || Object.keys(heights).length === 0) {
+        this.logger.debug(`No block heights found for chain ${chainId}, skipping block lag check`);
+        return;
+      }
+
+      // Find the highest block across all endpoints
+      const highestBlock = Math.max(...Object.values(heights));
+
+      // Use the thresholds from constants
+      const warningThreshold = ALERTS.THRESHOLDS.SYNC_LAG_ERROR_BLOCKS;
+      const criticalThreshold = ALERTS.THRESHOLDS.SYNC_LAG_CRITICAL_BLOCKS;
+
+      // Track lagging endpoints in two categories to reduce alert noise
+      const criticalLaggingEndpoints = [];
+      const warningLaggingEndpoints = [];
+
+      // Check each endpoint against the highest block
+      for (const [endpoint, blockHeight] of Object.entries(heights)) {
+        const blocksBehind = highestBlock - blockHeight;
+
+        // Log block height for debugging
+        this.logger.debug(
+          `Endpoint ${endpoint} is at block ${blockHeight}, highest is ${highestBlock} (${blocksBehind} behind)`,
+        );
+
+        // If this endpoint is critically behind, add to critical list
+        if (blocksBehind >= criticalThreshold) {
+          criticalLaggingEndpoints.push({
+            endpoint,
+            blockHeight,
+            blocksBehind,
+          });
+        }
+        // If this endpoint is significantly behind but not critical, add to warning list
+        else if (blocksBehind >= warningThreshold) {
+          warningLaggingEndpoints.push({
+            endpoint,
+            blockHeight,
+            blocksBehind,
+          });
+        }
+      }
+
+      // Send aggregated critical alert if any endpoints are critically behind
+      if (criticalLaggingEndpoints.length > 0) {
+        // Sort by most blocks behind first
+        criticalLaggingEndpoints.sort((a, b) => b.blocksBehind - a.blocksBehind);
+
+        // Format detailed message with limited number of affected endpoints to reduce message size
+        const MAX_ENDPOINTS_TO_SHOW = 5;
+        const displayEndpoints = criticalLaggingEndpoints.slice(0, MAX_ENDPOINTS_TO_SHOW);
+        const additionalCount = criticalLaggingEndpoints.length - MAX_ENDPOINTS_TO_SHOW;
+
+        let endpointDetails = displayEndpoints
+          .map(e => `- ${e.endpoint}: ${e.blocksBehind} delay blocks (at block ${e.blockHeight})`)
+          .join('\n');
+
+        if (additionalCount > 0) {
+          endpointDetails += `\n- ... and ${additionalCount} more endpoint${additionalCount > 1 ? 's' : ''}`;
+        }
+
+        const message = `- Highest block: ${highestBlock} \n\nCRITICAL: ${criticalLaggingEndpoints.length} RPC endpoint${criticalLaggingEndpoints.length > 1 ? 's are' : ' is'} critically behind the latest block:\n${endpointDetails}`;
+        this.logger.error(message);
+
+        // Send error alert through the alert service
+        this.alertService.error(ALERTS.TYPES.SYNC_BLOCKS_LAG, ALERTS.COMPONENTS.SYNC, message, chainId);
+      }
+
+      // Send aggregated warning alert if any endpoints are behind (but not critical)
+      if (warningLaggingEndpoints.length > 0) {
+        // Sort by most blocks behind first
+        warningLaggingEndpoints.sort((a, b) => b.blocksBehind - a.blocksBehind);
+
+        // Format detailed message with limited number of affected endpoints to reduce message size
+        const MAX_ENDPOINTS_TO_SHOW = 5;
+        const displayEndpoints = warningLaggingEndpoints.slice(0, MAX_ENDPOINTS_TO_SHOW);
+        const additionalCount = warningLaggingEndpoints.length - MAX_ENDPOINTS_TO_SHOW;
+
+        let endpointDetails = displayEndpoints
+          .map(e => `- ${e.endpoint}: ${e.blocksBehind} delay blocks (at block ${e.blockHeight})`)
+          .join('\n');
+
+        if (additionalCount > 0) {
+          endpointDetails += `\n- ... and ${additionalCount} more endpoint${additionalCount > 1 ? 's' : ''}`;
+        }
+
+        const message = `- Highest block: ${highestBlock} \n\nWARNING: ${warningLaggingEndpoints.length} RPC endpoint${warningLaggingEndpoints.length > 1 ? 's are' : ' is'} behind the latest block:\n${endpointDetails}`;
+        this.logger.warn(message);
+
+        // Send warning alert through the alert service
+        this.alertService.warning(ALERTS.TYPES.SYNC_BLOCKS_LAG, ALERTS.COMPONENTS.SYNC, message, chainId);
+      }
+    } catch (error) {
+      this.logger.error(`Error checking for block height lag: ${error.message}`);
+    }
   }
 }

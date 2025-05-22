@@ -272,7 +272,7 @@ export const ALERTS = {
     TX_FAILURE: 'transaction_failure',
     HIGH_TX_VOLUME: 'high_transaction_volume',
     LOW_TX_VOLUME: 'low_transaction_volume',
-    SYNC_LAG: 'sync_lag',
+    SYNC_BLOCKS_LAG: 'sync_blocks_lag',
     WALLET_LOW_BALANCE: 'wallet_low_balance',
     INSUFFICIENT_WALLET_BALANCE: 'insufficient_wallet_balance',
     CONSENSUS_FREQUENT_MISSED_ROUNDS: 'consensus_frequent_missed_rounds',
@@ -305,7 +305,8 @@ export const ALERTS = {
     RPC_LATENCY_WARNING_MS: 15000, // 15 seconds
 
     // Sync
-    SYNC_LAG_ERROR_BLOCKS: 10, // 10 blocks
+    SYNC_LAG_ERROR_BLOCKS: 100, // 100 blocks
+    SYNC_LAG_CRITICAL_BLOCKS: 1000, // 1000 blocks
 
     // Transaction volume
     TX_VOLUME_LOW_THRESHOLD: 10, // 10 transactions
@@ -324,6 +325,8 @@ export const ALERTS = {
       DEFAULT: 300, // 5 minutes
       RPC_ENDPOINT_DOWN: 600, // 10 minutes
       HIGH_BLOCK_TIME: 900, // 15 minutes
+      SYNC_LAG: 600, // 10 minutes
+      SYNC_LAG_MANY_ENDPOINTS: 1800, // 30 minutes (when many endpoints are affected)
     },
   },
 };
