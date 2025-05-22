@@ -54,6 +54,12 @@ export class BlocksMonitorService implements OnModuleInit {
   private transactionCounts: Record<string, TimeWindowData>;
   private failedTransactions: Record<string, TimeWindowData>;
 
+  // Alert throttling - Primary throttling mechanism for sync lag alerts
+  // This works in addition to the AlertService throttling to guarantee a minimum time between alerts
+  // Both use the same config value: ALERTS.NOTIFICATIONS.THROTTLE_SECONDS.SYNC_BLOCKS_LAG
+  private lastSyncLagAlertTime: Record<number, number> = {}; // chainId -> timestamp
+  private readonly syncLagAlertThrottleMs = ALERTS.NOTIFICATIONS.THROTTLE_SECONDS.SYNC_BLOCKS_LAG * 1000; // Use config value
+
   constructor(
     private readonly blockchainService: BlockchainService,
     private readonly configService: ConfigService,
@@ -838,6 +844,31 @@ export class BlocksMonitorService implements OnModuleInit {
         }
       }
 
+      // Check if we should throttle these alerts
+      const now = Date.now();
+      const lastAlertTime = this.lastSyncLagAlertTime[chainId] || 0;
+      const timeSinceLastAlert = now - lastAlertTime;
+
+      // Log throttling information for debugging
+      if (lastAlertTime > 0) {
+        this.logger.debug(
+          `Time since last sync lag alert for chain ${chainId}: ${Math.floor(timeSinceLastAlert / 1000)}s (throttle: ${Math.floor(this.syncLagAlertThrottleMs / 1000)}s)`,
+        );
+      }
+
+      // Skip alerts if we're still in the throttle period
+      if (lastAlertTime > 0 && timeSinceLastAlert < this.syncLagAlertThrottleMs) {
+        if (criticalLaggingEndpoints.length > 0 || warningLaggingEndpoints.length > 0) {
+          this.logger.debug(
+            `Throttling sync lag alerts for chain ${chainId}: ${criticalLaggingEndpoints.length} critical, ${warningLaggingEndpoints.length} warning endpoints affected`,
+          );
+        }
+        return;
+      }
+
+      // Only update the last alert time if we're actually sending an alert
+      let alertSent = false;
+
       // Send aggregated critical alert if any endpoints are critically behind
       if (criticalLaggingEndpoints.length > 0) {
         // Sort by most blocks behind first
@@ -861,6 +892,8 @@ export class BlocksMonitorService implements OnModuleInit {
 
         // Send error alert through the alert service
         this.alertService.error(ALERTS.TYPES.SYNC_BLOCKS_LAG, ALERTS.COMPONENTS.SYNC, message, chainId);
+
+        alertSent = true;
       }
 
       // Send aggregated warning alert if any endpoints are behind (but not critical)
@@ -886,6 +919,14 @@ export class BlocksMonitorService implements OnModuleInit {
 
         // Send warning alert through the alert service
         this.alertService.warning(ALERTS.TYPES.SYNC_BLOCKS_LAG, ALERTS.COMPONENTS.SYNC, message, chainId);
+
+        alertSent = true;
+      }
+
+      // Update the last alert time if we sent any alerts
+      if (alertSent) {
+        this.lastSyncLagAlertTime[chainId] = now;
+        this.logger.debug(`Updated last sync lag alert time for chain ${chainId} to ${new Date(now).toISOString()}`);
       }
     } catch (error) {
       this.logger.error(`Error checking for block height lag: ${error.message}`);
