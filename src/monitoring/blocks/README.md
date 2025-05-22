@@ -11,6 +11,7 @@ The Blocks Monitor service monitors blocks across XDC networks (Mainnet and Test
 3. **Transaction Processing**: Analyzes transaction success/failure rates within blocks for network health metrics
 4. **Endpoint Failover**: Automatically switches to healthy endpoints when the primary endpoint fails
 5. **Alerting**: Sends alerts when block times exceed thresholds or endpoints experience downtime
+6. **Sync Blocks Lag Detection**: Identifies and alerts when endpoints fall significantly behind in block height
 
 ## Configuration Options
 
@@ -20,6 +21,9 @@ The Blocks Monitor service monitors blocks across XDC networks (Mainnet and Test
 - `errorRecoveryDelay`: Delay before retrying after errors (defaults to 10000ms)
 - `initialScanDelay`: Delay for initial scan (defaults to 3000ms)
 - Network configurations for Mainnet (`chainId: 50`) and Testnet (`chainId: 51`) endpoints
+- Alert thresholds:
+  - `SYNC_LAG_ERROR_BLOCKS`: Warning threshold for block lag (defaults to 100 blocks)
+  - `SYNC_LAG_CRITICAL_BLOCKS`: Critical threshold for block lag (defaults to 1000 blocks)
 
 ## Integration Points
 
@@ -53,3 +57,9 @@ The Blocks Monitor service monitors blocks across XDC networks (Mainnet and Test
 - **Health Metrics**: Comprehensive metrics for block times, processing rates, and endpoint health
 - **Batch Transaction Processing**: Efficient processing of transactions in configurable batches
 - **Dynamic Configuration**: Runtime configuration updates without service restart
+- **Sync Blocks Lag Detection**: Identifies endpoints that are behind in block height compared to the network's highest block
+  - Warning alerts for endpoints 100-999 blocks behind
+  - Critical alerts for endpoints 1000+ blocks behind
+  - Intelligent alert aggregation to reduce notification noise
+  - Limits detailed information to top 5 affected endpoints
+  - Adaptive throttling based on the number of affected endpoints

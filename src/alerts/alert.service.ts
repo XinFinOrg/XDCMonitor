@@ -697,7 +697,7 @@ export class AlertService implements OnModuleInit {
    * Create an error-level alert
    */
   async error(alertType: string, component: string, message: string, chainId?: number): Promise<void> {
-    if (this.shouldThrottle(alertType)) {
+    if (this.shouldThrottle(alertType, message)) {
       this.logger.debug(`Throttling error alert: ${alertType}`);
       return;
     }
@@ -718,7 +718,7 @@ export class AlertService implements OnModuleInit {
    * Warnings are saved to the database but not sent as notifications
    */
   async warning(alertType: string, component: string, message: string, chainId?: number): Promise<void> {
-    if (this.shouldThrottle(alertType)) {
+    if (this.shouldThrottle(alertType, message)) {
       this.logger.debug(`Throttling warning alert: ${alertType}`);
       return;
     }
@@ -767,7 +767,7 @@ export class AlertService implements OnModuleInit {
    * Create an info-level alert
    */
   async info(alertType: string, component: string, message: string, chainId?: number): Promise<void> {
-    if (this.shouldThrottle(alertType)) {
+    if (this.shouldThrottle(alertType, message)) {
       this.logger.debug(`Throttling info alert: ${alertType}`);
       return;
     }
@@ -786,13 +786,30 @@ export class AlertService implements OnModuleInit {
   /**
    * Check if an alert should be throttled
    */
-  private shouldThrottle(alertType: string): boolean {
+  private shouldThrottle(alertType: string, message?: string): boolean {
     const now = Date.now();
     const lastTime = this.alertThrottling[alertType] || 0;
 
     // Get throttle time for this alert type or use default
-    const throttleSeconds =
+    let throttleSeconds =
       ALERTS.NOTIFICATIONS.THROTTLE_SECONDS[alertType] || ALERTS.NOTIFICATIONS.THROTTLE_SECONDS.DEFAULT;
+
+    // For SYNC_LAG alerts, check if multiple endpoints are affected and use longer throttling
+    if (alertType === ALERTS.TYPES.SYNC_BLOCKS_LAG && message) {
+      // Extract number of affected endpoints from the message
+      const matchResult = message.match(/(\d+)\s+RPC\s+endpoint/i);
+      if (matchResult && matchResult[1]) {
+        const endpointCount = parseInt(matchResult[1], 10);
+
+        // If many endpoints are affected, use the longer throttle time
+        if (endpointCount > 3) {
+          throttleSeconds = ALERTS.NOTIFICATIONS.THROTTLE_SECONDS.SYNC_LAG_MANY_ENDPOINTS;
+          this.logger.debug(
+            `Using extended throttle time (${throttleSeconds}s) for SYNC_LAG alert with ${endpointCount} endpoints`,
+          );
+        }
+      }
+    }
 
     if (now - lastTime < throttleSeconds * 1000) {
       return true;

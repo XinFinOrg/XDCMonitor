@@ -12,10 +12,14 @@ A comprehensive Node.js-based monitoring system for the XDC Network. This applic
   - Dynamic frequency adjustment based on endpoint health
   - Peer count monitoring with dynamic baselines and anomaly detection
   - Multi-method verification with primary and fallback strategies
+  - RPC sync blocks lag detection with configurable thresholds (warning at 100 blocks, critical at 1000 blocks)
+  - Intelligent alert aggregation for multiple lagging endpoints
 - **Block Propagation Monitoring**: Block time tracking, slow block detection
 - **Transaction Monitoring**: Automated transaction testing, smart contract deployment testing
 - **Consensus Monitoring**: Masternode performance tracking, epoch transitions, validator penalties
 - **Alert System**: Dashboard alerts, Telegram notifications, webhook notifications
+  - Adaptive throttling to reduce noise during widespread issues
+  - Alert aggregation for related problems
 - **Metrics Collection**: InfluxDB time-series database, Grafana dashboards
 
 ## Architecture
@@ -39,6 +43,8 @@ The XDC Monitor has been optimized with a modular, maintainable architecture:
 - **Code Optimization**: Helper methods reduce duplication and improve maintainability
 - **DRY Principle**: Don't Repeat Yourself approach for alert classification and formatting
 - **Sliding Window Data**: Memory-efficient approach for tracking recent state without database overhead
+- **Alert Aggregation**: Groups related alerts to reduce notification noise
+- **Adaptive Alert Throttling**: Increases throttle time for widespread issues
 
 ### Technical Details
 
@@ -109,6 +115,12 @@ The system monitors the following conditions:
    - Severity: Warning
    - Component: consensus
    - Threshold: Penalized in 70% or more of recent epochs
+9. **RPC Sync Blocks Lag**
+   - Alerts when RPC endpoints fall behind in block height compared to the network
+   - Warning Severity: When endpoints are 100-999 blocks behind
+   - Critical Severity: When endpoints are 1000+ blocks behind
+   - Component: sync
+   - Features intelligent alert aggregation and adaptive throttling to reduce notification noise
 
 ### Alert Delivery
 
