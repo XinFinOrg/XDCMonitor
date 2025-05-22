@@ -121,6 +121,7 @@ The system monitors the following conditions:
    - Critical Severity: When endpoints are 1000+ blocks behind
    - Component: sync
    - Features intelligent alert aggregation and adaptive throttling to reduce notification noise
+   - Uses 1-hour throttling to prevent notification fatigue during prolonged sync issues
 
 ### Alert Delivery
 
