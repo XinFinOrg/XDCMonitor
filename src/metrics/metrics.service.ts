@@ -362,7 +362,7 @@ export class MetricsService implements OnModuleInit {
 
   /**
    * Record peer count for an endpoint
-   * 
+   *
    * @param endpoint The RPC/WebSocket endpoint URL
    * @param peerCount Number of peers connected to the node
    * @param endpointType Type of endpoint (rpc/websocket)
@@ -374,7 +374,7 @@ export class MetricsService implements OnModuleInit {
         .tag('endpoint', endpoint)
         .tag('type', endpointType)
         .tag('chainId', chainId.toString())
-        .intField('value', peerCount)
+        .intField('value', peerCount),
     );
     this.logger.debug(`Recorded peer count for ${endpointType} ${endpoint} (chain ${chainId}): ${peerCount} peers`);
   }

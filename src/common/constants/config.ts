@@ -275,6 +275,7 @@ export const ALERTS = {
     SYNC_BLOCKS_LAG: 'sync_blocks_lag',
     WALLET_LOW_BALANCE: 'wallet_low_balance',
     INSUFFICIENT_WALLET_BALANCE: 'insufficient_wallet_balance',
+    TRANSACTION_FAILURE_RATE_HIGH: 'transaction_failure_rate_high',
     CONSENSUS_FREQUENT_MISSED_ROUNDS: 'consensus_frequent_missed_rounds',
     CONSENSUS_UNUSUAL_TIMEOUT: 'consensus_unusual_timeout',
     CONSENSUS_PENALTY_LIST_SIZE_EXCEEDED: 'consensus_penalty_list_size_exceeded',

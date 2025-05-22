@@ -171,13 +171,42 @@ export class TransactionMonitorService implements OnModuleInit {
           providerData.provider !== null,
       );
 
+    // Track transaction success/failure rates for each network and transaction type
+    const results = {
+      50: {
+        // Mainnet
+        normalTransaction: { success: 0, failure: 0, total: 0, failedEndpoints: [] },
+        contractDeployment: { success: 0, failure: 0, total: 0, failedEndpoints: [] },
+      },
+      51: {
+        // Testnet
+        normalTransaction: { success: 0, failure: 0, total: 0, failedEndpoints: [] },
+        contractDeployment: { success: 0, failure: 0, total: 0, failedEndpoints: [] },
+      },
+    };
+
     // Test each active mainnet RPC with both transaction types if wallet has enough balance
     if (this.testWallets[50].hasBalance) {
       for (const providerData of mainnetProviders) {
         // Run normal transaction test
-        await this.runTransactionTest(50, false, providerData.endpoint.url);
+        const normalTxResult = await this.runTransactionTest(50, false, providerData.endpoint.url);
+        results[50].normalTransaction.total++;
+        if (normalTxResult) {
+          results[50].normalTransaction.success++;
+        } else {
+          results[50].normalTransaction.failure++;
+          results[50].normalTransaction.failedEndpoints.push(providerData.endpoint.url);
+        }
+
         // Run contract deployment test
-        await this.runTransactionTest(50, true, providerData.endpoint.url);
+        const contractTxResult = await this.runTransactionTest(50, true, providerData.endpoint.url);
+        results[50].contractDeployment.total++;
+        if (contractTxResult) {
+          results[50].contractDeployment.success++;
+        } else {
+          results[50].contractDeployment.failure++;
+          results[50].contractDeployment.failedEndpoints.push(providerData.endpoint.url);
+        }
       }
     } else {
       this.logger.warn('Skipping Mainnet transaction tests due to insufficient wallet balance');
@@ -193,9 +222,24 @@ export class TransactionMonitorService implements OnModuleInit {
     if (this.testWallets[51].hasBalance) {
       for (const providerData of testnetProviders) {
         // Run normal transaction test
-        await this.runTransactionTest(51, false, providerData.endpoint.url);
+        const normalTxResult = await this.runTransactionTest(51, false, providerData.endpoint.url);
+        results[51].normalTransaction.total++;
+        if (normalTxResult) {
+          results[51].normalTransaction.success++;
+        } else {
+          results[51].normalTransaction.failure++;
+          results[51].normalTransaction.failedEndpoints.push(providerData.endpoint.url);
+        }
+
         // Run contract deployment test
-        await this.runTransactionTest(51, true, providerData.endpoint.url);
+        const contractTxResult = await this.runTransactionTest(51, true, providerData.endpoint.url);
+        results[51].contractDeployment.total++;
+        if (contractTxResult) {
+          results[51].contractDeployment.success++;
+        } else {
+          results[51].contractDeployment.failure++;
+          results[51].contractDeployment.failedEndpoints.push(providerData.endpoint.url);
+        }
       }
     } else {
       this.logger.warn('Skipping Testnet transaction tests due to insufficient wallet balance');
@@ -206,6 +250,98 @@ export class TransactionMonitorService implements OnModuleInit {
         51,
       );
     }
+
+    // Check failure rates and generate alerts if needed
+    this.checkFailureRatesAndAlert(results);
+  }
+
+  /**
+   * Check transaction failure rates across RPC endpoints and generate alerts if necessary
+   */
+  private checkFailureRatesAndAlert(results: any) {
+    // Check Mainnet normal transactions
+    if (results[50].normalTransaction.total > 0) {
+      const failureRate = results[50].normalTransaction.failure / results[50].normalTransaction.total;
+      if (failureRate >= 0.5) {
+        // 50% or more failed
+        // Format the list of failed endpoints for better readability
+        const failedEndpointsList = results[50].normalTransaction.failedEndpoints
+          .map(endpoint => `\n  - ${endpoint}`)
+          .join('');
+
+        this.alertService.error(
+          ALERTS.TYPES.TRANSACTION_FAILURE_RATE_HIGH,
+          ALERTS.COMPONENTS.TRANSACTION,
+          `High transaction failure rate on Mainnet: ${results[50].normalTransaction.failure}/${results[50].normalTransaction.total} (${Math.round(failureRate * 100)}%) RPC endpoints failed to process normal transactions.\n\nFailed endpoints:${failedEndpointsList}`,
+          50,
+        );
+      }
+    }
+
+    // Check Mainnet contract deployments
+    if (results[50].contractDeployment.total > 0) {
+      const failureRate = results[50].contractDeployment.failure / results[50].contractDeployment.total;
+      if (failureRate >= 0.5) {
+        // 50% or more failed
+        // Format the list of failed endpoints for better readability
+        const failedEndpointsList = results[50].contractDeployment.failedEndpoints
+          .map(endpoint => `\n  - ${endpoint}`)
+          .join('');
+
+        this.alertService.error(
+          ALERTS.TYPES.TRANSACTION_FAILURE_RATE_HIGH,
+          ALERTS.COMPONENTS.TRANSACTION,
+          `High contract deployment failure rate on Mainnet: ${results[50].contractDeployment.failure}/${results[50].contractDeployment.total} (${Math.round(failureRate * 100)}%) RPC endpoints failed to deploy contracts.\n\nFailed endpoints:${failedEndpointsList}`,
+          50,
+        );
+      }
+    }
+
+    // Check Testnet normal transactions
+    if (results[51].normalTransaction.total > 0) {
+      const failureRate = results[51].normalTransaction.failure / results[51].normalTransaction.total;
+      if (failureRate >= 0.5) {
+        // 50% or more failed
+        // Format the list of failed endpoints for better readability
+        const failedEndpointsList = results[51].normalTransaction.failedEndpoints
+          .map(endpoint => `\n  - ${endpoint}`)
+          .join('');
+
+        this.alertService.error(
+          ALERTS.TYPES.TRANSACTION_FAILURE_RATE_HIGH,
+          ALERTS.COMPONENTS.TRANSACTION,
+          `High transaction failure rate on Testnet: ${results[51].normalTransaction.failure}/${results[51].normalTransaction.total} (${Math.round(failureRate * 100)}%) RPC endpoints failed to process normal transactions.\n\nFailed endpoints:${failedEndpointsList}`,
+          51,
+        );
+      }
+    }
+
+    // Check Testnet contract deployments
+    if (results[51].contractDeployment.total > 0) {
+      const failureRate = results[51].contractDeployment.failure / results[51].contractDeployment.total;
+      if (failureRate >= 0.5) {
+        // 50% or more failed
+        // Format the list of failed endpoints for better readability
+        const failedEndpointsList = results[51].contractDeployment.failedEndpoints
+          .map(endpoint => `\n  - ${endpoint}`)
+          .join('');
+
+        this.alertService.error(
+          ALERTS.TYPES.TRANSACTION_FAILURE_RATE_HIGH,
+          ALERTS.COMPONENTS.TRANSACTION,
+          `High contract deployment failure rate on Testnet: ${results[51].contractDeployment.failure}/${results[51].contractDeployment.total} (${Math.round(failureRate * 100)}%) RPC endpoints failed to deploy contracts.\n\nFailed endpoints:${failedEndpointsList}`,
+          51,
+        );
+      }
+    }
+
+    // Log summary of transaction test results
+    this.logger.log(
+      `Transaction test summary - Mainnet: Normal ${results[50].normalTransaction.success}/${results[50].normalTransaction.total} successful, Contract ${results[50].contractDeployment.success}/${results[50].contractDeployment.total} successful`,
+    );
+    this.logger.log(
+      `Transaction test summary - Testnet: Normal ${results[51].normalTransaction.success}/${results[51].normalTransaction.total} successful, Contract ${results[51].contractDeployment.success}/${results[51].contractDeployment.total} successful`,
+    );
   }
 
   private async runTransactionTest(chainId: number, deployContract: boolean, rpcUrl?: string) {
@@ -299,5 +435,7 @@ export class TransactionMonitorService implements OnModuleInit {
         rpcUrl,
       );
     }
+
+    return success;
   }
 }
