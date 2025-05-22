@@ -46,7 +46,6 @@ export class HealthService implements OnModuleInit {
    * Set up the health check job on module initialization
    */
   onModuleInit() {
-    debugger;
     if (!this.healthchecksUrl) {
       this.logger.warn('No healthchecks.io URL configured, health check pinging is disabled');
       return;
@@ -102,7 +101,6 @@ export class HealthService implements OnModuleInit {
    * This is called automatically based on the configured interval
    */
   async pingHealthchecks(): Promise<void> {
-    debugger;
     try {
       if (!this.healthchecksUrl) {
         return;
