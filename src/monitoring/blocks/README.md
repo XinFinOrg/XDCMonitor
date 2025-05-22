@@ -63,3 +63,4 @@ The Blocks Monitor service monitors blocks across XDC networks (Mainnet and Test
   - Intelligent alert aggregation to reduce notification noise
   - Limits detailed information to top 5 affected endpoints
   - Adaptive throttling based on the number of affected endpoints
+  - Extended 1-hour throttling to prevent notification fatigue during prolonged sync issues
