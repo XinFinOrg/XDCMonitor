@@ -13,6 +13,7 @@ The Transaction Monitor service performs active transaction testing on XDC netwo
 5. **Transaction Lifecycle**: Tracks transaction submission, confirmation, and receipt validation
 6. **Provider Testing**: Tests transaction functionality across all available RPC endpoints
 7. **Multi-endpoint Validation**: Verifies transaction compatibility across different RPC endpoints on the same network
+8. **Failure Rate Monitoring**: Tracks transaction failure rates across RPC endpoints and generates alerts when more than 50% of endpoints fail
 
 ## Configuration Options
 
@@ -28,6 +29,7 @@ The Transaction Monitor service performs active transaction testing on XDC netwo
 - **ConfigService**: Loads configuration including private keys and feature toggles
 - **MetricsService**: Reports transaction metrics and wallet balances
 - **AlertService**: Sends alerts on low wallet balances or transaction failures
+- **ALERTS.TYPES.TRANSACTION_FAILURE_RATE_HIGH**: Alert type used when transaction failure rate exceeds 50%
 
 ## Scheduled Testing
 
@@ -36,6 +38,8 @@ The Transaction Monitor service performs active transaction testing on XDC netwo
 - For each available provider, both transaction types (value transfer and contract deployment) are tested
 - Status changes and metrics are updated after each test cycle
 - Dynamic provider selection uses only active and healthy endpoints
+- Tracks transaction success/failure rates and generates alerts when failure rates exceed 50%
+- Detailed failure information includes a list of all failing RPC endpoints
 
 ## Error Handling
 
@@ -44,6 +48,7 @@ The Transaction Monitor service performs active transaction testing on XDC netwo
 - Skips tests with clear error notifications when prerequisite conditions aren't met
 - Maintains wallet state between test runs
 - Automatic alerts for insufficient wallet balances
+- Aggregated failure rate tracking with specific endpoint details for troubleshooting
 
 ## Key Features
 
@@ -56,3 +61,5 @@ The Transaction Monitor service performs active transaction testing on XDC netwo
 - **Comprehensive Metrics**: Records transaction success rates, confirmation times, and gas usage
 - **Automatic Alerts**: Sends notifications for transaction failures and insufficient balances
 - **Fail-safe Design**: Won't attempt transactions if wallet balance is too low
+- **Failure Rate Detection**: Alerts when more than 50% of RPC endpoints fail transaction processing
+- **Detailed Failure Information**: Includes specific list of failing endpoints in alert messages

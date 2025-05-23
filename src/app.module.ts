@@ -4,9 +4,10 @@ import { ConfigModule } from '@config/config.module';
 import { HealthModule } from './health/health.module';
 import { MetricsModule } from '@metrics/metrics.module';
 import { MonitoringModule } from '@monitoring/monitoring.module';
+import { LoggerModule } from '@logging/logger.module';
 import { Module } from '@nestjs/common';
 
 @Module({
-  imports: [ConfigModule, BlockchainModule, MonitoringModule, MetricsModule, AlertModule, HealthModule],
+  imports: [LoggerModule, ConfigModule, BlockchainModule, MonitoringModule, MetricsModule, AlertModule, HealthModule],
 })
 export class AppModule {}

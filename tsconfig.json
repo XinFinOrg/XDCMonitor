@@ -26,6 +26,7 @@
       "@monitoring/*": ["src/monitoring/*"],
       "@metrics/*": ["src/metrics/*"],
       "@common/*": ["src/common/*"],
+      "@logging/*": ["src/logging/*"],
       "@alerts/*": ["src/alerts/*"],
       "@types": ["src/types"],
       "@types/*": ["src/types/*"],
