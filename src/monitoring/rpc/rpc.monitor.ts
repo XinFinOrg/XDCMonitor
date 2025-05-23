@@ -5,6 +5,7 @@ import { RpcRetryClient } from '@common/utils/rpc-retry-client';
 import { ConfigService } from '@config/config.service';
 import { MetricsService } from '@metrics/metrics.service';
 import { PeerCountMonitor } from '@monitoring/rpc/peer-count.monitor';
+import { RpcSelectorService } from '@monitoring/rpc/rpc-selector.service';
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { EndpointStatus, MonitorType, RpcEndpoint, RpcMonitorConfig, ServiceStatus } from '@types';
 import axios from 'axios';
@@ -52,6 +53,7 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
     private readonly metricsService: MetricsService,
     private readonly alertService: AlertService,
     private readonly peerCountMonitor: PeerCountMonitor,
+    private readonly rpcSelectorService: RpcSelectorService,
   ) {}
 
   // #region Lifecycle Methods
@@ -384,14 +386,14 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
 
             // Use the provided check function to check this endpoint
             const isUp = await checkFn(endpoint);
-            
+
             this.logger.debug(
               `${endpointTypeStr} endpoint ( ${endpoint.url} ) for chain ${endpoint.chainId} is ${isUp ? 'UP' : 'DOWN'}`,
             );
-            
+
             // If down and postCheckFn provided, call it
             if (!isUp && postCheckFn) postCheckFn(endpoint, isUp);
-            
+
             return { endpoint, isUp };
           } catch (error) {
             this.logger.error(`Error checking endpoint ${endpoint.name}: ${error.message}`);
@@ -437,7 +439,7 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
   private isWebSocketEndpoint(endpoint: RpcEndpoint): boolean {
     return endpoint.url.startsWith('ws://') || endpoint.url.startsWith('wss://');
   }
-  
+
   /**
    * Monitor a specific RPC endpoint (HTTP only, not WebSocket)
    */
@@ -532,6 +534,9 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
     this.metricsService.setRpcStatus(endpoint.url, isUp, endpoint.chainId);
     this.metricsService.recordRpcLatency(endpoint.url, latency, endpoint.chainId);
 
+    // Update RPC selector service with this endpoint's health
+    this.rpcSelectorService.updateEndpointHealth(endpoint, isUp, latency);
+
     // If endpoint is up, check peer count; otherwise check for downtime
     if (isUp) {
       this.monitorRpcPeerCount(endpoint);
@@ -545,10 +550,10 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
    */
   private monitorPeerCount(endpoint: RpcEndpoint, isWebSocket: boolean): void {
     const endpointType = isWebSocket ? 'WebSocket' : 'RPC';
-    const monitorFn = isWebSocket ? 
-      this.peerCountMonitor.monitorWsPeerCount.bind(this.peerCountMonitor) :
-      this.peerCountMonitor.monitorRpcPeerCount.bind(this.peerCountMonitor);
-    
+    const monitorFn = isWebSocket
+      ? this.peerCountMonitor.monitorWsPeerCount.bind(this.peerCountMonitor)
+      : this.peerCountMonitor.monitorRpcPeerCount.bind(this.peerCountMonitor);
+
     try {
       // Make sure we don't have any issues blocking the entire monitoring process
       Promise.resolve().then(async () => {
@@ -638,7 +643,7 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
 
   /**
    * Test a WebSocket connection
-   * 
+   *
    * Optimized with better error handling and cleanup to prevent memory leaks
    */
   private testWebSocketConnection(endpoint: RpcEndpoint): Promise<boolean> {
@@ -659,13 +664,13 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
         });
 
         let resolved = false;
-        
+
         // Helper function to prevent multiple resolves and handle cleanup
         const safeResolve = (success: boolean, reason: string = '') => {
           if (resolved) return;
-          
+
           resolved = true;
-          
+
           // Update statuses based on connection result
           if (success) {
             this.updateStatus(endpoint, this.wsStatuses, true);
@@ -674,7 +679,7 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
           } else {
             this.handleWsConnectionFailure(endpoint, socket, reason || 'Connection failed');
           }
-          
+
           resolve(success);
         };
 
@@ -689,7 +694,7 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
           this.logger.debug(`WebSocket connection to ${endpoint.name} successful`);
           clearTimeout(timeout);
           safeResolve(true);
-          
+
           // Clean close of the socket
           try {
             socket.close(1000, 'Normal closure');
@@ -764,7 +769,7 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
     const domain = url.hostname;
     const isHttps = url.protocol === 'https:' || url.protocol === 'wss:';
     const port = url.port || (isHttps ? '443' : '80');
-    
+
     return { url, domain, port };
   }
 
@@ -878,20 +883,27 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Sync with blockchain service to ensure consistency
+   * Sync with BlockchainService to check for endpoints behind in block height
    */
   private syncWithBlockchainService(): void {
     this.logger.debug('Syncing provider status with BlockchainService');
 
-    // Sync HTTP RPC providers
-    for (const { endpoint } of this.blockchainService.getAllProviders()) {
-      const { url, status } = endpoint;
+    // We'll need to manually get block heights for each provider
+    this.checkProviderBlockHeights();
+
+    // First pass: sync HTTP RPC providers
+    for (const providerData of this.blockchainService.getAllProviders()) {
+      const { url, status, chainId } = providerData.endpoint;
       const currentStatus = this.rpcStatuses.get(url);
 
       if (currentStatus) {
         currentStatus.status = status === 'up' ? 'up' : 'down';
       } else {
-        this.rpcStatuses.set(url, { status: status === 'up' ? 'up' : 'down', latency: 0, alerted: false });
+        this.rpcStatuses.set(url, {
+          status: status === 'up' ? 'up' : 'down',
+          latency: 0,
+          alerted: false,
+        });
       }
     }
 
@@ -966,6 +978,89 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
       }
 
       this.metricsService.setWebsocketStatus(url, status === 'up', chainId);
+    }
+  }
+
+  /**
+   * Check and update block heights for all RPC providers
+   * Detect if endpoints are falling behind in sync
+   */
+  private async checkProviderBlockHeights(): Promise<void> {
+    // Get all online RPC endpoints
+    const rpcEndpoints = this.configService.getRpcEndpoints();
+    const highestBlocks = new Map<number, number>();
+    const blockHeights = new Map<string, number>();
+
+    // First pass: collect block heights for all endpoints
+    for (const endpoint of rpcEndpoints) {
+      const { url, chainId } = endpoint;
+      const status = this.rpcStatuses.get(url);
+
+      // Only check endpoints that are up
+      if (status?.status === 'up') {
+        try {
+          // Get block height from provider
+          const blockHeight = await this.blockchainService.getLatestBlockNumber(chainId, url);
+          blockHeights.set(url, blockHeight);
+
+          // Update highest block for this chain
+          if (!highestBlocks.has(chainId) || blockHeight > highestBlocks.get(chainId)) {
+            highestBlocks.set(chainId, blockHeight);
+          }
+        } catch (error) {
+          this.logger.debug(`Failed to get block height for ${url}: ${error.message}`);
+        }
+      }
+    }
+
+    // Second pass: check for lagging endpoints
+    for (const endpoint of rpcEndpoints) {
+      const { url, chainId } = endpoint;
+      const blockHeight = blockHeights.get(url);
+
+      // Skip endpoints we couldn't get heights for
+      if (blockHeight === undefined) continue;
+
+      const highestBlock = highestBlocks.get(chainId) || 0;
+      const blocksBehind = Math.max(0, highestBlock - blockHeight);
+
+      // Determine if the endpoint is synced with the network
+      const syncedWithNetwork = blocksBehind <= this.configService.getMonitoringConfig().blockDiscrepancySyncThreshold;
+
+      // Update RPC selector with sync status
+      this.rpcSelectorService.updateEndpointSyncStatus(endpoint, syncedWithNetwork, blocksBehind);
+
+      // Alert on significant lag
+      if (blocksBehind > this.configService.getMonitoringConfig().blockDiscrepancySyncThreshold) {
+        this.handleRpcSyncLag(endpoint, blockHeight, highestBlock, blocksBehind);
+      }
+    }
+  }
+
+  /**
+   * Handle alerts for RPC endpoints that are behind in sync
+   */
+  private handleRpcSyncLag(
+    endpoint: RpcEndpoint,
+    currentBlock: number,
+    networkBlock: number,
+    blocksBehind: number,
+  ): void {
+    const { url, name, chainId } = endpoint;
+
+    // Determine severity based on how far behind
+    const criticalThreshold = 1000; // 1000+ blocks behind is critical
+    const warningThreshold = this.configService.getMonitoringConfig().blockDiscrepancySyncThreshold;
+
+    // Format alert message
+    const blocksMsg = `${blocksBehind.toLocaleString()} blocks`;
+    const currentMsg = `${currentBlock.toLocaleString()} vs. network ${networkBlock.toLocaleString()}`;
+    const message = `RPC endpoint ${name} (${url}) for chain ${chainId} is ${blocksMsg} behind (${currentMsg})`;
+
+    if (blocksBehind >= criticalThreshold) {
+      this.alertService.error(ALERTS.TYPES.SYNC_BLOCKS_LAG, ALERTS.COMPONENTS.SYNC, message, chainId);
+    } else if (blocksBehind >= warningThreshold) {
+      this.alertService.warning(ALERTS.TYPES.SYNC_BLOCKS_LAG, ALERTS.COMPONENTS.SYNC, message, chainId);
     }
   }
 

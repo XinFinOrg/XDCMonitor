@@ -438,4 +438,20 @@ export class TransactionMonitorService implements OnModuleInit {
 
     return success;
   }
+
+  /**
+   * Public method to get current test wallet status for testing
+   */
+  public getTestWalletStatus(): any {
+    return {
+      mainnet: {
+        address: this.testWallets[50]?.address,
+        hasBalance: this.testWallets[50]?.hasBalance || false,
+      },
+      testnet: {
+        address: this.testWallets[51]?.address,
+        hasBalance: this.testWallets[51]?.hasBalance || false,
+      },
+    };
+  }
 }

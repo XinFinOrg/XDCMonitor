@@ -273,7 +273,7 @@ export class AlertManager {
 
     // Check if the message contains HTML tags
     const containsHtml = /<[a-z][\s\S]*>/i.test(alert.message);
-    
+
     // If the message content has HTML, use HTML formatting for the entire message
     let message;
     if (containsHtml) {
@@ -318,13 +318,15 @@ export class AlertManager {
 
       // Check if the message contains HTML tags
       const containsHtml = /<[a-z][\s\S]*>/i.test(alert.message);
-      
+
       // Create options object with optional message_thread_id
       const options: TelegramBot.SendMessageOptions = {
         parse_mode: containsHtml ? 'HTML' : 'Markdown',
       };
-      
-      this.logger.debug(`Detected ${containsHtml ? 'HTML' : 'Markdown'} content, using ${options.parse_mode} parse mode`);
+
+      this.logger.debug(
+        `Detected ${containsHtml ? 'HTML' : 'Markdown'} content, using ${options.parse_mode} parse mode`,
+      );
 
       if (messageThreadId) {
         options.message_thread_id = parseInt(messageThreadId, 10);
@@ -386,13 +388,13 @@ export class AlertManager {
 
       // Check if the message contains HTML tags
       const containsHtml = /<[a-z][\s\S]*>/i.test(text);
-      
+
       // If HTML is detected, don't remove formatting markers
       const cleanText = containsHtml ? text : text.replace(/\*/g, '');
-      
+
       // Set the correct parse mode based on content
       const effectiveParseMode = containsHtml ? 'HTML' : parseMode;
-      
+
       this.logger.debug(`Fallback method using parse mode: ${effectiveParseMode || 'none'}`);
 
       // Create the request URL
@@ -404,7 +406,7 @@ export class AlertManager {
         text: cleanText,
         disable_web_page_preview: true,
       };
-      
+
       // Set parse_mode - HTML detection takes precedence over provided parseMode
       if (effectiveParseMode) {
         data.parse_mode = effectiveParseMode;

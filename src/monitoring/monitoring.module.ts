@@ -8,6 +8,7 @@ import { ConsensusModule } from '@monitoring/consensus/consensus.module';
 import { MonitoringController } from '@monitoring/monitoring.controller';
 import { RpcMonitorService } from '@monitoring/rpc/rpc.monitor';
 import { PeerCountMonitor } from '@monitoring/rpc/peer-count.monitor';
+import { RpcSelectorModule } from '@monitoring/rpc/rpc-selector.module';
 import { TransactionMonitorService } from '@monitoring/transaction/transaction.monitor';
 import { Module, forwardRef } from '@nestjs/common';
 import { ScheduleModule } from '@nestjs/schedule';
@@ -19,6 +20,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     ConfigModule,
     MetricsModule,
     ConsensusModule,
+    RpcSelectorModule,
     forwardRef(() => AlertModule),
   ],
   providers: [BlocksMonitorService, RpcMonitorService, TransactionMonitorService, MetricsManager, PeerCountMonitor],

@@ -1,6 +1,6 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { ethers } from 'ethers';
 import { ConfigService } from '@config/config.service';
+import { RpcSelectorService } from '@monitoring/rpc/rpc-selector.service';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import {
   AccountBalance,
   BlockInfo,
@@ -10,6 +10,7 @@ import {
   TransactionStatus,
   WsProviderWithMetadata,
 } from '@types';
+import { ethers } from 'ethers';
 
 @Injectable()
 export class BlockchainService implements OnModuleInit {
@@ -19,7 +20,10 @@ export class BlockchainService implements OnModuleInit {
   private activeProvider: ProviderWithMetadata;
   private readonly MAX_FAILURES = 3;
 
-  constructor(private readonly configService: ConfigService) {
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly rpcSelectorService?: RpcSelectorService,
+  ) {
     // Initialize Map objects
     this.providers = new Map<string, ProviderWithMetadata>();
     this.wsProviders = new Map<string, WsProviderWithMetadata>();
@@ -666,16 +670,26 @@ export class BlockchainService implements OnModuleInit {
   }
 
   /**
-   * Get a provider for a specific chain
+   * Get a provider for a specific chain ID
    * @param chainId The chain ID (50 for Mainnet, 51 for Testnet)
    * @returns A provider for the specified chain
    */
   getProviderForChainId(chainId: number): ProviderWithMetadata | null {
-    // First try to find the primary provider for this chain
-    const primaryUrl = this.configService.getPrimaryRpcUrl(chainId);
+    // First try to get the best provider URL from the selector service (if available)
+    let primaryUrl: string;
+
+    if (this.rpcSelectorService) {
+      // Use the dynamic selection service if available
+      primaryUrl = this.rpcSelectorService.getPrimaryRpcUrl(chainId);
+    } else {
+      // Fall back to the static config
+      primaryUrl = this.configService.getPrimaryRpcUrl(chainId);
+    }
+
+    // Try to get the primary provider
     const primaryProvider = this.providers.get(primaryUrl);
 
-    if (primaryProvider && primaryProvider.provider) {
+    if (primaryProvider && primaryProvider.provider && primaryProvider.endpoint.status === 'up') {
       return primaryProvider;
     }
 

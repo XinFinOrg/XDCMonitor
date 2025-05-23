@@ -4,6 +4,12 @@ A comprehensive Node.js-based monitoring system for the XDC Network. This applic
 
 ## Features
 
+- **Dynamic RPC Selection**: Intelligent selection of optimal RPC endpoints based on real-time health metrics
+  - Automatic quality tier classification (HIGH, MEDIUM, LOW, UNKNOWN)
+  - Multi-factor scoring algorithm considering latency, success rates, and sync status
+  - Seamless failover with minimum switch intervals to prevent rapid toggling
+  - Block height sync monitoring and lag detection
+  - Real-time endpoint health tracking with exponential decay weighting
 - **RPC URL Monitoring**: Mainnet and Testnet endpoint monitoring, downtime detection, latency measurement, peer count analysis
 - **Multi-RPC Monitoring**: Monitor multiple endpoints simultaneously, compare response times, adaptive monitoring frequency
 - **Advanced Connection Point Checks**: HTTP/HTTPS port checks, WebSocket port checks, subscription testing, batch processing
@@ -22,6 +28,237 @@ A comprehensive Node.js-based monitoring system for the XDC Network. This applic
   - Alert aggregation for related problems
 - **Metrics Collection**: InfluxDB time-series database, Grafana dashboards
 
+## Dynamic RPC Selection System
+
+The XDC Monitor features an advanced dynamic RPC selection system that automatically chooses the best available RPC endpoints for optimal blockchain service reliability.
+
+### How It Works
+
+1. **Real-Time Health Monitoring**: Continuously monitors all configured RPC endpoints for:
+
+   - Response latency and reliability
+   - Block height synchronization status
+   - Success rates with exponential decay (recent performance weighted more heavily)
+   - Network connectivity and peer count
+
+2. **Quality Tier Classification**: Automatically categorizes endpoints into quality tiers:
+
+   - **HIGH (Tier 3)**: Consistently reliable, low latency endpoints
+   - **MEDIUM (Tier 2)**: Generally reliable with occasional issues
+   - **LOW (Tier 1)**: Less reliable or higher latency endpoints
+   - **UNKNOWN (Tier 0)**: Newly discovered or not yet evaluated endpoints
+
+3. **Multi-Factor Scoring**: Uses a weighted algorithm to score endpoints based on:
+
+   - **Latency Score (40%)**: Lower latency is better
+   - **Success Rate (30%)**: Higher success rate is better
+   - **Sync Score (20%)**: How well the endpoint keeps up with the network
+   - **Quality Tier Bonus (10%)**: Preference for higher-tier endpoints
+
+4. **Intelligent Switching**: Automatically switches to better endpoints when:
+   - Current primary endpoint has issues (down, high latency, out of sync)
+   - A significantly better endpoint becomes available
+   - Minimum switch interval (5 minutes) has passed to prevent rapid toggling
+
+### Configuration
+
+The system works automatically without configuration, but you can monitor its operation through API endpoints:
+
+```bash
+# Get health metrics for all RPC endpoints
+curl http://your-server:3000/api/monitoring/rpc/health
+
+# Get currently selected primary endpoints
+curl http://your-server:3000/api/monitoring/rpc/primary
+
+# Get health metrics for a specific chain
+curl http://your-server:3000/api/monitoring/rpc/health/50  # Mainnet
+curl http://your-server:3000/api/monitoring/rpc/health/51  # Testnet
+
+# Get overall RPC status
+curl http://your-server:3000/api/monitoring/rpc/status
+```
+
+### Benefits
+
+- **Self-Healing Infrastructure**: Automatically adapts to network conditions and endpoint issues
+- **Optimal Performance**: Always uses the best available endpoint for blockchain operations
+- **Reduced Downtime**: Seamless failover when primary endpoints have problems
+- **Transparent Operation**: Works behind the scenes without requiring manual intervention
+- **Quality-Based Prioritization**: Learns from historical performance to prefer reliable endpoints
+
+## Comprehensive Logging System
+
+The XDC Monitor features an enterprise-grade logging system designed for production environments with comprehensive log management, daily organization, and powerful analysis capabilities.
+
+### Key Features
+
+- **Daily Log Organization**: Logs are organized in daily folders (YYYY-MM-DD format) for intuitive navigation and investigation
+- **Winston-Based Service**: Built on Winston logger with multiple transports and automatic rotation
+- **Multiple Log Levels**: Support for debug, info, warn, error, and verbose logging with appropriate file segregation
+- **Specialized Logging Methods**: Dedicated logging functions for different system components and activities
+- **Structured Metadata**: JSON metadata support for detailed, searchable logging information
+- **Exception Handling**: Automatic capture of uncaught exceptions and unhandled promise rejections
+- **Performance Monitoring**: Built-in latency tracking and performance metrics logging
+
+### Log Organization
+
+#### Daily Structure
+
+```
+logs/
+├── 2024-01-15/           # Daily folder (YYYY-MM-DD format)
+│   ├── combined.log      # All log levels for this day
+│   ├── app.log           # Application logs for this day
+│   ├── error.log         # Error logs for this day
+│   ├── debug.log         # Debug logs (when LOG_LEVEL=debug)
+│   ├── exceptions.log    # Uncaught exceptions
+│   └── rejections.log    # Promise rejections
+└── 2024-01-16/           # Next day's logs
+```
+
+#### Benefits of Daily Organization
+
+- **Easy Investigation**: Navigate directly to the day when an issue occurred
+- **Natural Cleanup**: Delete entire day folders when logs are no longer needed
+- **Better Performance**: Smaller daily files instead of huge rotating files
+- **Unlimited Storage**: No file size limits, perfect for high-capacity servers
+- **Intuitive Navigation**: Organized the way humans think about time
+
+### Usage
+
+#### Basic Logging
+
+```typescript
+import { CustomLoggerService } from '@logging/logger.service';
+
+@Injectable()
+export class YourService {
+  constructor(private readonly logger: CustomLoggerService) {}
+
+  yourMethod() {
+    this.logger.log('General information', 'YourService');
+    this.logger.warn('Warning message', 'YourService');
+    this.logger.error('Error occurred', undefined, 'YourService');
+    this.logger.debug('Debug information', 'YourService');
+  }
+}
+```
+
+#### Specialized Logging Methods
+
+```typescript
+// Log RPC activity with latency
+this.logger.logRpcActivity('https://rpc.xinfin.network', 'Connection successful', 250);
+
+// Log blockchain activity with metadata
+this.logger.logBlockchainActivity(50, 'New block processed', {
+  blockNumber: 12345,
+  txCount: 45,
+});
+
+// Log monitoring activity
+this.logger.logMonitoringActivity('RPC_MONITOR', 'Health check completed', {
+  endpointsUp: 7,
+  endpointsDown: 0,
+});
+
+// Log metrics and alerts
+this.logger.logMetrics('InfluxDB write completed', { pointsWritten: 100 });
+this.logger.logAlert('error', 'RPC_MONITOR', 'Endpoint is down', {
+  endpoint: 'https://rpc.example.com',
+});
+```
+
+### Log Management Scripts
+
+The system includes comprehensive NPM scripts for log management:
+
+#### Viewing Logs
+
+```bash
+# View all today's logs in real-time
+npm run logs:view
+
+# View specific log types
+npm run logs:view-errors       # Today's error logs only
+npm run logs:view-app         # Today's app logs only
+npm run logs:view-debug       # Today's debug logs only
+npm run logs:view-combined    # Today's combined logs only
+
+# View yesterday's logs
+npm run logs:view-yesterday
+
+# List all available log days
+npm run logs:list-days
+```
+
+#### Managing Logs
+
+```bash
+# Check total log size and daily breakdown
+npm run logs:size
+
+# Archive all daily logs (moves to archive folder)
+npm run logs:archive
+
+# Clear all daily logs (permanent deletion)
+npm run logs:clear
+
+# Clean up logs older than 30 days
+npm run logs:cleanup-old
+```
+
+### Configuration
+
+Control logging behavior with environment variables:
+
+```bash
+# Set log level (in .env file)
+LOG_LEVEL=info    # Default: info, warn, error
+LOG_LEVEL=debug   # All levels including debug (creates debug.log)
+LOG_LEVEL=error   # Only errors
+LOG_LEVEL=warn    # Warnings and errors
+LOG_LEVEL=verbose # Everything (most detailed)
+```
+
+### Log Analysis
+
+#### Common Analysis Commands
+
+```bash
+# Find all errors in today's logs
+grep -i "error\|fail\|down" logs/$(date +%Y-%m-%d)/combined.log
+
+# Check RPC endpoint issues
+grep -i "rpc.*error\|endpoint.*down" logs/$(date +%Y-%m-%d)/combined.log
+
+# Monitor alert activity
+grep "\[ALERT:" logs/$(date +%Y-%m-%d)/combined.log | tail -20
+
+# Check application startup
+grep "XDC MONITOR APPLICATION STARTED" logs/$(date +%Y-%m-%d)/combined.log
+```
+
+#### Performance Analysis
+
+```bash
+# Find performance issues
+grep -i "latency\|slow\|timeout" logs/$(date +%Y-%m-%d)/combined.log
+
+# Track specific endpoint performance
+grep "rpc.xinfin.network" logs/$(date +%Y-%m-%d)/combined.log | grep "ms"
+```
+
+### Integration with Monitoring
+
+The logging system integrates seamlessly with other monitoring components:
+
+- **Alert Integration**: All alerts are automatically logged with structured metadata
+- **Performance Tracking**: RPC latency and blockchain operation timing included in logs
+- **Error Correlation**: Stack traces and context information for debugging
+- **Metrics Logging**: InfluxDB operations and metrics collection logged for troubleshooting
+
 ## Architecture
 
 The XDC Monitor has been optimized with a modular, maintainable architecture:
@@ -33,6 +270,7 @@ The XDC Monitor has been optimized with a modular, maintainable architecture:
 - **Time-Series Data Management**: Efficient time window data structures for metrics
 - **Modular Services**: Clean separation of concerns with specialized service modules
 - **Consensus Monitoring**: Specialized monitors for miners, epochs, and rewards
+- **Comprehensive Logging System**: Enterprise-grade Winston-based logging with daily organization, multiple transports, and specialized methods
 
 ### Performance Optimizations
 
@@ -122,6 +360,16 @@ The system monitors the following conditions:
    - Component: sync
    - Features intelligent alert aggregation and adaptive throttling to reduce notification noise
    - Uses 1-hour throttling to prevent notification fatigue during prolonged sync issues
+10. **High Transaction Failure Rate**
+
+- Alerts when more than 50% of RPC endpoints fail transaction tests
+- Severity: Error
+- Component: transaction
+- Threshold: 50% of RPC endpoints failing
+- Includes detailed list of all failing RPC endpoints for quick troubleshooting
+- Monitors both normal transactions and contract deployments separately
+- Tracks failure rates per network (Mainnet chainId 50, Testnet chainId 51)
+- Provides specific endpoint failure information for rapid issue resolution
 
 ### Alert Delivery
 
@@ -158,7 +406,59 @@ The system uses these environment variables to control alert behavior:
 - `TELEGRAM_BOT_TOKEN` & `TELEGRAM_CHAT_ID`: Required for Telegram notifications
 - `NOTIFICATION_WEBHOOK_URL`: URL to send webhook alerts (for Slack, Discord, etc.)
 
-### Testing Alerts
+### Comprehensive Testing Framework
+
+The XDC Monitor includes an extensive testing framework for validating alert functionality and simulating various network conditions:
+
+#### Alert Testing Endpoints
+
+```bash
+# Test all alerts at once
+curl http://your-server:3000/api/testing/trigger-all-alerts
+
+# Test specific alert types
+curl http://your-server:3000/api/testing/trigger-alert/block-time
+curl http://your-server:3000/api/testing/trigger-alert/tx-errors
+curl http://your-server:3000/api/testing/trigger-alert/tx-volume
+curl http://your-server:3000/api/testing/trigger-alert/rpc-time
+
+# Manually trigger custom alerts
+curl "http://your-server:3000/api/testing/trigger-manual-alert?type=error&title=Custom%20Alert&message=Test%20message&chainId=50"
+```
+
+#### Network Simulation Endpoints
+
+```bash
+# Simulate slow block times
+curl "http://your-server:3000/api/testing/simulate-slow-blocktime?seconds=4"
+curl "http://your-server:3000/api/testing/simulate-apothem-blocktime?seconds=4"
+
+# Simulate RPC endpoint issues
+curl -X POST "http://your-server:3000/api/testing/simulate-rpc-down?endpoint=https://rpc.example.com"
+curl -X POST "http://your-server:3000/api/testing/simulate-rpc-latency?endpoint=https://rpc.example.com&latency=500"
+```
+
+#### Telegram Integration Testing
+
+```bash
+# Test Telegram topic routing (Mainnet/Testnet/General)
+curl http://your-server:3000/api/testing/test-telegram-topics
+```
+
+#### Weekly Report Testing
+
+```bash
+# Generate weekly report for custom date range
+curl "http://your-server:3000/api/testing/generate-weekly-report?startDays=7&endDays=0"
+
+# Get formatted weekly report message (as would be sent to Telegram)
+curl "http://your-server:3000/api/testing/weekly-report-message?startDays=7&endDays=0"
+
+# Send weekly report to all configured channels
+curl -X POST "http://your-server:3000/api/testing/send-weekly-report?startDays=7&endDays=0"
+```
+
+### Testing Alert System
 
 You can test the alert system using these API endpoints:
 
@@ -389,6 +689,33 @@ chmod +x run.sh
 - **Notifications Test**: `/api/notifications/test` - Test the notification system
 - **Telegram Webhook**: `/api/notifications/telegram` - Endpoint for Grafana to send alerts
 
+### Comprehensive Testing Endpoints
+
+The system provides extensive testing capabilities through dedicated API endpoints:
+
+#### Alert Testing Endpoints
+
+- **Trigger All Alerts**: `/api/testing/trigger-all-alerts` - Trigger all implemented alert types for comprehensive testing
+- **Trigger Specific Alert**: `/api/testing/trigger-alert/{type}` - Trigger specific alert types (block-time, tx-errors, tx-volume, rpc-time)
+- **Trigger Manual Alert**: `/api/testing/trigger-manual-alert?type={type}&title={title}&message={message}&chainId={chainId}` - Create custom alerts with flexible parameters
+
+#### Network Simulation Endpoints
+
+- **Simulate Slow Block Time**: `/api/testing/simulate-slow-blocktime?seconds={seconds}` - Simulate slow block times for Mainnet
+- **Simulate Apothem Block Time**: `/api/testing/simulate-apothem-blocktime?seconds={seconds}` - Simulate slow block times for Testnet
+- **Simulate RPC Down**: `/api/testing/simulate-rpc-down?endpoint={url}` (POST) - Simulate RPC endpoint downtime
+- **Simulate RPC Latency**: `/api/testing/simulate-rpc-latency?endpoint={url}&latency={ms}` (POST) - Simulate high RPC latency
+
+#### Telegram Integration Testing
+
+- **Test Telegram Topics**: `/api/testing/test-telegram-topics` - Test topic-based routing for Mainnet/Testnet/General alerts
+
+#### Weekly Report Testing
+
+- **Generate Weekly Report**: `/api/testing/generate-weekly-report?startDays={days}&endDays={days}` - Generate weekly alert reports for custom date ranges
+- **Get Weekly Report Message**: `/api/testing/weekly-report-message?startDays={days}&endDays={days}` - Get formatted weekly report messages
+- **Send Weekly Report**: `/api/testing/send-weekly-report?startDays={days}&endDays={days}` (POST) - Generate and send weekly reports to all channels
+
 ### Testing Endpoints
 
 - **Trigger Manual Alert**: `/api/testing/trigger-manual-alert?type=error&title=Title&message=Message` - Directly trigger an alert
@@ -434,6 +761,20 @@ The system includes comprehensive transaction monitoring capabilities:
 - **Multi-Chain Support**: Tests both Mainnet (chainId 50) and Testnet (chainId 51)
 - **Wallet Management**: Continuously monitors test wallet balances
 - **Performance Metrics**: Tracks transaction confirmation times and success rates
+- **Failure Rate Monitoring**: Tracks transaction failure rates across RPC endpoints and generates alerts when more than 50% of endpoints fail
+- **Detailed Failure Reporting**: Provides specific lists of failing RPC endpoints in alerts for quick troubleshooting
+- **Per-Network Tracking**: Monitors transaction types separately for each network with individual failure rate calculations
+- **Multi-Endpoint Validation**: Tests transaction functionality across all available RPC endpoints on each network
+
+### Failure Rate Detection
+
+The transaction monitor includes advanced failure rate detection:
+
+- **50% Threshold Alerting**: Automatically generates error alerts when 50% or more RPC endpoints fail transaction tests
+- **Transaction Type Separation**: Monitors normal transactions and contract deployments separately
+- **Network-Specific Tracking**: Maintains separate failure rates for Mainnet (chainId 50) and Testnet (chainId 51)
+- **Detailed Endpoint Information**: Alert messages include complete lists of failing RPC endpoints for rapid issue resolution
+- **Real-Time Monitoring**: Failure rates are calculated in real-time during each 5-minute test cycle
 
 ### Requirements
 
@@ -639,6 +980,11 @@ src/
 │   ├── config.module.ts     # Configuration module definition
 │   └── config.service.ts    # Service for accessing configuration
 ├── blockchain/              # Blockchain interaction services
+├── logging/                 # Comprehensive logging system
+│   ├── logger.service.ts    # Winston-based logging service with daily organization
+│   ├── logger.module.ts     # NestJS module configuration for logging
+│   ├── index.ts            # Exports for easier importing
+│   └── README.md           # Comprehensive logging documentation
 ├── monitoring/              # Core monitoring services
 │   ├── alerts.service.ts    # Alert configuration and delivery
 │   ├── blocks.monitor.ts    # Block monitoring implementation
@@ -700,14 +1046,22 @@ The application includes several powerful utilities:
    - Severity-based prioritization
    - Network classification for targeted routing
 
-4. **Modular Helpers**: Optimized code structure with reusable components
+4. **CustomLoggerService**: Enterprise-grade logging service
+
+   - Winston-based logging with multiple transports
+   - Daily log organization for easy investigation
+   - Specialized logging methods for different components
+   - Automatic exception handling and structured metadata
+   - Performance monitoring and metrics logging
+
+5. **Modular Helpers**: Optimized code structure with reusable components
 
    - Smart network detection for Mainnet/Testnet classification
    - Standardized table formatting for consistent display
    - Component aggregation for detailed reporting
    - Runtime optimization through code reuse
 
-5. **ConsensusMonitor**: Orchestration for consensus monitoring
+6. **ConsensusMonitor**: Orchestration for consensus monitoring
    - Coordinated initialization of component monitors
    - Centralized validator data management
    - Complete round-trip monitoring for consensus violations
