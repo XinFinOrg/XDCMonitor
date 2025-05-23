@@ -576,9 +576,9 @@
               "tooltip": false,
               "viz": false
             },
-            "insertNulls": false,
+            "insertNulls": 3600000,
             "lineWidth": 0,
-            "spanNulls": false
+            "spanNulls": 3600000
           },
           "mappings": [
             {
@@ -719,9 +719,9 @@
               "tooltip": false,
               "viz": false
             },
-            "insertNulls": false,
+            "insertNulls": 3600000,
             "lineWidth": 0,
-            "spanNulls": false
+            "spanNulls": 3600000
           },
           "mappings": [
             {
@@ -1904,7 +1904,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green"
+                "color": "green",
+                "value": null
               },
               {
                 "color": "yellow",
@@ -2017,7 +2018,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green"
+                "color": "green",
+                "value": null
               },
               {
                 "color": "yellow",
@@ -2101,9 +2103,9 @@
               "tooltip": false,
               "viz": false
             },
-            "insertNulls": false,
+            "insertNulls": 3600000,
             "lineWidth": 0,
-            "spanNulls": false
+            "spanNulls": 3600000
           },
           "mappings": [
             {
@@ -2126,7 +2128,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "red"
+                "color": "red",
+                "value": null
               },
               {
                 "color": "green",
@@ -2148,7 +2151,8 @@
                   "mode": "absolute",
                   "steps": [
                     {
-                      "color": "red"
+                      "color": "red",
+                      "value": null
                     }
                   ]
                 }
@@ -2246,7 +2250,7 @@
               "tooltip": false,
               "viz": false
             },
-            "insertNulls": false,
+            "insertNulls": 3600000,
             "lineInterpolation": "linear",
             "lineWidth": 2,
             "pointSize": 5,
@@ -2254,7 +2258,7 @@
               "type": "linear"
             },
             "showPoints": "never",
-            "spanNulls": false,
+            "spanNulls": 3600000,
             "stacking": {
               "group": "A",
               "mode": "none"
@@ -2268,7 +2272,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green"
+                "color": "green",
+                "value": null
               },
               {
                 "color": "red",
@@ -2340,9 +2345,9 @@
               "tooltip": false,
               "viz": false
             },
-            "insertNulls": false,
+            "insertNulls": 3600000,
             "lineWidth": 0,
-            "spanNulls": false
+            "spanNulls": 3600000
           },
           "mappings": [
             {
@@ -2365,7 +2370,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "red"
+                "color": "red",
+                "value": null
               },
               {
                 "color": "green",
@@ -2387,7 +2393,8 @@
                   "mode": "absolute",
                   "steps": [
                     {
-                      "color": "red"
+                      "color": "red",
+                      "value": null
                     }
                   ]
                 }
@@ -2485,7 +2492,7 @@
               "tooltip": false,
               "viz": false
             },
-            "insertNulls": false,
+            "insertNulls": 3600000,
             "lineInterpolation": "linear",
             "lineWidth": 2,
             "pointSize": 5,
@@ -2493,7 +2500,7 @@
               "type": "linear"
             },
             "showPoints": "never",
-            "spanNulls": false,
+            "spanNulls": 3600000,
             "stacking": {
               "group": "A",
               "mode": "none"
@@ -2507,7 +2514,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green"
+                "color": "green",
+                "value": null
               },
               {
                 "color": "red",
@@ -2577,7 +2585,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "red"
+                "color": "red",
+                "value": null
               },
               {
                 "color": "yellow",
@@ -2669,7 +2678,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green"
+                "color": "green",
+                "value": null
               }
             ]
           },
@@ -2726,7 +2736,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green"
+                "color": "green",
+                "value": null
               }
             ]
           },
@@ -2783,7 +2794,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green"
+                "color": "green",
+                "value": null
               }
             ]
           },
@@ -2840,7 +2852,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green"
+                "color": "green",
+                "value": null
               },
               {
                 "color": "red",
@@ -2997,7 +3010,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green"
+                "color": "green",
+                "value": null
               },
               {
                 "color": "red",
@@ -3079,7 +3093,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green"
+                "color": "green",
+                "value": null
               }
             ]
           }
@@ -3119,7 +3134,8 @@
                   "mode": "absolute",
                   "steps": [
                     {
-                      "color": "green"
+                      "color": "green",
+                      "value": null
                     },
                     {
                       "color": "yellow",
@@ -3190,7 +3206,8 @@
                   "mode": "absolute",
                   "steps": [
                     {
-                      "color": "red"
+                      "color": "red",
+                      "value": null
                     },
                     {
                       "color": "yellow",
@@ -3333,7 +3350,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green"
+                "color": "green",
+                "value": null
               },
               {
                 "color": "red",
@@ -3511,7 +3529,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "text"
+                "color": "text",
+                "value": null
               }
             ]
           }
@@ -3666,7 +3685,7 @@
       "type": "table"
     },
     {
-      "collapsed": true,
+      "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
@@ -3674,155 +3693,155 @@
         "y": 125
       },
       "id": 114,
-      "panels": [
+      "panels": [],
+      "title": "Alert Details",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb"
+      },
+      "description": "Recent alert history showing system health issues, components affected, and timing.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": true,
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "type"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "error": {
+                        "color": "red",
+                        "index": 2
+                      },
+                      "info": {
+                        "color": "blue",
+                        "index": 0
+                      },
+                      "warning": {
+                        "color": "orange",
+                        "index": 1
+                      }
+                    },
+                    "type": "value"
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "displayName",
+                "value": "Severity"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 24,
+        "x": 0,
+        "y": 126
+      },
+      "id": 123,
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": ["sum"],
+          "show": false
+        },
+        "showHeader": true,
+        "sortBy": [
+          {
+            "desc": true,
+            "displayName": "Time"
+          }
+        ]
+      },
+      "pluginVersion": "10.2.0",
+      "targets": [
         {
           "datasource": {
             "type": "influxdb",
             "uid": "influxdb"
           },
-          "description": "Recent alert history showing system health issues, components affected, and timing.",
-          "fieldConfig": {
-            "defaults": {
-              "color": {
-                "mode": "thresholds"
-              },
-              "custom": {
-                "align": "auto",
-                "cellOptions": {
-                  "type": "auto"
-                },
-                "filterable": true,
-                "inspect": false
-              },
-              "mappings": [],
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green"
-                  }
-                ]
-              }
-            },
-            "overrides": [
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "type"
-                },
-                "properties": [
-                  {
-                    "id": "mappings",
-                    "value": [
-                      {
-                        "options": {
-                          "error": {
-                            "color": "red",
-                            "index": 2
-                          },
-                          "info": {
-                            "color": "blue",
-                            "index": 0
-                          },
-                          "warning": {
-                            "color": "orange",
-                            "index": 1
-                          }
-                        },
-                        "type": "value"
-                      }
-                    ]
-                  },
-                  {
-                    "id": "custom.cellOptions",
-                    "value": {
-                      "type": "color-text"
-                    }
-                  },
-                  {
-                    "id": "displayName",
-                    "value": "Severity"
-                  }
-                ]
-              }
-            ]
-          },
-          "gridPos": {
-            "h": 7,
-            "w": 24,
-            "x": 0,
-            "y": 113
-          },
-          "id": 123,
-          "options": {
-            "cellHeight": "sm",
-            "footer": {
-              "countRows": false,
-              "fields": "",
-              "reducer": ["sum"],
-              "show": false
-            },
-            "showHeader": true,
-            "sortBy": [
-              {
-                "desc": true,
-                "displayName": "Time"
-              }
-            ]
-          },
-          "pluginVersion": "10.2.0",
-          "targets": [
-            {
-              "datasource": {
-                "type": "influxdb",
-                "uid": "influxdb"
-              },
-              "editorMode": "code",
-              "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"alert_history\" and r.chainId == \"50\")\n  |> pivot(rowKey:[\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> group()\n  |> sort(columns: [\"_time\"], desc: true)",
-              "refId": "A"
-            }
-          ],
-          "title": "Recent Alert History",
-          "transformations": [
-            {
-              "id": "organize",
-              "options": {
-                "excludeByName": {
-                  "_measurement": true,
-                  "_start": true,
-                  "_stop": true,
-                  "_time": 0,
-                  "chainId": 4,
-                  "component": 5,
-                  "title": 1,
-                  "type": 3,
-                  "value": 2
-                },
-                "indexByName": {
-                  "_measurement": 8,
-                  "_start": 6,
-                  "_stop": 7,
-                  "_time": 0,
-                  "chainId": 4,
-                  "component": 5,
-                  "title": 1,
-                  "type": 3,
-                  "value": 2
-                },
-                "renameByName": {
-                  "_time": "Time",
-                  "chainId": "Chain ID",
-                  "component": "Component",
-                  "type": "Alert Type"
-                }
-              }
-            }
-          ],
-          "type": "table"
+          "editorMode": "code",
+          "query": "from(bucket: \"xdc_metrics\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"alert_history\" and r.chainId == \"50\")\n  |> pivot(rowKey:[\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> group()\n  |> sort(columns: [\"_time\"], desc: true)",
+          "refId": "A"
         }
       ],
-      "title": "Alert Details",
-      "type": "row"
+      "title": "Recent Alert History",
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "_measurement": true,
+              "_start": true,
+              "_stop": true,
+              "_time": 0,
+              "chainId": false,
+              "component": false,
+              "title": false,
+              "type": false,
+              "value": false
+            },
+            "indexByName": {
+              "_measurement": 8,
+              "_start": 6,
+              "_stop": 7,
+              "_time": 0,
+              "chainId": 4,
+              "component": 5,
+              "title": 1,
+              "type": 3,
+              "value": 2
+            },
+            "renameByName": {
+              "_time": "Time",
+              "chainId": "Chain ID",
+              "component": "Component",
+              "type": "Alert Type"
+            }
+          }
+        }
+      ],
+      "type": "table"
     }
   ],
   "refresh": "10s",
@@ -3839,6 +3858,6 @@
   "timezone": "",
   "title": "XDC Network Unified Dashboard",
   "uid": "xdc-unified-dashboard",
-  "version": 258,
+  "version": 37,
   "weekStart": ""
 }

@@ -181,3 +181,10 @@ export const PRIMARY_RPC_URLS = {
   [MAINNET_CHAIN_ID]: 'http://173.212.233.170:8989',
   [TESTNET_CHAIN_ID]: 'https://rpc.apothem.network',
 };
+
+export const RPC_QUALITY_TIERS = {
+  HIGH: 3, // Consistently reliable, low latency
+  MEDIUM: 2, // Generally reliable with occasional issues
+  LOW: 1, // Less reliable or higher latency
+  UNKNOWN: 0, // Not yet evaluated
+};

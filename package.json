@@ -13,6 +13,18 @@
     "start:prod": "node dist/main",
     "start:fast": "NODE_ENV=development npx ts-node-dev -r tsconfig-paths/register --respawn --transpile-only src/main.ts",
     "start:turbo": "NODE_ENV=development nodemon --watch 'src/**/*.ts' --ignore 'src/**/*.spec.ts' --exec 'ts-node -r tsconfig-paths/register' src/main.ts",
+    "logs:view": "tail -f logs/$(date +%Y-%m-%d)/*.log 2>/dev/null || echo 'No logs for today yet. Logs will be created when app starts.'",
+    "logs:view-errors": "tail -f logs/$(date +%Y-%m-%d)/error.log 2>/dev/null || echo 'No error logs for today yet.'",
+    "logs:view-app": "tail -f logs/$(date +%Y-%m-%d)/app.log 2>/dev/null || echo 'No app logs for today yet.'",
+    "logs:view-debug": "tail -f logs/$(date +%Y-%m-%d)/debug.log 2>/dev/null || echo 'No debug logs for today yet. Enable with LOG_LEVEL=debug.'",
+    "logs:view-combined": "tail -f logs/$(date +%Y-%m-%d)/combined.log 2>/dev/null || echo 'No combined logs for today yet.'",
+    "logs:view-yesterday": "tail -f logs/$(date -d yesterday +%Y-%m-%d)/*.log 2>/dev/null || echo 'No logs for yesterday.'",
+    "logs:list-days": "ls -la logs/ | grep '^d' | awk '{print $9}' | grep -E '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' | sort",
+    "logs:view-day": "echo 'Usage: yarn logs:view-day YYYY-MM-DD' && echo 'Example: yarn logs:view-day 2024-01-15'",
+    "logs:clear": "rm -rf logs/20* && echo 'All daily log directories cleared.'",
+    "logs:archive": "mkdir -p logs/archive/$(date +%Y%m%d_%H%M%S) && mv logs/20* logs/archive/$(date +%Y%m%d_%H%M%S)/ 2>/dev/null && echo 'Daily logs archived' || echo 'No logs to archive'",
+    "logs:size": "du -sh logs/ 2>/dev/null | head -1 && echo 'Daily breakdown:' && du -sh logs/20* 2>/dev/null | tail -10 || echo 'No logs directory yet'",
+    "logs:cleanup-old": "find logs/ -maxdepth 1 -type d -name '20*' -mtime +30 -exec rm -rf {} \\; && echo 'Cleaned up logs older than 30 days'",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
     "test": "jest",
     "test:watch": "jest --watch",
@@ -97,6 +109,7 @@
       "^@types/(.*)$": "<rootDir>/types/$1",
       "^@monitoring/(.*)$": "<rootDir>/monitoring/$1",
       "^@metrics/(.*)$": "<rootDir>/metrics/$1",
+      "^@logging/(.*)$": "<rootDir>/logging/$1",
       "^@/(.*)$": "<rootDir>/$1"
     }
   }
