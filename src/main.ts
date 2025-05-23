@@ -1,7 +1,6 @@
 import { AppModule } from '@/app.module';
-import { Logger } from '@nestjs/common';
-import { NestFactory } from '@nestjs/core';
 import { CustomLoggerService } from '@logging/logger.service';
+import { NestFactory } from '@nestjs/core';
 
 process.on('unhandledRejection', (reason, promise) => {
   console.error('Unhandled Rejection at:', promise, 'reason:', reason);
@@ -14,10 +13,14 @@ process.on('uncaughtException', error => {
 });
 
 async function bootstrap() {
+  // Add immediate console feedback for debugging
+  if (process.env.NODE_ENV === 'development') {
+    console.log('🚀 Starting XDC Monitor in development mode...');
+    console.log('📊 Debug logging enabled');
+  }
+
   // Create the app first
-  const app = await NestFactory.create(AppModule, {
-    bufferLogs: true, // Buffer logs until custom logger is ready
-  });
+  const app = await NestFactory.create(AppModule);
 
   // Get our custom logger service
   const customLogger = app.get(CustomLoggerService);

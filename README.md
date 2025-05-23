@@ -368,6 +368,8 @@ The system monitors the following conditions:
 - Threshold: 50% of RPC endpoints failing
 - Includes detailed list of all failing RPC endpoints for quick troubleshooting
 - Monitors both normal transactions and contract deployments separately
+- Tracks failure rates per network (Mainnet chainId 50, Testnet chainId 51)
+- Provides specific endpoint failure information for rapid issue resolution
 
 ### Alert Delivery
 
@@ -404,7 +406,59 @@ The system uses these environment variables to control alert behavior:
 - `TELEGRAM_BOT_TOKEN` & `TELEGRAM_CHAT_ID`: Required for Telegram notifications
 - `NOTIFICATION_WEBHOOK_URL`: URL to send webhook alerts (for Slack, Discord, etc.)
 
-### Testing Alerts
+### Comprehensive Testing Framework
+
+The XDC Monitor includes an extensive testing framework for validating alert functionality and simulating various network conditions:
+
+#### Alert Testing Endpoints
+
+```bash
+# Test all alerts at once
+curl http://your-server:3000/api/testing/trigger-all-alerts
+
+# Test specific alert types
+curl http://your-server:3000/api/testing/trigger-alert/block-time
+curl http://your-server:3000/api/testing/trigger-alert/tx-errors
+curl http://your-server:3000/api/testing/trigger-alert/tx-volume
+curl http://your-server:3000/api/testing/trigger-alert/rpc-time
+
+# Manually trigger custom alerts
+curl "http://your-server:3000/api/testing/trigger-manual-alert?type=error&title=Custom%20Alert&message=Test%20message&chainId=50"
+```
+
+#### Network Simulation Endpoints
+
+```bash
+# Simulate slow block times
+curl "http://your-server:3000/api/testing/simulate-slow-blocktime?seconds=4"
+curl "http://your-server:3000/api/testing/simulate-apothem-blocktime?seconds=4"
+
+# Simulate RPC endpoint issues
+curl -X POST "http://your-server:3000/api/testing/simulate-rpc-down?endpoint=https://rpc.example.com"
+curl -X POST "http://your-server:3000/api/testing/simulate-rpc-latency?endpoint=https://rpc.example.com&latency=500"
+```
+
+#### Telegram Integration Testing
+
+```bash
+# Test Telegram topic routing (Mainnet/Testnet/General)
+curl http://your-server:3000/api/testing/test-telegram-topics
+```
+
+#### Weekly Report Testing
+
+```bash
+# Generate weekly report for custom date range
+curl "http://your-server:3000/api/testing/generate-weekly-report?startDays=7&endDays=0"
+
+# Get formatted weekly report message (as would be sent to Telegram)
+curl "http://your-server:3000/api/testing/weekly-report-message?startDays=7&endDays=0"
+
+# Send weekly report to all configured channels
+curl -X POST "http://your-server:3000/api/testing/send-weekly-report?startDays=7&endDays=0"
+```
+
+### Testing Alert System
 
 You can test the alert system using these API endpoints:
 
@@ -635,6 +689,33 @@ chmod +x run.sh
 - **Notifications Test**: `/api/notifications/test` - Test the notification system
 - **Telegram Webhook**: `/api/notifications/telegram` - Endpoint for Grafana to send alerts
 
+### Comprehensive Testing Endpoints
+
+The system provides extensive testing capabilities through dedicated API endpoints:
+
+#### Alert Testing Endpoints
+
+- **Trigger All Alerts**: `/api/testing/trigger-all-alerts` - Trigger all implemented alert types for comprehensive testing
+- **Trigger Specific Alert**: `/api/testing/trigger-alert/{type}` - Trigger specific alert types (block-time, tx-errors, tx-volume, rpc-time)
+- **Trigger Manual Alert**: `/api/testing/trigger-manual-alert?type={type}&title={title}&message={message}&chainId={chainId}` - Create custom alerts with flexible parameters
+
+#### Network Simulation Endpoints
+
+- **Simulate Slow Block Time**: `/api/testing/simulate-slow-blocktime?seconds={seconds}` - Simulate slow block times for Mainnet
+- **Simulate Apothem Block Time**: `/api/testing/simulate-apothem-blocktime?seconds={seconds}` - Simulate slow block times for Testnet
+- **Simulate RPC Down**: `/api/testing/simulate-rpc-down?endpoint={url}` (POST) - Simulate RPC endpoint downtime
+- **Simulate RPC Latency**: `/api/testing/simulate-rpc-latency?endpoint={url}&latency={ms}` (POST) - Simulate high RPC latency
+
+#### Telegram Integration Testing
+
+- **Test Telegram Topics**: `/api/testing/test-telegram-topics` - Test topic-based routing for Mainnet/Testnet/General alerts
+
+#### Weekly Report Testing
+
+- **Generate Weekly Report**: `/api/testing/generate-weekly-report?startDays={days}&endDays={days}` - Generate weekly alert reports for custom date ranges
+- **Get Weekly Report Message**: `/api/testing/weekly-report-message?startDays={days}&endDays={days}` - Get formatted weekly report messages
+- **Send Weekly Report**: `/api/testing/send-weekly-report?startDays={days}&endDays={days}` (POST) - Generate and send weekly reports to all channels
+
 ### Testing Endpoints
 
 - **Trigger Manual Alert**: `/api/testing/trigger-manual-alert?type=error&title=Title&message=Message` - Directly trigger an alert
@@ -680,6 +761,20 @@ The system includes comprehensive transaction monitoring capabilities:
 - **Multi-Chain Support**: Tests both Mainnet (chainId 50) and Testnet (chainId 51)
 - **Wallet Management**: Continuously monitors test wallet balances
 - **Performance Metrics**: Tracks transaction confirmation times and success rates
+- **Failure Rate Monitoring**: Tracks transaction failure rates across RPC endpoints and generates alerts when more than 50% of endpoints fail
+- **Detailed Failure Reporting**: Provides specific lists of failing RPC endpoints in alerts for quick troubleshooting
+- **Per-Network Tracking**: Monitors transaction types separately for each network with individual failure rate calculations
+- **Multi-Endpoint Validation**: Tests transaction functionality across all available RPC endpoints on each network
+
+### Failure Rate Detection
+
+The transaction monitor includes advanced failure rate detection:
+
+- **50% Threshold Alerting**: Automatically generates error alerts when 50% or more RPC endpoints fail transaction tests
+- **Transaction Type Separation**: Monitors normal transactions and contract deployments separately
+- **Network-Specific Tracking**: Maintains separate failure rates for Mainnet (chainId 50) and Testnet (chainId 51)
+- **Detailed Endpoint Information**: Alert messages include complete lists of failing RPC endpoints for rapid issue resolution
+- **Real-Time Monitoring**: Failure rates are calculated in real-time during each 5-minute test cycle
 
 ### Requirements
 

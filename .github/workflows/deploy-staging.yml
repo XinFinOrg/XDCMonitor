@@ -168,7 +168,7 @@ jobs:
           TELEGRAM_TESTNET_TOPIC_ID=${TELEGRAM_TESTNET_TOPIC_ID}
 
           # Logging configuration
-          LOG_LEVEL=info
+          LOG_LEVEL=debug
 
           # InfluxDB Configuration
           INFLUXDB_URL=http://localhost:8086

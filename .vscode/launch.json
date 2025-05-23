@@ -6,11 +6,29 @@
       "request": "launch",
       "name": "Debug XDC Monitor",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "start:fast", "--", "--inspect"],
+      "runtimeArgs": ["run", "start:debug"],
       "skipFiles": ["<node_internals>/**"],
       "console": "integratedTerminal",
       "env": {
-        "NODE_ENV": "development"
+        "NODE_ENV": "development",
+        "LOG_LEVEL": "debug"
+      },
+      "sourceMaps": true,
+      "resolveSourceMapLocations": ["${workspaceFolder}/**", "!**/node_modules/**"],
+      "restart": true,
+      "stopOnEntry": false
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Debug XDC Monitor (Fast)",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "start:fast"],
+      "skipFiles": ["<node_internals>/**"],
+      "console": "integratedTerminal",
+      "env": {
+        "NODE_ENV": "development",
+        "LOG_LEVEL": "debug"
       },
       "sourceMaps": true,
       "resolveSourceMapLocations": ["${workspaceFolder}/**", "!**/node_modules/**"],
