@@ -988,10 +988,9 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
   private async checkProviderBlockHeights(): Promise<void> {
     // Get all online RPC endpoints
     const rpcEndpoints = this.configService.getRpcEndpoints();
-    const highestBlocks = new Map<number, number>();
     const blockHeights = new Map<string, number>();
 
-    // First pass: collect block heights for all endpoints
+    // Collect block heights for all endpoints
     for (const endpoint of rpcEndpoints) {
       const { url, chainId } = endpoint;
       const status = this.rpcStatuses.get(url);
@@ -1002,18 +1001,13 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
           // Get block height from provider
           const blockHeight = await this.blockchainService.getLatestBlockNumber(chainId, url);
           blockHeights.set(url, blockHeight);
-
-          // Update highest block for this chain
-          if (!highestBlocks.has(chainId) || blockHeight > highestBlocks.get(chainId)) {
-            highestBlocks.set(chainId, blockHeight);
-          }
         } catch (error) {
           this.logger.debug(`Failed to get block height for ${url}: ${error.message}`);
         }
       }
     }
 
-    // Second pass: check for lagging endpoints
+    // Update RPC selector with sync status for each endpoint
     for (const endpoint of rpcEndpoints) {
       const { url, chainId } = endpoint;
       const blockHeight = blockHeights.get(url);
@@ -1021,7 +1015,13 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
       // Skip endpoints we couldn't get heights for
       if (blockHeight === undefined) continue;
 
-      const highestBlock = highestBlocks.get(chainId) || 0;
+      // Get all heights for this chain to determine highest block
+      const chainEndpoints = rpcEndpoints.filter(e => e.chainId === chainId);
+      const chainHeights = chainEndpoints.map(e => blockHeights.get(e.url)).filter(h => h !== undefined);
+
+      if (chainHeights.length === 0) continue;
+
+      const highestBlock = Math.max(...chainHeights);
       const blocksBehind = Math.max(0, highestBlock - blockHeight);
 
       // Determine if the endpoint is synced with the network
@@ -1029,39 +1029,10 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
 
       // Update RPC selector with sync status
       this.rpcSelectorService.updateEndpointSyncStatus(endpoint, syncedWithNetwork, blocksBehind);
-
-      // Alert on significant lag
-      if (blocksBehind > this.configService.getMonitoringConfig().blockDiscrepancySyncThreshold) {
-        this.handleRpcSyncLag(endpoint, blockHeight, highestBlock, blocksBehind);
-      }
     }
-  }
 
-  /**
-   * Handle alerts for RPC endpoints that are behind in sync
-   */
-  private handleRpcSyncLag(
-    endpoint: RpcEndpoint,
-    currentBlock: number,
-    networkBlock: number,
-    blocksBehind: number,
-  ): void {
-    const { url, name, chainId } = endpoint;
-
-    // Determine severity based on how far behind
-    const criticalThreshold = 1000; // 1000+ blocks behind is critical
-    const warningThreshold = this.configService.getMonitoringConfig().blockDiscrepancySyncThreshold;
-
-    // Format alert message
-    const blocksMsg = `${blocksBehind.toLocaleString()} blocks`;
-    const currentMsg = `${currentBlock.toLocaleString()} vs. network ${networkBlock.toLocaleString()}`;
-    const message = `RPC endpoint ${name} (${url}) for chain ${chainId} is ${blocksMsg} behind (${currentMsg})`;
-
-    if (blocksBehind >= criticalThreshold) {
-      this.alertService.error(ALERTS.TYPES.SYNC_BLOCKS_LAG, ALERTS.COMPONENTS.SYNC, message, chainId);
-    } else if (blocksBehind >= warningThreshold) {
-      this.alertService.warning(ALERTS.TYPES.SYNC_BLOCKS_LAG, ALERTS.COMPONENTS.SYNC, message, chainId);
-    }
+    // Note: Block height lag alerting is handled by the BlocksMonitorService.checkForBlockHeightLag method
+    // which provides more comprehensive alerting with proper throttling and aggregation
   }
 
   /**
