@@ -584,6 +584,11 @@ INFLUXDB_BUCKET=xdc_metrics
 INFLUXDB_ADMIN_USER=admin
 INFLUXDB_ADMIN_PASSWORD=secure-password
 
+# internal-node-datasource configuration
+INTERNAL_NODE_INFLUXDB_URL=http://xdc-internal-node:8086
+INTERNAL_NODE_INFLUXDB_TOKEN=your_actual_token_here
+
+
 # Grafana Admin Credentials
 GRAFANA_ADMIN_USER=admin
 GRAFANA_ADMIN_PASSWORD=secure-password
