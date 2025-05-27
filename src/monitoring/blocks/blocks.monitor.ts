@@ -410,8 +410,8 @@ export class BlocksMonitorService implements OnModuleInit {
       if (!isNaN(blockNumber)) {
         // Store height and update metrics
         this.endpointBlockHeights[networkKey][endpoint] = blockNumber;
-        this.metricsService.setBlockHeight(blockNumber, endpoint, chainId.toString());
-        this.metricsService.setRpcStatus(endpoint, true, chainId);
+        await this.metricsService.setBlockHeightWithSentinel(blockNumber, endpoint, chainId.toString(), false);
+        this.metricsService.setRpcStatusWithSentinel(endpoint, true, chainId, false);
 
         // Update status for primary endpoint if this is it
         if (endpoint === this.primaryEndpointStatus[chainId]?.url) {
@@ -419,7 +419,9 @@ export class BlocksMonitorService implements OnModuleInit {
         }
       }
     } catch (error) {
-      this.metricsService.setRpcStatus(endpoint, false, chainId);
+      // Use sentinel values for failed endpoints to maintain visibility in Grafana
+      this.metricsService.setRpcStatusWithSentinel(endpoint, false, chainId, true);
+      await this.metricsService.setBlockHeightWithSentinel(null, endpoint, chainId.toString(), true);
 
       // Handle primary endpoint error if this is it
       if (endpoint === this.primaryEndpointStatus[chainId]?.url) {
@@ -503,7 +505,7 @@ export class BlocksMonitorService implements OnModuleInit {
 
   private handlePrimaryEndpointError(chainId: number, primaryEndpoint: string, error: Error): void {
     this.logger.error(`Primary endpoint ${primaryEndpoint} error: ${error.message}`);
-    this.metricsService.setRpcStatus(primaryEndpoint, false, chainId);
+    this.metricsService.setRpcStatusWithSentinel(primaryEndpoint, false, chainId, true);
 
     const status = this.primaryEndpointStatus[chainId] || {
       url: primaryEndpoint,
@@ -556,7 +558,7 @@ export class BlocksMonitorService implements OnModuleInit {
     try {
       // Update metrics
       if (endpoint) {
-        this.metricsService.setBlockHeight(block.number, endpoint, chainId.toString());
+        await this.metricsService.setBlockHeightWithSentinel(block.number, endpoint, chainId.toString(), false);
       }
 
       // Process transactions and update metrics

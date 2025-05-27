@@ -4,7 +4,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import * as dotenv from 'dotenv';
 import * as fs from 'fs';
 import { join } from 'path';
-import { RpcEndpoint, AlertNotificationConfig, MonitoringConfig, InfluxDbConfig } from '@types';
+import { RpcEndpoint, AlertNotificationConfig, MonitoringConfig, InfluxDbConfig, SentinelValueConfig } from '@types';
 import {
   EXPLORER_ENDPOINTS,
   FAUCET_ENDPOINTS,
@@ -198,6 +198,13 @@ export class ConfigService {
         enableDashboard: this.isFeatureEnabled(FEATURE_FLAGS.ENABLE_DASHBOARD_ALERTS, true),
       };
 
+      const sentinelValues = {
+        enabled: this.getBoolean(ENV_VARS.ENABLE_SENTINEL_VALUES, true),
+        peerCount: this.getNumber(ENV_VARS.SENTINEL_PEER_COUNT, DEFAULTS.SENTINEL_PEER_COUNT),
+        latency: this.getNumber(ENV_VARS.SENTINEL_LATENCY, DEFAULTS.SENTINEL_LATENCY),
+        status: this.getNumber(ENV_VARS.SENTINEL_STATUS_DOWN, DEFAULTS.SENTINEL_STATUS_DOWN),
+      };
+
       this.monitoringConfig = {
         scanIntervalMs: this.getNumber(ENV_VARS.SCAN_INTERVAL, DEFAULTS.SCAN_INTERVAL) * 1000,
         blocksToScan: this.getNumber(ENV_VARS.BLOCKS_TO_SCAN, DEFAULTS.BLOCKS_TO_SCAN),
@@ -216,6 +223,7 @@ export class ConfigService {
           ENV_VARS.TRANSACTION_HISTORY_WINDOW_MS,
           DEFAULTS.TRANSACTION_HISTORY_WINDOW_MS,
         ),
+        sentinelValues,
       };
     }
 

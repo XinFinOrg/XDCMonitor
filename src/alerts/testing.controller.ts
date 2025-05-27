@@ -36,7 +36,7 @@ export class TestingController {
     }
 
     this.logger.log(`Simulating RPC down: ${endpoint}`);
-    this.metricsService.setRpcStatus(endpoint, false);
+    this.metricsService.setRpcStatusWithSentinel(endpoint, false, 50, true);
 
     return { success: true, message: `Simulated RPC down for ${endpoint}` };
   }
@@ -49,7 +49,7 @@ export class TestingController {
 
     const latencyMs = parseInt(latency);
     this.logger.log(`Simulating high RPC latency: ${endpoint} - ${latencyMs}ms`);
-    this.metricsService.recordRpcLatency(endpoint, latencyMs);
+    this.metricsService.recordRpcLatencyWithSentinel(endpoint, latencyMs, 50, false);
 
     return { success: true, message: `Simulated latency of ${latencyMs}ms for ${endpoint}` };
   }

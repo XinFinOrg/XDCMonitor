@@ -139,6 +139,12 @@ export const ENV_VARS = {
   // Healthchecks.io configuration
   HEALTHCHECKS_IO_URL: 'HEALTHCHECKS_IO_URL',
   HEALTHCHECKS_IO_INTERVAL: 'HEALTHCHECKS_IO_INTERVAL',
+
+  // Sentinel values configuration for null data handling
+  ENABLE_SENTINEL_VALUES: 'ENABLE_SENTINEL_VALUES',
+  SENTINEL_PEER_COUNT: 'SENTINEL_PEER_COUNT',
+  SENTINEL_LATENCY: 'SENTINEL_LATENCY',
+  SENTINEL_STATUS_DOWN: 'SENTINEL_STATUS_DOWN',
 } as const;
 
 // Network related constants
@@ -188,6 +194,11 @@ export const DEFAULTS = {
 
   // Dashboard update intervals
   DASHBOARD_UPDATE_INTERVAL_MS: 5000, // 5 seconds
+
+  // Sentinel values for null data handling in Grafana
+  SENTINEL_PEER_COUNT: -1,
+  SENTINEL_LATENCY: -1,
+  SENTINEL_STATUS_DOWN: 0,
 } as const;
 
 // Time constants in milliseconds for convenience

@@ -47,7 +47,11 @@ export class PeerCountMonitor {
    */
   public async monitorRpcPeerCount(endpoint: RpcEndpoint): Promise<boolean> {
     const peerCount = await this.fetchRpcPeerCount(endpoint);
-    if (peerCount === null) return false;
+    if (peerCount === null) {
+      // Write sentinel value for failed endpoint to maintain visibility in Grafana
+      this.metricsService.setPeerCountWithSentinel(endpoint.url, null, 'rpc', endpoint.chainId, true);
+      return false;
+    }
 
     return this.processPeerCountWithMetrics(endpoint, peerCount, 'rpc');
   }
@@ -73,7 +77,7 @@ export class PeerCountMonitor {
     peerCount: number,
     endpointType: 'rpc' | 'websocket',
   ): boolean {
-    this.metricsService.setPeerCount(endpoint.url, peerCount, endpointType, endpoint.chainId);
+    this.metricsService.setPeerCountWithSentinel(endpoint.url, peerCount, endpointType, endpoint.chainId, false);
     const alertTriggered = this.processPeerCount(endpoint, peerCount, endpointType);
 
     const logLevel = alertTriggered ? 'log' : 'debug';
