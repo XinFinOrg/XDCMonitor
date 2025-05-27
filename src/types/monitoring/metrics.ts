@@ -18,6 +18,16 @@ export interface InfluxDbConfig {
 }
 
 /**
+ * Sentinel value configuration for handling null/missing data
+ */
+export interface SentinelValueConfig {
+  enabled: boolean;
+  peerCount: number;
+  latency: number;
+  status: number; // 0 for down, 1 for up
+}
+
+/**
  * Monitoring configuration
  */
 export interface MonitoringConfig {
@@ -32,4 +42,5 @@ export interface MonitoringConfig {
   slowRpcThresholdMs: number;
   blockDiscrepancySyncThreshold: number;
   transactionHistoryWindowMs: number;
+  sentinelValues: SentinelValueConfig;
 }
