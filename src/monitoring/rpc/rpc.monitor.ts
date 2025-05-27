@@ -531,8 +531,10 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
    */
   private async updateRpcEndpointStatus(endpoint: RpcEndpoint, isUp: boolean, latency: number): Promise<void> {
     this.updateStatus(endpoint, this.rpcStatuses, isUp, { latency });
-    this.metricsService.setRpcStatus(endpoint.url, isUp, endpoint.chainId);
-    this.metricsService.recordRpcLatency(endpoint.url, latency, endpoint.chainId);
+
+    // Use sentinel-enabled methods to maintain endpoint visibility in Grafana
+    this.metricsService.setRpcStatusWithSentinel(endpoint.url, isUp, endpoint.chainId, !isUp);
+    this.metricsService.recordRpcLatencyWithSentinel(endpoint.url, latency, endpoint.chainId, !isUp);
 
     // Update RPC selector service with this endpoint's health
     this.rpcSelectorService.updateEndpointHealth(endpoint, isUp, latency);
@@ -624,7 +626,7 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
 
       // Update status to down
       this.updateStatus(endpoint, this.wsStatuses, false);
-      this.metricsService.setWebsocketStatus(endpoint.url, false, endpoint.chainId);
+      this.metricsService.setWebsocketStatusWithSentinel(endpoint.url, false, endpoint.chainId, true);
       this.blockchainService.updateWsProviderStatus(endpoint.url, false);
 
       // Check for downtime notification
@@ -674,7 +676,7 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
           // Update statuses based on connection result
           if (success) {
             this.updateStatus(endpoint, this.wsStatuses, true);
-            this.metricsService.setWebsocketStatus(endpoint.url, true, endpoint.chainId);
+            this.metricsService.setWebsocketStatusWithSentinel(endpoint.url, true, endpoint.chainId, false);
             this.blockchainService.updateWsProviderStatus(endpoint.url, true);
           } else {
             this.handleWsConnectionFailure(endpoint, socket, reason || 'Connection failed');
@@ -732,7 +734,7 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
    */
   private handleWsConnectionFailure(endpoint: RpcEndpoint, socket: WebSocket | null, reason: string) {
     this.updateStatus(endpoint, this.wsStatuses, false);
-    this.metricsService.setWebsocketStatus(endpoint.url, false, endpoint.chainId);
+    this.metricsService.setWebsocketStatusWithSentinel(endpoint.url, false, endpoint.chainId, true);
     this.blockchainService.updateWsProviderStatus(endpoint.url, false);
 
     if (socket) {
@@ -875,10 +877,10 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
   private updateServiceStatus(endpoint: RpcEndpoint, isUp: boolean): void {
     if (endpoint.url.includes('explorer') || endpoint.url.includes('scan')) {
       this.explorerStatuses.set(endpoint.url, { status: isUp ? 'up' : 'down' });
-      this.metricsService.setExplorerStatus(endpoint.url, isUp, endpoint.chainId);
+      this.metricsService.setExplorerStatusWithSentinel(endpoint.url, isUp, endpoint.chainId, !isUp);
     } else if (endpoint.url.includes('faucet')) {
       this.faucetStatuses.set(endpoint.url, { status: isUp ? 'up' : 'down' });
-      this.metricsService.setFaucetStatus(endpoint.url, isUp, endpoint.chainId);
+      this.metricsService.setFaucetStatusWithSentinel(endpoint.url, isUp, endpoint.chainId, !isUp);
     }
   }
 
@@ -977,7 +979,7 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
         }
       }
 
-      this.metricsService.setWebsocketStatus(url, status === 'up', chainId);
+      this.metricsService.setWebsocketStatusWithSentinel(url, status === 'up', chainId, status !== 'up');
     }
   }
 

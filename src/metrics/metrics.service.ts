@@ -6,7 +6,7 @@ import { MinerRecord, MinerStatus } from '@types';
 
 /**
  * InfluxDB Metrics Service
- * Handles all metrics recording and InfluxDB communication
+ * Handles all metrics recording and InfluxDB communication with optimized sentinel value support
  */
 @Injectable()
 export class MetricsService implements OnModuleInit {
@@ -25,10 +25,88 @@ export class MetricsService implements OnModuleInit {
   private readonly FLUSH_INTERVAL = 5000; // Flush every 5 seconds
   private readonly MAX_QUEUE_SIZE = 1000; // Maximum queue size to prevent memory issues
 
+  // Last known good block heights per endpoint (endpoint -> chainId -> blockHeight)
+  private lastKnownBlockHeights = new Map<string, Map<string, number>>();
+
   constructor(private readonly configService: ConfigService) {
     // Add a small delay to ensure InfluxDB is ready
     // This helps especially when running outside Docker
     setTimeout(() => this.initializeInfluxDB(), 3000); // 3 second delay
+  }
+
+  /**
+   * Get sentinel value configuration
+   */
+  private getSentinelConfig() {
+    return this.configService.getMonitoringConfig().sentinelValues;
+  }
+
+  /**
+   * Check if sentinel values are enabled
+   */
+  private isSentinelEnabled(): boolean {
+    return this.getSentinelConfig().enabled;
+  }
+
+  /**
+   * Store the last known good block height for an endpoint
+   */
+  private setLastKnownBlockHeight(endpoint: string, chainId: string, blockHeight: number): void {
+    if (!this.lastKnownBlockHeights.has(endpoint)) {
+      this.lastKnownBlockHeights.set(endpoint, new Map());
+    }
+    this.lastKnownBlockHeights.get(endpoint)!.set(chainId, blockHeight);
+  }
+
+  /**
+   * Get the last known good block height for an endpoint
+   */
+  private getLastKnownBlockHeight(endpoint: string, chainId: string): number | null {
+    const endpointMap = this.lastKnownBlockHeights.get(endpoint);
+    if (!endpointMap) return null;
+    return endpointMap.get(chainId) || null;
+  }
+
+  /**
+   * Query InfluxDB for the last known good block height for an endpoint
+   */
+  private async queryLastKnownBlockHeight(endpoint: string, chainId: string): Promise<number | null> {
+    if (!this.connected || !this.influxClient) {
+      return null;
+    }
+
+    try {
+      const config = this.configService.getInfluxDbConfig();
+      const queryApi = this.influxClient.getQueryApi(config.org);
+
+      // Query for the last successful block height for this endpoint
+      const query = `
+        from(bucket: "${config.bucket}")
+          |> range(start: -7d)
+          |> filter(fn: (r) => r._measurement == "block_height")
+          |> filter(fn: (r) => r.endpoint == "${endpoint}")
+          |> filter(fn: (r) => r.chainId == "${chainId}")
+          |> filter(fn: (r) => r.endpoint_status == "active" or not exists r.endpoint_status)
+          |> filter(fn: (r) => r._field == "height")
+          |> filter(fn: (r) => r._value > 0)
+          |> last()
+      `;
+
+      const records = await queryApi.collectRows(query);
+      if (records.length > 0) {
+        const lastRecord = records[0] as any;
+        const blockHeight = parseInt(String(lastRecord._value));
+        if (!isNaN(blockHeight) && blockHeight > 0) {
+          // Cache this value for future use
+          this.setLastKnownBlockHeight(endpoint, chainId, blockHeight);
+          return blockHeight;
+        }
+      }
+    } catch (error) {
+      this.logger.debug(`Failed to query last known block height for ${endpoint}: ${error.message}`);
+    }
+
+    return null;
   }
 
   /**
@@ -41,6 +119,55 @@ export class MetricsService implements OnModuleInit {
     this.logger.log(
       `Metrics will be batched (size: ${this.BATCH_SIZE}) and flushed every ${this.FLUSH_INTERVAL / 1000} seconds`,
     );
+
+    // Initialize block height cache after a delay to ensure InfluxDB is connected
+    setTimeout(() => this.initializeBlockHeightCache(), 10000);
+  }
+
+  /**
+   * Initialize the block height cache by loading recent data from InfluxDB
+   */
+  private async initializeBlockHeightCache(): Promise<void> {
+    if (!this.connected || !this.influxClient) {
+      this.logger.debug('Skipping block height cache initialization - InfluxDB not connected');
+      return;
+    }
+
+    try {
+      const config = this.configService.getInfluxDbConfig();
+      const queryApi = this.influxClient.getQueryApi(config.org);
+
+      // Query for the most recent block heights for all endpoints
+      const query = `
+        from(bucket: "${config.bucket}")
+          |> range(start: -24h)
+          |> filter(fn: (r) => r._measurement == "block_height")
+          |> filter(fn: (r) => r.endpoint_status == "active" or not exists r.endpoint_status)
+          |> filter(fn: (r) => r._field == "height")
+          |> filter(fn: (r) => r._value > 0)
+          |> group(columns: ["endpoint", "chainId"])
+          |> last()
+      `;
+
+      const records = await queryApi.collectRows(query);
+      let cacheCount = 0;
+
+      for (const record of records) {
+        const data = record as any;
+        const endpoint = data.endpoint;
+        const chainId = data.chainId;
+        const blockHeight = parseInt(String(data._value));
+
+        if (endpoint && chainId && !isNaN(blockHeight) && blockHeight > 0) {
+          this.setLastKnownBlockHeight(endpoint, chainId, blockHeight);
+          cacheCount++;
+        }
+      }
+
+      this.logger.log(`Initialized block height cache with ${cacheCount} endpoint entries`);
+    } catch (error) {
+      this.logger.warn(`Failed to initialize block height cache: ${error.message}`);
+    }
   }
 
   /**
@@ -215,13 +342,45 @@ export class MetricsService implements OnModuleInit {
   //
 
   /**
-   * Record blockchain block height
+   * Record blockchain block height with sentinel value support for failed endpoints
    */
-  setBlockHeight(height: number, endpoint: string, chainId: string): void {
+  async setBlockHeightWithSentinel(
+    height: number | null,
+    endpoint: string,
+    chainId: string,
+    endpointFailed: boolean = false,
+  ): Promise<void> {
+    let actualHeight: number;
+
+    if (endpointFailed && this.isSentinelEnabled()) {
+      // For failed endpoints, try to use last known good block height
+      let lastKnownHeight = this.getLastKnownBlockHeight(endpoint, chainId);
+
+      // If we don't have a cached value, try to query InfluxDB
+      if (lastKnownHeight === null) {
+        lastKnownHeight = await this.queryLastKnownBlockHeight(endpoint, chainId);
+      }
+
+      // Use last known height if available, otherwise fall back to -1 as final fallback
+      actualHeight = lastKnownHeight ?? -1;
+
+      this.logger.debug(
+        `Using ${lastKnownHeight !== null ? 'last known' : 'sentinel'} block height ${actualHeight} for failed endpoint ${endpoint}`,
+      );
+    } else if (height !== null) {
+      // For successful endpoints, store the height and use it
+      actualHeight = height;
+      this.setLastKnownBlockHeight(endpoint, chainId, height);
+    } else {
+      // Fallback case - use -1 as final fallback when no data is available
+      actualHeight = -1;
+    }
+
     const point = new Point('block_height')
       .tag('chainId', chainId)
       .tag('endpoint', endpoint)
-      .intField('height', height);
+      .tag('endpoint_status', endpointFailed ? 'failed' : 'active')
+      .intField('height', actualHeight);
 
     this.writePoint(point);
   }
@@ -308,22 +467,37 @@ export class MetricsService implements OnModuleInit {
   }
 
   /**
-   * Record RPC endpoint latency
+   * Record RPC endpoint latency with sentinel value support for failed endpoints
    */
-  recordRpcLatency(endpoint: string, latencyMs: number, chainId: number = 50): void {
-    // Fix negative latency if it occurs
-    const latency = latencyMs < 0 ? 0 : latencyMs;
+  recordRpcLatencyWithSentinel(
+    endpoint: string,
+    latencyMs: number | null,
+    chainId: number = 50,
+    endpointFailed: boolean = false,
+  ): void {
+    const sentinelConfig = this.getSentinelConfig();
 
-    if (latencyMs < 0) {
-      this.logger.warn(`Attempted to record negative latency (${latencyMs}ms) for ${endpoint}. Using 0ms instead.`);
+    // Use sentinel value if endpoint failed and sentinel values are enabled
+    let actualLatency: number;
+    if (endpointFailed && sentinelConfig.enabled) {
+      actualLatency = sentinelConfig.latency;
+    } else if (latencyMs === null) {
+      actualLatency = sentinelConfig.enabled ? sentinelConfig.latency : 0;
+    } else {
+      // Fix negative latency if it occurs
+      actualLatency = latencyMs < 0 ? 0 : latencyMs;
+      if (latencyMs < 0) {
+        this.logger.warn(`Attempted to record negative latency (${latencyMs}ms) for ${endpoint}. Using 0ms instead.`);
+      }
     }
 
-    this.writePoint(
-      new Point('rpc_latency')
-        .tag('endpoint', endpoint)
-        .tag('chainId', chainId.toString())
-        .floatField('value', latency),
-    );
+    const point = new Point('rpc_latency')
+      .tag('endpoint', endpoint)
+      .tag('chainId', chainId.toString())
+      .tag('endpoint_status', endpointFailed ? 'failed' : 'active')
+      .floatField('value', actualLatency);
+
+    this.writePoint(point);
   }
 
   /**
@@ -343,40 +517,111 @@ export class MetricsService implements OnModuleInit {
     );
   }
 
-  // Convenience methods that use setServiceStatus internally
-  setRpcStatus(endpoint: string, isUp: boolean, chainId: number = 50): void {
-    this.setServiceStatus('rpc', endpoint, isUp, chainId);
+  /**
+   * Record service status metrics with sentinel value support for failed endpoints
+   */
+  setServiceStatusWithSentinel(
+    type: 'rpc' | 'websocket' | 'explorer' | 'faucet',
+    endpoint: string,
+    isUp: boolean | null,
+    chainId: number = 50,
+    endpointFailed: boolean = false,
+  ): void {
+    const sentinelConfig = this.getSentinelConfig();
+
+    // Convert boolean to number with proper sentinel logic
+    let statusValue: number;
+    if (endpointFailed && sentinelConfig.enabled) {
+      statusValue = sentinelConfig.status;
+    } else if (isUp === null) {
+      statusValue = sentinelConfig.enabled ? sentinelConfig.status : 0;
+    } else {
+      statusValue = isUp ? 1 : 0;
+    }
+
+    const point = new Point(`${type}_status`)
+      .tag('endpoint', endpoint)
+      .tag('chainId', chainId.toString())
+      .tag('endpoint_status', endpointFailed ? 'failed' : 'active')
+      .intField('value', statusValue);
+
+    this.writePoint(point);
   }
 
-  setWebsocketStatus(endpoint: string, isUp: boolean, chainId: number = 50): void {
-    this.setServiceStatus('websocket', endpoint, isUp, chainId);
+  // Convenience methods that use setServiceStatusWithSentinel internally
+  setRpcStatusWithSentinel(
+    endpoint: string,
+    isUp: boolean | null,
+    chainId: number = 50,
+    endpointFailed: boolean = false,
+  ): void {
+    this.setServiceStatusWithSentinel('rpc', endpoint, isUp, chainId, endpointFailed);
   }
 
-  setExplorerStatus(endpoint: string, isUp: boolean, chainId: number = 50): void {
-    this.setServiceStatus('explorer', endpoint, isUp, chainId);
+  setWebsocketStatusWithSentinel(
+    endpoint: string,
+    isUp: boolean | null,
+    chainId: number = 50,
+    endpointFailed: boolean = false,
+  ): void {
+    this.setServiceStatusWithSentinel('websocket', endpoint, isUp, chainId, endpointFailed);
   }
 
-  setFaucetStatus(endpoint: string, isUp: boolean, chainId: number = 50): void {
-    this.setServiceStatus('faucet', endpoint, isUp, chainId);
+  setExplorerStatusWithSentinel(
+    endpoint: string,
+    isUp: boolean | null,
+    chainId: number = 50,
+    endpointFailed: boolean = false,
+  ): void {
+    this.setServiceStatusWithSentinel('explorer', endpoint, isUp, chainId, endpointFailed);
+  }
+
+  setFaucetStatusWithSentinel(
+    endpoint: string,
+    isUp: boolean | null,
+    chainId: number = 50,
+    endpointFailed: boolean = false,
+  ): void {
+    this.setServiceStatusWithSentinel('faucet', endpoint, isUp, chainId, endpointFailed);
   }
 
   /**
-   * Record peer count for an endpoint
+   * Record peer count for an endpoint with sentinel value support for failed endpoints
    *
    * @param endpoint The RPC/WebSocket endpoint URL
-   * @param peerCount Number of peers connected to the node
+   * @param peerCount Number of peers connected to the node (null if failed to fetch)
    * @param endpointType Type of endpoint (rpc/websocket)
    * @param chainId Chain ID (50 for mainnet, 51 for testnet)
+   * @param endpointFailed Whether the endpoint failed to respond
    */
-  setPeerCount(endpoint: string, peerCount: number, endpointType: 'rpc' | 'websocket', chainId: number = 50): void {
-    this.writePoint(
-      new Point('peer_count')
-        .tag('endpoint', endpoint)
-        .tag('type', endpointType)
-        .tag('chainId', chainId.toString())
-        .intField('value', peerCount),
+  setPeerCountWithSentinel(
+    endpoint: string,
+    peerCount: number | null,
+    endpointType: 'rpc' | 'websocket',
+    chainId: number = 50,
+    endpointFailed: boolean = false,
+  ): void {
+    const sentinelConfig = this.getSentinelConfig();
+
+    // Use sentinel value if endpoint failed and sentinel values are enabled
+    const actualPeerCount =
+      endpointFailed && sentinelConfig.enabled
+        ? sentinelConfig.peerCount
+        : (peerCount ?? (sentinelConfig.enabled ? sentinelConfig.peerCount : 0));
+
+    const point = new Point('peer_count')
+      .tag('endpoint', endpoint)
+      .tag('type', endpointType)
+      .tag('chainId', chainId.toString())
+      .tag('endpoint_status', endpointFailed ? 'failed' : 'active')
+      .intField('value', actualPeerCount);
+
+    this.writePoint(point);
+
+    const statusText = endpointFailed ? '(failed - using sentinel)' : '(active)';
+    this.logger.debug(
+      `Recorded peer count for ${endpointType} ${endpoint} (chain ${chainId}): ${actualPeerCount} peers ${statusText}`,
     );
-    this.logger.debug(`Recorded peer count for ${endpointType} ${endpoint} (chain ${chainId}): ${peerCount} peers`);
   }
 
   /**
@@ -540,6 +785,40 @@ export class MetricsService implements OnModuleInit {
         .tag('status', status)
         .intField('index', index ?? 0),
     );
+  }
+
+  /**
+   * Ensure all known endpoints have recent data points to maintain visibility in Grafana
+   * This method should be called periodically to write sentinel values for offline endpoints
+   */
+  async ensureEndpointVisibility(
+    allEndpoints: Array<{ url: string; chainId: number; type: 'rpc' | 'websocket' }>,
+    activeEndpoints: Set<string>,
+  ): Promise<void> {
+    if (!this.isSentinelEnabled()) {
+      return; // Skip if sentinel values are disabled
+    }
+
+    const sentinelConfig = this.getSentinelConfig();
+
+    for (const endpoint of allEndpoints) {
+      const isActive = activeEndpoints.has(endpoint.url);
+
+      if (!isActive) {
+        // Write sentinel values for inactive endpoints
+        await this.setBlockHeightWithSentinel(null, endpoint.url, endpoint.chainId.toString(), true);
+        this.setPeerCountWithSentinel(endpoint.url, null, endpoint.type, endpoint.chainId, true);
+        this.recordRpcLatencyWithSentinel(endpoint.url, null, endpoint.chainId, true);
+
+        if (endpoint.type === 'rpc') {
+          this.setRpcStatusWithSentinel(endpoint.url, null, endpoint.chainId, true);
+        } else {
+          this.setWebsocketStatusWithSentinel(endpoint.url, null, endpoint.chainId, true);
+        }
+
+        this.logger.debug(`Wrote sentinel values for inactive ${endpoint.type} endpoint: ${endpoint.url}`);
+      }
+    }
   }
 
   /**
