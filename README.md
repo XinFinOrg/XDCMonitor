@@ -524,8 +524,8 @@ docker pull ghcr.io/[organization]/xdc-monitor:sha-abcdef
 1. Clone the repository:
 
    ```bash
-   git clone https://github.com/yourusername/xdc-monitor.git
-   cd xdc-monitor
+   git clone https://github.com/XinFinOrg/XDCMonitor.git
+   cd XDCMonitor/
    ```
 
 2. Install dependencies:
