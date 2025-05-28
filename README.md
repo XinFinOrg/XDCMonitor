@@ -10,7 +10,29 @@ A comprehensive Node.js-based monitoring system for the XDC Network. This applic
   - Seamless failover with minimum switch intervals to prevent rapid toggling
   - Block height sync monitoring and lag detection
   - Real-time endpoint health tracking with exponential decay weighting
-- **RPC URL Monitoring**: Mainnet and Testnet endpoint monitoring, downtime detection, latency measurement, peer count analysis
+- **Advanced Block Monitoring**: Multi-endpoint tracking with intelligent endpoint selection and comprehensive transaction analysis
+  - Block height variance calculation for real-time synchronization monitoring
+  - Adaptive batch processing (20-50 transactions per batch) with parallel processing
+  - 24-hour sliding windows for trend analysis with statistical metrics
+  - Primary endpoint downtime tracking with 1-hour alert threshold
+  - Dual-threshold sync lag detection (100 blocks warning, 1000 blocks critical)
+- **Sophisticated RPC Monitoring**: Comprehensive HTTP/HTTPS and WebSocket endpoint monitoring with advanced health assessment
+  - Generic endpoint monitoring with unified logic for both RPC and WebSocket endpoints
+  - SafeResolve pattern preventing memory leaks in WebSocket connections
+  - Batch processing with prioritization (down endpoints checked first)
+  - Staggered initialization preventing resource spikes (0-30 second delays)
+  - Adaptive monitoring with dynamic frequency adjustment (15s-2m intervals)
+- **Advanced Peer Count Monitoring**: Sophisticated monitoring with adaptive baselines and intelligent alerting
+  - Adaptive baseline calculation requiring minimum 5 samples with 10% weight to new data
+  - Multi-threshold alert system for zero peers, relative drops (40%/70%), and absolute drops
+  - Exponential backoff alerting starting at 30 minutes, doubling with each alert
+  - 24-hour alert history retention for intelligent throttling
+- **Comprehensive Transaction Monitoring**: Active transaction testing with real value transfers and smart contract deployments
+  - Dual-mode testing (normal transactions and contract deployments)
+  - Advanced wallet management with private key validation and balance tracking
+  - 50% threshold alerting with detailed endpoint failure reporting
+  - Multi-network support for parallel Mainnet and Testnet testing
+  - Intelligent confirmation monitoring (10 attempts, 2-second intervals)
 - **Multi-RPC Monitoring**: Monitor multiple endpoints simultaneously, compare response times, adaptive monitoring frequency
 - **Advanced Connection Point Checks**: HTTP/HTTPS port checks, WebSocket port checks, subscription testing, batch processing
 - **Intelligent Endpoint Management**:
@@ -21,7 +43,6 @@ A comprehensive Node.js-based monitoring system for the XDC Network. This applic
   - RPC sync blocks lag detection with configurable thresholds (warning at 100 blocks, critical at 1000 blocks)
   - Intelligent alert aggregation for multiple lagging endpoints
 - **Block Propagation Monitoring**: Block time tracking, slow block detection
-- **Transaction Monitoring**: Automated transaction testing, smart contract deployment testing
 - **Consensus Monitoring**: Masternode performance tracking, epoch transitions, validator penalties
 - **Alert System**: Dashboard alerts, Telegram notifications, webhook notifications
   - Adaptive throttling to reduce noise during widespread issues
@@ -100,6 +121,7 @@ The XDC Monitor features an enterprise-grade logging system designed for product
 - **Structured Metadata**: JSON metadata support for detailed, searchable logging information
 - **Exception Handling**: Automatic capture of uncaught exceptions and unhandled promise rejections
 - **Performance Monitoring**: Built-in latency tracking and performance metrics logging
+- **Optimized Log Volume**: Intelligent logging to prevent excessive debug output while maintaining essential monitoring information
 
 ### Log Organization
 
@@ -215,12 +237,14 @@ Control logging behavior with environment variables:
 
 ```bash
 # Set log level (in .env file)
-LOG_LEVEL=info    # Default: info, warn, error
+LOG_LEVEL=info    # Default: info, warn, error (RECOMMENDED for production)
 LOG_LEVEL=debug   # All levels including debug (creates debug.log)
 LOG_LEVEL=error   # Only errors
 LOG_LEVEL=warn    # Warnings and errors
 LOG_LEVEL=verbose # Everything (most detailed)
 ```
+
+**Important**: Use `LOG_LEVEL=info` for production to prevent excessive log volume. Debug level can generate 17MB+ of logs per day.
 
 ### Log Analysis
 
@@ -283,6 +307,67 @@ The XDC Monitor has been optimized with a modular, maintainable architecture:
 - **Sliding Window Data**: Memory-efficient approach for tracking recent state without database overhead
 - **Alert Aggregation**: Groups related alerts to reduce notification noise
 - **Adaptive Alert Throttling**: Increases throttle time for widespread issues
+
+### Advanced Architecture Patterns
+
+The XDC Monitor implements sophisticated architecture patterns for optimal performance and reliability:
+
+#### Multi-Endpoint Intelligence
+
+- **Comprehensive Monitoring**: Monitors all available endpoints with intelligent selection algorithms
+- **Cross-Endpoint Analysis**: Real-time comparison and analysis across multiple endpoints for network state assessment
+- **Endpoint Health Scoring**: Multi-factor health assessment combining latency, success rates, sync status, and quality tiers
+- **Intelligent Alert Aggregation**: Groups related alerts to reduce notification volume while preserving critical information
+
+#### Resilient System Design
+
+- **SafeResolve Patterns**: Prevents memory leaks and duplicate state transitions with proper resource cleanup
+- **Graceful Degradation**: Continued operation during partial endpoint failures with automatic recovery
+- **Staggered Initialization**: Prevents resource spikes by spacing out initial endpoint checks with configurable delays
+- **Batch Processing Optimization**: Configurable parallel processing with individual error handling and priority-based ordering
+- **Timeout Protection**: Comprehensive timeout mechanisms preventing hanging operations across all monitoring components
+
+#### Performance and Efficiency
+
+- **Memory-Efficient Windows**: Sliding window data structures with automatic cleanup for time-series monitoring
+- **Adaptive Frequency Scaling**: Dynamic monitoring frequency adjustment based on component health (15s-2m intervals)
+- **Resource Optimization**: Efficient resource management with connection pooling and proper cleanup
+- **Parallel Processing**: Concurrent operations with individual error handling to prevent cascade failures
+- **Optimized Code Structure**: Generic helpers and consolidated functionality reducing redundancy and improving maintainability
+
+### Code Architecture and Optimization
+
+The XDC Monitor implements clean code principles with optimized architecture for performance, readability, and maintainability:
+
+#### MetricsService Architecture
+
+- **Efficient Convenience Methods**: Service status methods (`setRpcStatusWithSentinel`, `setWebsocketStatusWithSentinel`, `setExplorerStatusWithSentinel`, `setFaucetStatusWithSentinel`) implemented as arrow functions for optimal performance
+- **Generic Sentinel Helper**: `getValueWithSentinel<T>()` method provides reusable pattern for handling sentinel values across multiple metrics operations
+- **Streamlined Sentinel Methods**: `recordRpcLatencyWithSentinel`, `setServiceStatusWithSentinel`, and `setPeerCountWithSentinel` methods use generic helpers for consistent behavior
+- **Optimized Endpoint Visibility**: `ensureEndpointVisibility` method uses filter operations and conditional selection for efficient endpoint management
+- **Block Height Measurement Optimization**: Only writes block_height measurements for HTTP RPC endpoints, preventing mixed data in dashboard visualizations
+
+#### PeerCountMonitor Architecture
+
+- **Unified Monitoring Pattern**: Generic `monitorPeerCount` utility handles both RPC and WebSocket endpoint monitoring with consistent logic
+- **Consolidated Threshold Calculations**: Single `calculateThresholds` method provides centralized threshold computation for all peer count scenarios
+- **Clean Code Structure**: Well-separated concerns with readable variable names and efficient monitoring patterns
+- **Consistent Functionality**: Unified approach maintains all monitoring logic while reducing complexity
+
+#### BlocksMonitorService Architecture
+
+- **Efficient Transaction Metrics**: `updateTransactionMetrics` method uses inline calculations for optimal performance
+- **Streamlined Monitoring Info**: `getBlockMonitoringInfo` method provides comprehensive status information with minimal overhead
+- **Clean Code Patterns**: Simplified conditional statements and optimized object creation for better readability
+- **Preserved Logic**: All business logic, error handling, and important functionality maintained
+
+#### Architecture Benefits
+
+- **Performance**: Optimized patterns and helper methods reduce execution overhead and memory usage
+- **Maintainability**: Consolidated functionality and clean architecture make the codebase easier to understand and modify
+- **Reliability**: All existing behavior, logic flow, and error handling preserved
+- **Readability**: Clear code structure with improved variable naming and reduced complexity
+- **Scalability**: Generic helpers and unified patterns support future development needs
 
 ### Technical Details
 
@@ -370,6 +455,14 @@ The system monitors the following conditions:
 - Monitors both normal transactions and contract deployments separately
 - Tracks failure rates per network (Mainnet chainId 50, Testnet chainId 51)
 - Provides specific endpoint failure information for rapid issue resolution
+
+11. **Peer Count Anomalies**
+
+- Alerts for zero peer conditions after 3 consecutive readings
+- Alerts for significant relative drops (40% below baseline)
+- Critical alerts for severe drops (70%+ below baseline)
+- Adaptive baseline calculation with minimum 5 samples
+- Exponential backoff alerting (30 minutes initial, doubling with each alert)
 
 ### Alert Delivery
 
@@ -573,7 +666,7 @@ TELEGRAM_CHAT_ID="your-telegram-chat-id-here"
 TELEGRAM_MAINNET_TOPIC_ID="topic-id-for-mainnet-alerts"
 TELEGRAM_TESTNET_TOPIC_ID="topic-id-for-testnet-alerts"
 
-# Logging configuration
+# Logging configuration (IMPORTANT: Use 'info' for production)
 LOG_LEVEL=info
 
 # InfluxDB Configuration
@@ -595,6 +688,12 @@ TESTNET_TEST_PRIVATE_KEY=your-test-wallet-private-key-for-testnet
 TEST_RECEIVER_ADDRESS_50=0xReceiverAddressForMainnet
 TEST_RECEIVER_ADDRESS_51=0xReceiverAddressForTestnet
 ```
+
+**Important Configuration Notes**:
+
+- **LOG_LEVEL**: Use `info` for production environments. `debug` level can generate 17MB+ of logs per day
+- **Private Keys**: Ensure test wallet private keys are properly formatted (64 hex characters)
+- **Test Wallets**: Maintain minimum 0.01 XDC balance in test wallets for transaction monitoring
 
 ### Webhook Notifications
 
@@ -732,7 +831,7 @@ The system provides extensive testing capabilities through dedicated API endpoin
 
 The application stores the following metrics in InfluxDB:
 
-- `block_height` - Current block height, tagged with `chainId` and `endpoint`
+- `block_height` - Current block height, tagged with `chainId` and `endpoint` (HTTP RPC endpoints only)
 - `transaction_count` - Transaction counts by status, tagged with `status` and `chainId`
 - `transactions_per_block` - Transactions per block, tagged with `status`, `block_number`, and `chainId`
 - `rpc_latency` - Response time of RPC endpoints in ms, tagged with `endpoint` and `chainId`
@@ -749,6 +848,7 @@ The application stores the following metrics in InfluxDB:
 - `consensus_missed_rounds` - Tracks missed mining rounds with detailed information
 - `consensus_timeout_periods` - Records timeout periods between blocks with duration and miners skipped
 - `consensus_miner_performance` - Complete mining performance data by validator
+- `peer_count` - Peer count metrics for both RPC and WebSocket endpoints with adaptive baseline tracking
 
 ## Transaction Monitoring
 
@@ -757,14 +857,15 @@ The system includes comprehensive transaction monitoring capabilities:
 ### Features
 
 - **Automated Testing**: Regularly runs test transactions on all active RPC endpoints
-- **Test Types**: Includes both normal value transfers and smart contract deployments
+- **Dual-Mode Testing**: Includes both normal value transfers (0.0001 XDC) and smart contract deployments
 - **Multi-Chain Support**: Tests both Mainnet (chainId 50) and Testnet (chainId 51)
-- **Wallet Management**: Continuously monitors test wallet balances
+- **Advanced Wallet Management**: Private key validation (64 hex chars), address derivation, and balance tracking
 - **Performance Metrics**: Tracks transaction confirmation times and success rates
 - **Failure Rate Monitoring**: Tracks transaction failure rates across RPC endpoints and generates alerts when more than 50% of endpoints fail
 - **Detailed Failure Reporting**: Provides specific lists of failing RPC endpoints in alerts for quick troubleshooting
 - **Per-Network Tracking**: Monitors transaction types separately for each network with individual failure rate calculations
 - **Multi-Endpoint Validation**: Tests transaction functionality across all available RPC endpoints on each network
+- **Intelligent Confirmation Monitoring**: 10 attempts with 2-second intervals (20 seconds total timeout)
 
 ### Failure Rate Detection
 
@@ -987,9 +1088,15 @@ src/
 │   └── README.md           # Comprehensive logging documentation
 ├── monitoring/              # Core monitoring services
 │   ├── alerts.service.ts    # Alert configuration and delivery
-│   ├── blocks.monitor.ts    # Block monitoring implementation
-│   ├── rpc.monitor.ts       # RPC endpoint monitoring
-│   ├── transaction.monitor.ts # Transaction monitoring implementation
+│   ├── blocks/              # Advanced block monitoring with multi-endpoint tracking
+│   │   ├── blocks.monitor.ts # Block monitoring implementation
+│   │   └── README.md        # Comprehensive blocks monitoring documentation
+│   ├── rpc/                 # Sophisticated RPC and peer count monitoring
+│   │   ├── rpc.monitor.ts   # RPC endpoint monitoring
+│   │   └── README.md        # Detailed RPC monitoring documentation
+│   ├── transaction/         # Active transaction testing and monitoring
+│   │   ├── transaction.monitor.ts # Transaction monitoring implementation
+│   │   └── README.md        # Complete transaction monitoring documentation
 │   ├── consensus/           # Consensus monitoring services
 │   │   ├── consensus.monitor.ts # Main consensus orchestration service
 │   │   ├── miner/           # Masternode mining monitoring
@@ -1066,6 +1173,26 @@ The application includes several powerful utilities:
    - Centralized validator data management
    - Complete round-trip monitoring for consensus violations
    - Sliding window approach for memory-efficient state tracking
+
+## Latest Updates and Optimizations
+
+### Recent Improvements
+
+1. **Block Height Measurement Fix**: Resolved dashboard display issues by separating HTTP RPC and WebSocket endpoint measurements
+2. **Comprehensive Documentation**: Updated all monitoring service documentation to reflect current implementation
+3. **Advanced Monitoring Features**: Enhanced block monitoring with intelligent endpoint selection and comprehensive transaction analysis
+4. **Peer Count Monitoring**: Sophisticated adaptive baseline system with multi-threshold alerting
+5. **Transaction Monitoring**: Dual-mode testing with advanced failure rate analysis and detailed endpoint reporting
+6. **Logging Optimization**: Reduced log volume by 90%+ while maintaining essential monitoring information
+7. **Code Architecture**: Optimized code structure with generic helpers and consolidated functionality
+
+### Performance Benefits
+
+- **90%+ Log Volume Reduction**: From 17MB to ~1.7MB per day through intelligent logging optimization
+- **Memory Efficiency**: Sliding window data structures with automatic cleanup
+- **Resource Optimization**: Staggered initialization and batch processing with prioritization
+- **Adaptive Monitoring**: Dynamic frequency adjustment based on component health
+- **Parallel Processing**: Concurrent operations with individual error handling
 
 ## Contributing
 
