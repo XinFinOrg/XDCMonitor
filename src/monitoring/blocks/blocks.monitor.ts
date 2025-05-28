@@ -420,7 +420,7 @@ export class BlocksMonitorService implements OnModuleInit {
       }
     } catch (error) {
       // Use sentinel values for failed endpoints to maintain visibility in Grafana
-      this.metricsService.setRpcStatusWithSentinel(endpoint, false, chainId, true);
+      this.metricsService.setRpcStatusWithSentinel(endpoint, false, chainId, false);
       await this.metricsService.setBlockHeightWithSentinel(null, endpoint, chainId.toString(), true);
 
       // Handle primary endpoint error if this is it
@@ -505,7 +505,7 @@ export class BlocksMonitorService implements OnModuleInit {
 
   private handlePrimaryEndpointError(chainId: number, primaryEndpoint: string, error: Error): void {
     this.logger.error(`Primary endpoint ${primaryEndpoint} error: ${error.message}`);
-    this.metricsService.setRpcStatusWithSentinel(primaryEndpoint, false, chainId, true);
+    this.metricsService.setRpcStatusWithSentinel(primaryEndpoint, false, chainId, false);
 
     const status = this.primaryEndpointStatus[chainId] || {
       url: primaryEndpoint,
@@ -675,38 +675,27 @@ export class BlocksMonitorService implements OnModuleInit {
 
     // Update transaction history metrics
     this.transactionCounts[networkKey].addDataPoint(totalTxs);
-    if (failedCount > 0) {
-      this.failedTransactions[networkKey].addDataPoint(failedCount);
-    }
+    if (failedCount > 0) this.failedTransactions[networkKey].addDataPoint(failedCount);
 
     // Calculate and update transactions per minute
-    const txSum = this.transactionCounts[networkKey].getSum();
-    const minutes = TRANSACTION_HISTORY_WINDOW_MS / (60 * 1000);
-    this.metricsService.setTransactionsPerMinute(txSum / minutes, chainId);
+    this.metricsService.setTransactionsPerMinute(
+      this.transactionCounts[networkKey].getSum() / (TRANSACTION_HISTORY_WINDOW_MS / 60000),
+      chainId,
+    );
   }
 
   getBlockMonitoringInfo(): BlockMonitoringInfo {
     try {
       const rpcStatuses = this.rpcMonitorService.getAllRpcStatuses();
-
-      // Find current best endpoints
-      const mainnetBestEndpoint =
-        this.getBestEndpoint(NETWORK_MAINNET) || this.networks[NETWORK_MAINNET]?.primaryEndpoint;
-      const testnetBestEndpoint =
-        this.getBestEndpoint(NETWORK_TESTNET) || this.networks[NETWORK_TESTNET]?.primaryEndpoint;
-
-      // Get filtered endpoints for each network
       const getNetworkEndpoints = (chainId: number) => rpcStatuses.filter(e => e.chainId === chainId).map(e => e.url);
 
       return {
         enabled: this.monitoringEnabled,
         primaryEndpoint: {
-          mainnet: mainnetBestEndpoint,
-          testnet: testnetBestEndpoint,
+          mainnet: this.getBestEndpoint(NETWORK_MAINNET) || this.networks[NETWORK_MAINNET]?.primaryEndpoint,
+          testnet: this.getBestEndpoint(NETWORK_TESTNET) || this.networks[NETWORK_TESTNET]?.primaryEndpoint,
         },
-        blockTimeThreshold: {
-          error: BLOCKCHAIN.BLOCKS.BLOCK_TIME_ERROR_THRESHOLD,
-        },
+        blockTimeThreshold: { error: BLOCKCHAIN.BLOCKS.BLOCK_TIME_ERROR_THRESHOLD },
         scanInterval: this.scanIntervalMs,
         monitoredEndpoints: {
           mainnet: { endpoints: getNetworkEndpoints(MAINNET_CHAIN_ID) },
@@ -720,11 +709,7 @@ export class BlocksMonitorService implements OnModuleInit {
           mainnet: this.calculateBlockHeightVariance(NETWORK_MAINNET),
           testnet: this.calculateBlockHeightVariance(NETWORK_TESTNET),
         },
-        queueStats: {
-          size: 0,
-          processing: 0,
-          completed: 0,
-        },
+        queueStats: { size: 0, processing: 0, completed: 0 },
         blockTimeStats: {
           mainnet: this.getTimeWindowStats(NETWORK_MAINNET),
           testnet: this.getTimeWindowStats(NETWORK_TESTNET),
