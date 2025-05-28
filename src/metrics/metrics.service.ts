@@ -49,6 +49,17 @@ export class MetricsService implements OnModuleInit {
   }
 
   /**
+   * Get appropriate value with sentinel fallback logic
+   */
+  private getValueWithSentinel<T>(value: T | null, sentinelValue: T, endpointFailed: boolean, fallbackValue: T): T {
+    const sentinelConfig = this.getSentinelConfig();
+
+    if (endpointFailed && sentinelConfig.enabled) return sentinelValue;
+    if (value === null) return sentinelConfig.enabled ? sentinelValue : fallbackValue;
+    return value;
+  }
+
+  /**
    * Store the last known good block height for an endpoint
    */
   private setLastKnownBlockHeight(endpoint: string, chainId: string, blockHeight: number): void {
@@ -307,9 +318,6 @@ export class MetricsService implements OnModuleInit {
 
     try {
       this.writeApi.writePoint(point);
-      // Use toLineProtocol() to get a string representation that includes the measurement name
-      const pointInfo = point.toLineProtocol().split(',')[0];
-      this.logger.debug(`Wrote data point: ${pointInfo}`);
     } catch (error) {
       this.logger.error(`Error writing to InfluxDB: ${error.message}`);
 
@@ -364,9 +372,10 @@ export class MetricsService implements OnModuleInit {
       // Use last known height if available, otherwise fall back to -1 as final fallback
       actualHeight = lastKnownHeight ?? -1;
 
-      this.logger.debug(
-        `Using ${lastKnownHeight !== null ? 'last known' : 'sentinel'} block height ${actualHeight} for failed endpoint ${endpoint}`,
-      );
+      // Only log when using last known height, not for every sentinel value
+      if (lastKnownHeight !== null) {
+        this.logger.debug(`Using last known block height ${actualHeight} for failed endpoint ${endpoint}`);
+      }
     } else if (height !== null) {
       // For successful endpoints, store the height and use it
       actualHeight = height;
@@ -434,10 +443,13 @@ export class MetricsService implements OnModuleInit {
   ): void {
     const blockNumberStr = blockNumber.toString();
 
-    this.logger.debug(
-      `Writing transaction metrics for block #${blockNumber} (chain ${chainId}): ` +
-        `${totalTxs} total, ${success} success, ${failed} failed`,
-    );
+    // Only log blocks with significant activity (>10 transactions) or failures to reduce log volume
+    if (totalTxs > 10 || failed > 0) {
+      this.logger.debug(
+        `Writing transaction metrics for block #${blockNumber} (chain ${chainId}): ` +
+          `${totalTxs} total, ${success} success, ${failed} failed`,
+      );
+    }
 
     this.writePoint(
       new Point('transactions_per_block')
@@ -461,9 +473,12 @@ export class MetricsService implements OnModuleInit {
         .intField('value', totalTxs),
     );
 
-    this.logger.debug(
-      `Set transactions per block for block #${blockNumber}: ${totalTxs} total, ${success} confirmed, ${failed} failed`,
-    );
+    // Only log blocks with significant activity or failures
+    if (totalTxs > 10 || failed > 0) {
+      this.logger.debug(
+        `Set transactions per block for block #${blockNumber}: ${totalTxs} total, ${success} confirmed, ${failed} failed`,
+      );
+    }
   }
 
   /**
@@ -476,45 +491,21 @@ export class MetricsService implements OnModuleInit {
     endpointFailed: boolean = false,
   ): void {
     const sentinelConfig = this.getSentinelConfig();
+    const actualLatency = this.getValueWithSentinel(latencyMs, sentinelConfig.latency, endpointFailed, 0);
 
-    // Use sentinel value if endpoint failed and sentinel values are enabled
-    let actualLatency: number;
-    if (endpointFailed && sentinelConfig.enabled) {
-      actualLatency = sentinelConfig.latency;
-    } else if (latencyMs === null) {
-      actualLatency = sentinelConfig.enabled ? sentinelConfig.latency : 0;
-    } else {
-      // Fix negative latency if it occurs
-      actualLatency = latencyMs < 0 ? 0 : latencyMs;
-      if (latencyMs < 0) {
-        this.logger.warn(`Attempted to record negative latency (${latencyMs}ms) for ${endpoint}. Using 0ms instead.`);
-      }
+    // Fix negative latency if it occurs
+    const validLatency = actualLatency < 0 ? 0 : actualLatency;
+    if (actualLatency < 0) {
+      this.logger.warn(`Attempted to record negative latency (${actualLatency}ms) for ${endpoint}. Using 0ms instead.`);
     }
 
     const point = new Point('rpc_latency')
       .tag('endpoint', endpoint)
       .tag('chainId', chainId.toString())
       .tag('endpoint_status', endpointFailed ? 'failed' : 'active')
-      .floatField('value', actualLatency);
+      .floatField('value', validLatency);
 
     this.writePoint(point);
-  }
-
-  /**
-   * Record service status metrics (RPC, WebSocket, Explorer, Faucet)
-   */
-  setServiceStatus(
-    type: 'rpc' | 'websocket' | 'explorer' | 'faucet',
-    endpoint: string,
-    isUp: boolean,
-    chainId: number = 50,
-  ): void {
-    this.writePoint(
-      new Point(`${type}_status`)
-        .tag('endpoint', endpoint)
-        .tag('chainId', chainId.toString())
-        .intField('value', isUp ? 1 : 0),
-    );
   }
 
   /**
@@ -528,16 +519,12 @@ export class MetricsService implements OnModuleInit {
     endpointFailed: boolean = false,
   ): void {
     const sentinelConfig = this.getSentinelConfig();
-
-    // Convert boolean to number with proper sentinel logic
-    let statusValue: number;
-    if (endpointFailed && sentinelConfig.enabled) {
-      statusValue = sentinelConfig.status;
-    } else if (isUp === null) {
-      statusValue = sentinelConfig.enabled ? sentinelConfig.status : 0;
-    } else {
-      statusValue = isUp ? 1 : 0;
-    }
+    const statusValue = this.getValueWithSentinel(
+      isUp === null ? null : isUp ? 1 : 0,
+      sentinelConfig.status,
+      endpointFailed,
+      0,
+    );
 
     const point = new Point(`${type}_status`)
       .tag('endpoint', endpoint)
@@ -549,41 +536,17 @@ export class MetricsService implements OnModuleInit {
   }
 
   // Convenience methods that use setServiceStatusWithSentinel internally
-  setRpcStatusWithSentinel(
-    endpoint: string,
-    isUp: boolean | null,
-    chainId: number = 50,
-    endpointFailed: boolean = false,
-  ): void {
+  setRpcStatusWithSentinel = (endpoint: string, isUp: boolean | null, chainId = 50, endpointFailed = false) =>
     this.setServiceStatusWithSentinel('rpc', endpoint, isUp, chainId, endpointFailed);
-  }
 
-  setWebsocketStatusWithSentinel(
-    endpoint: string,
-    isUp: boolean | null,
-    chainId: number = 50,
-    endpointFailed: boolean = false,
-  ): void {
+  setWebsocketStatusWithSentinel = (endpoint: string, isUp: boolean | null, chainId = 50, endpointFailed = false) =>
     this.setServiceStatusWithSentinel('websocket', endpoint, isUp, chainId, endpointFailed);
-  }
 
-  setExplorerStatusWithSentinel(
-    endpoint: string,
-    isUp: boolean | null,
-    chainId: number = 50,
-    endpointFailed: boolean = false,
-  ): void {
+  setExplorerStatusWithSentinel = (endpoint: string, isUp: boolean | null, chainId = 50, endpointFailed = false) =>
     this.setServiceStatusWithSentinel('explorer', endpoint, isUp, chainId, endpointFailed);
-  }
 
-  setFaucetStatusWithSentinel(
-    endpoint: string,
-    isUp: boolean | null,
-    chainId: number = 50,
-    endpointFailed: boolean = false,
-  ): void {
+  setFaucetStatusWithSentinel = (endpoint: string, isUp: boolean | null, chainId = 50, endpointFailed = false) =>
     this.setServiceStatusWithSentinel('faucet', endpoint, isUp, chainId, endpointFailed);
-  }
 
   /**
    * Record peer count for an endpoint with sentinel value support for failed endpoints
@@ -602,12 +565,7 @@ export class MetricsService implements OnModuleInit {
     endpointFailed: boolean = false,
   ): void {
     const sentinelConfig = this.getSentinelConfig();
-
-    // Use sentinel value if endpoint failed and sentinel values are enabled
-    const actualPeerCount =
-      endpointFailed && sentinelConfig.enabled
-        ? sentinelConfig.peerCount
-        : (peerCount ?? (sentinelConfig.enabled ? sentinelConfig.peerCount : 0));
+    const actualPeerCount = this.getValueWithSentinel(peerCount, sentinelConfig.peerCount, endpointFailed, 0);
 
     const point = new Point('peer_count')
       .tag('endpoint', endpoint)
@@ -618,10 +576,13 @@ export class MetricsService implements OnModuleInit {
 
     this.writePoint(point);
 
-    const statusText = endpointFailed ? '(failed - using sentinel)' : '(active)';
-    this.logger.debug(
-      `Recorded peer count for ${endpointType} ${endpoint} (chain ${chainId}): ${actualPeerCount} peers ${statusText}`,
-    );
+    // Only log when there are issues (failures or zero peers) to reduce log volume
+    if (endpointFailed || actualPeerCount === 0) {
+      const statusText = endpointFailed ? '(failed - using sentinel)' : '(zero peers detected)';
+      this.logger.debug(
+        `Recorded peer count for ${endpointType} ${endpoint} (chain ${chainId}): ${actualPeerCount} peers ${statusText}`,
+      );
+    }
   }
 
   /**
@@ -795,29 +756,33 @@ export class MetricsService implements OnModuleInit {
     allEndpoints: Array<{ url: string; chainId: number; type: 'rpc' | 'websocket' }>,
     activeEndpoints: Set<string>,
   ): Promise<void> {
-    if (!this.isSentinelEnabled()) {
-      return; // Skip if sentinel values are disabled
+    if (!this.isSentinelEnabled()) return;
+
+    const inactiveEndpoints = allEndpoints.filter(endpoint => !activeEndpoints.has(endpoint.url));
+
+    for (const endpoint of inactiveEndpoints) {
+      if (endpoint.type === 'rpc') {
+        await this.setBlockHeightWithSentinel(null, endpoint.url, endpoint.chainId.toString(), true);
+      }
+
+      // Write other sentinel values for all inactive endpoints
+      this.setPeerCountWithSentinel(endpoint.url, null, endpoint.type, endpoint.chainId, true);
+      this.recordRpcLatencyWithSentinel(endpoint.url, null, endpoint.chainId, true);
+
+      const statusMethod =
+        endpoint.type === 'rpc' ? this.setRpcStatusWithSentinel : this.setWebsocketStatusWithSentinel;
+      statusMethod(endpoint.url, null, endpoint.chainId, true);
     }
 
-    const sentinelConfig = this.getSentinelConfig();
+    // Use summary logging instead of per-endpoint logging to reduce log volume
+    if (inactiveEndpoints.length > 0) {
+      const rpcEndpoints = inactiveEndpoints.filter(e => e.type === 'rpc');
+      const wsEndpoints = inactiveEndpoints.filter(e => e.type === 'websocket');
 
-    for (const endpoint of allEndpoints) {
-      const isActive = activeEndpoints.has(endpoint.url);
-
-      if (!isActive) {
-        // Write sentinel values for inactive endpoints
-        await this.setBlockHeightWithSentinel(null, endpoint.url, endpoint.chainId.toString(), true);
-        this.setPeerCountWithSentinel(endpoint.url, null, endpoint.type, endpoint.chainId, true);
-        this.recordRpcLatencyWithSentinel(endpoint.url, null, endpoint.chainId, true);
-
-        if (endpoint.type === 'rpc') {
-          this.setRpcStatusWithSentinel(endpoint.url, null, endpoint.chainId, true);
-        } else {
-          this.setWebsocketStatusWithSentinel(endpoint.url, null, endpoint.chainId, true);
-        }
-
-        this.logger.debug(`Wrote sentinel values for inactive ${endpoint.type} endpoint: ${endpoint.url}`);
-      }
+      this.logger.debug(
+        `Wrote sentinel values for ${inactiveEndpoints.length} inactive endpoints: ` +
+          `${rpcEndpoints.length} RPC (with block heights), ${wsEndpoints.length} WebSocket (status only)`,
+      );
     }
   }
 

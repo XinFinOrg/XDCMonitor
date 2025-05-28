@@ -46,14 +46,7 @@ export class PeerCountMonitor {
    * @returns True if an alert was fired, false otherwise
    */
   public async monitorRpcPeerCount(endpoint: RpcEndpoint): Promise<boolean> {
-    const peerCount = await this.fetchRpcPeerCount(endpoint);
-    if (peerCount === null) {
-      // Write sentinel value for failed endpoint to maintain visibility in Grafana
-      this.metricsService.setPeerCountWithSentinel(endpoint.url, null, 'rpc', endpoint.chainId, true);
-      return false;
-    }
-
-    return this.processPeerCountWithMetrics(endpoint, peerCount, 'rpc');
+    return this.monitorPeerCount(endpoint, 'rpc', () => this.fetchRpcPeerCount(endpoint));
   }
 
   /**
@@ -63,10 +56,25 @@ export class PeerCountMonitor {
    * @returns True if an alert was fired, false otherwise
    */
   public async monitorWsPeerCount(endpoint: RpcEndpoint): Promise<boolean> {
-    const peerCount = await this.fetchWsPeerCount(endpoint);
-    if (peerCount === null) return false;
+    return this.monitorPeerCount(endpoint, 'websocket', () => this.fetchWsPeerCount(endpoint));
+  }
 
-    return this.processPeerCountWithMetrics(endpoint, peerCount, 'websocket');
+  /**
+   * Generic peer count monitoring method
+   */
+  private async monitorPeerCount(
+    endpoint: RpcEndpoint,
+    endpointType: 'rpc' | 'websocket',
+    fetchFn: () => Promise<number | null>,
+  ): Promise<boolean> {
+    const peerCount = await fetchFn();
+    if (peerCount === null) {
+      // Write sentinel value for failed endpoint to maintain visibility in Grafana
+      this.metricsService.setPeerCountWithSentinel(endpoint.url, null, endpointType, endpoint.chainId, true);
+      return false;
+    }
+
+    return this.processPeerCountWithMetrics(endpoint, peerCount, endpointType);
   }
 
   /**
@@ -173,25 +181,18 @@ export class PeerCountMonitor {
   }
 
   /**
-   * Calculate the dynamic absolute drop threshold based on baseline
-   * Uses a percentage of the baseline but ensures a minimum drop threshold
+   * Calculate dynamic thresholds based on baseline
    * @param baseline The baseline peer count
-   * @returns The absolute drop threshold (number of peers)
+   * @returns Object containing all calculated thresholds
    */
-  private calculateAbsoluteDropThreshold(baseline: number): number {
-    // Calculate threshold as percentage of baseline (minimum 4)
-    return Math.max(Math.ceil(baseline * this.SIGNIFICANT_ABSOLUTE_DROP_FACTOR), this.MIN_ABSOLUTE_DROP_THRESHOLD);
-  }
-
-  /**
-   * Calculate the dynamic high peer threshold based on baseline
-   * Uses a multiplier of the baseline but ensures a minimum threshold
-   * @param baseline The baseline peer count
-   * @returns The high peer threshold (number of peers)
-   */
-  private calculateHighPeerThreshold(baseline: number): number {
-    // Calculate threshold as multiplier of baseline (minimum 8)
-    return Math.max(Math.ceil(baseline * this.HIGH_PEER_COUNT_FACTOR), this.MIN_HIGH_PEER_THRESHOLD);
+  private calculateThresholds(baseline: number) {
+    return {
+      absoluteDrop: Math.max(
+        Math.ceil(baseline * this.SIGNIFICANT_ABSOLUTE_DROP_FACTOR),
+        this.MIN_ABSOLUTE_DROP_THRESHOLD,
+      ),
+      highPeer: Math.max(Math.ceil(baseline * this.HIGH_PEER_COUNT_FACTOR), this.MIN_HIGH_PEER_THRESHOLD),
+    };
   }
 
   /**
@@ -258,8 +259,7 @@ export class PeerCountMonitor {
     if (sampleCount < this.MIN_SAMPLES_FOR_BASELINE || !typicallyHasPeers) return false;
 
     // Calculate dynamic thresholds based on baseline
-    const absoluteDropThreshold = this.calculateAbsoluteDropThreshold(baselinePeerCount);
-    const highPeerThreshold = this.calculateHighPeerThreshold(baselinePeerCount);
+    const { absoluteDrop, highPeer } = this.calculateThresholds(baselinePeerCount);
 
     // Determine alert type and check conditions
     let alertType = '';
@@ -285,10 +285,7 @@ export class PeerCountMonitor {
       isCritical = true;
     }
     // Check for significant absolute drop in peer count for high-peer endpoints
-    else if (
-      highestPeerCount >= highPeerThreshold &&
-      highestPeerCount - currentPeerCount >= absoluteDropThreshold * 2
-    ) {
+    else if (highestPeerCount >= highPeer && highestPeerCount - currentPeerCount >= absoluteDrop * 2) {
       alertType = ALERTS.TYPES.RPC_LOW_PEERS;
       isCritical = true;
     }
@@ -306,7 +303,7 @@ export class PeerCountMonitor {
       alertType,
       baselinePeerCount,
       highestPeerCount,
-      absoluteDropThreshold,
+      absoluteDrop,
     );
 
     const componentType = endpointType === 'rpc' ? ALERTS.COMPONENTS.RPC : ALERTS.COMPONENTS.WEBSOCKET;
