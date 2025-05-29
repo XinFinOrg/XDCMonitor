@@ -410,6 +410,14 @@ export class ConfigService {
    * Get block time threshold
    */
   get blockTimeThreshold(): number {
-    return this.getNumber('BLOCK_TIME_THRESHOLD', 5);
+    return this.getNumber(ENV_VARS.BLOCK_TIME_THRESHOLD, DEFAULTS.BLOCK_TIME_THRESHOLD);
+  }
+
+  /**
+   * Get list of endpoints that should be disabled for transaction testing
+   * Returns array of URLs/domains/IPs to exclude from transaction tests
+   */
+  getTransactionTestDisabledEndpoints(): string[] {
+    return this.getArray('TRANSACTION_TEST_DISABLED_ENDPOINTS', []);
   }
 }

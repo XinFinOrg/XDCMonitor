@@ -176,6 +176,7 @@ export const DEFAULTS = {
   SLOW_RPC_THRESHOLD_MS: 1000, // 1 second
   BLOCK_DISCREPANCY_SYNC_THRESHOLD: 5, // 5 blocks
   RECENT_BLOCKS_SAMPLE_SIZE: 100,
+  BLOCK_TIME_THRESHOLD: 3.0, // 3 seconds for block time alerts
 
   // InfluxDB defaults
   INFLUXDB_URL: 'http://localhost:8086',
