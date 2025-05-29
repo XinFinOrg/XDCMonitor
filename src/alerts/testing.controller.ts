@@ -2,6 +2,7 @@ import { MetricsService } from '@metrics/metrics.service';
 import { Controller, Get, Logger, Param, Post, Query } from '@nestjs/common';
 import { AlertService } from './alert.service';
 import { RpcMonitorService } from '@monitoring/rpc/rpc.monitor';
+import { ConfigService } from '@config/config.service';
 
 @Controller('testing')
 export class TestingController {
@@ -11,6 +12,7 @@ export class TestingController {
     private readonly metricsService: MetricsService,
     private readonly alertService: AlertService,
     private readonly rpcMonitorService: RpcMonitorService,
+    private readonly configService: ConfigService,
   ) {}
 
   @Get('simulate-slow-blocktime')
@@ -334,6 +336,99 @@ export class TestingController {
     return {
       success: true,
       message: `Weekly report sent for period ${startDate.toISOString()} to ${endDate.toISOString()}`,
+    };
+  }
+
+  /**
+   * Debug Telegram configuration - shows actual config values
+   */
+  @Get('debug-telegram-config')
+  async debugTelegramConfig() {
+    this.logger.log('Debugging Telegram configuration values');
+
+    const monitoringConfig = this.configService.getMonitoringConfig();
+    const alertNotifications = monitoringConfig.alertNotifications;
+
+    return {
+      success: true,
+      telegramConfig: {
+        botToken: alertNotifications.telegramBotToken ? '***configured***' : 'NOT CONFIGURED',
+        chatId: alertNotifications.telegramChatId || 'NOT CONFIGURED',
+        mainnetTopicId: alertNotifications.telegramMainnetTopicId || 'NOT CONFIGURED',
+        testnetTopicId: alertNotifications.telegramTestnetTopicId || 'NOT CONFIGURED',
+        enableTelegram: alertNotifications.enableTelegram,
+      },
+      diagnosis: {
+        canSendTelegram: !!(alertNotifications.telegramBotToken && alertNotifications.telegramChatId),
+        canRouteMainnet: !!alertNotifications.telegramMainnetTopicId,
+        canRouteTestnet: !!alertNotifications.telegramTestnetTopicId,
+        willGoToGeneral: !(alertNotifications.telegramMainnetTopicId && alertNotifications.telegramTestnetTopicId),
+      },
+      recommendation: this.generateTelegramRecommendation(alertNotifications),
+    };
+  }
+
+  private generateTelegramRecommendation(config: any): string {
+    if (!config.telegramBotToken || !config.telegramChatId) {
+      return 'Configure TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in your .env file';
+    }
+
+    if (!config.telegramTestnetTopicId) {
+      return 'Configure TELEGRAM_TESTNET_TOPIC_ID in your .env file to route Testnet alerts to specific topic';
+    }
+
+    if (!config.telegramMainnetTopicId) {
+      return 'Configure TELEGRAM_MAINNET_TOPIC_ID in your .env file to route Mainnet alerts to specific topic';
+    }
+
+    return 'All Telegram topic IDs are configured properly';
+  }
+
+  /**
+   * Test the exact transaction failure alert flow for debugging
+   */
+  @Get('trace-transaction-alert-flow')
+  async traceTransactionAlertFlow() {
+    this.logger.log('Tracing transaction alert flow for debugging');
+
+    // Get configuration like transaction monitor does
+    const monitoringConfig = this.configService.getMonitoringConfig();
+    this.logger.log(`Alert config: ${JSON.stringify(monitoringConfig.alertNotifications, null, 2)}`);
+
+    // Simulate the exact same alert that transaction monitor sends
+    const chainId = 51; // Testnet
+    const alertType = 'TRANSACTION_FAILURE_RATE_HIGH';
+    const component = 'transaction';
+    const message = `High transaction failure rate on Testnet: 5/5 (100%) RPC endpoints failed to process normal transactions.
+
+Failed endpoints:
+  - https://rpc.apothem.network
+  - https://erpc.apothem.network
+  - https://earpc.apothem.network
+  - https://rpc.ankr.com/xdc_testnet
+  - https://apothem.xdcrpc.com`;
+
+    this.logger.log(`About to call alertService.error with chainId: ${chainId}`);
+
+    // Call exactly the same method as transaction monitor
+    await this.alertService.error(alertType, component, message, chainId);
+
+    this.logger.log('Transaction alert flow test completed');
+
+    return {
+      success: true,
+      message: 'Traced transaction alert flow - check logs for detailed debugging info',
+      testParams: {
+        chainId: chainId,
+        alertType: alertType,
+        component: component,
+        messageLength: message.length,
+      },
+      configuration: {
+        testnetTopicId: monitoringConfig.alertNotifications.telegramTestnetTopicId,
+        mainnetTopicId: monitoringConfig.alertNotifications.telegramMainnetTopicId,
+        enableTelegram: monitoringConfig.alertNotifications.enableTelegram,
+      },
     };
   }
 }

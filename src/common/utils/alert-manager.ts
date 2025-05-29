@@ -274,6 +274,10 @@ export class AlertManager {
     this.logger.debug(`Raw chainId from alert: ${alert.chainId}`);
     this.logger.debug(`Channel config mainnetTopicId: ${mainnetTopicId}`);
     this.logger.debug(`Channel config testnetTopicId: ${testnetTopicId}`);
+    this.logger.debug(`Alert severity: ${alert.severity}`);
+    this.logger.debug(`Alert component: ${alert.component}`);
+    this.logger.debug(`Full alert object:`, JSON.stringify(alert, null, 2));
+    this.logger.debug(`Full channel config:`, JSON.stringify(channel.config, null, 2));
 
     // Format message for Telegram
     const severityEmoji =
@@ -322,27 +326,23 @@ export class AlertManager {
       // Use the primary chainId source - prefer direct property over metadata
       const chainId = chainIdFromAlert !== undefined ? chainIdFromAlert : chainIdFromMetadata;
 
-      this.logger.debug(`Final chainId used for topic selection: ${chainId}`);
+      this.logger.log(
+        `TELEGRAM TOPIC SELECTION - Final chainId: ${chainId}, testnetTopicId: ${testnetTopicId}, mainnetTopicId: ${mainnetTopicId}`,
+      );
 
       // Determine message thread ID based on chainId
       let messageThreadId: string | undefined;
 
-      this.logger.debug(`Checking topic selection logic:`);
-      this.logger.debug(`- chainId === 50? ${chainId === 50}`);
-      this.logger.debug(`- mainnetTopicId exists? ${!!mainnetTopicId}`);
-      this.logger.debug(`- chainId === 51? ${chainId === 51}`);
-      this.logger.debug(`- testnetTopicId exists? ${!!testnetTopicId}`);
-
       if (chainId === 50 && mainnetTopicId) {
         messageThreadId = mainnetTopicId;
-        this.logger.debug(`✅ Using Mainnet topic ID: ${messageThreadId}`);
+        this.logger.log(`✅ TELEGRAM TOPIC: Using Mainnet topic ID: ${messageThreadId}`);
       } else if (chainId === 51 && testnetTopicId) {
         messageThreadId = testnetTopicId;
-        this.logger.debug(`✅ Using Testnet topic ID: ${messageThreadId}`);
+        this.logger.log(`✅ TELEGRAM TOPIC: Using Testnet topic ID: ${messageThreadId}`);
       } else {
-        this.logger.debug(`❌ No topic selected - will send to General channel`);
-        this.logger.debug(
-          `Reason: chainId=${chainId}, mainnetTopicId=${mainnetTopicId}, testnetTopicId=${testnetTopicId}`,
+        this.logger.log(`❌ TELEGRAM TOPIC: No topic selected - sending to General channel`);
+        this.logger.log(
+          `TELEGRAM TOPIC: Reason - chainId=${chainId}, mainnetTopicId=${mainnetTopicId}, testnetTopicId=${testnetTopicId}`,
         );
       }
 
@@ -360,9 +360,11 @@ export class AlertManager {
 
       if (messageThreadId) {
         options.message_thread_id = parseInt(messageThreadId, 10);
-        this.logger.debug(`Final Telegram options: ${JSON.stringify(options)}`);
+        this.logger.log(
+          `TELEGRAM SEND: Final options with message_thread_id = ${options.message_thread_id}: ${JSON.stringify(options)}`,
+        );
       } else {
-        this.logger.debug(`No message_thread_id set - sending to General channel`);
+        this.logger.log(`TELEGRAM SEND: No message_thread_id set - sending to General channel`);
       }
 
       // Send the message with retry logic
