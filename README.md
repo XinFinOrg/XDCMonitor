@@ -710,6 +710,13 @@ MAINNET_TEST_PRIVATE_KEY=your-test-wallet-private-key-for-mainnet
 TESTNET_TEST_PRIVATE_KEY=your-test-wallet-private-key-for-testnet
 TEST_RECEIVER_ADDRESS_50=0xReceiverAddressForMainnet
 TEST_RECEIVER_ADDRESS_51=0xReceiverAddressForTestnet
+
+# Temporarily disable transaction tests for specific endpoints (comma-separated)
+# Use precise patterns for better control:
+# - Exact URL: http://testnet.xdcrpc.com:8555 (only HTTP on port 8555)
+# - Domain+Port: testnet.xdcrpc.com:8555 (both HTTP and HTTPS on port 8555)
+# - Domain only: testnet.xdcrpc.com (all ports and protocols for this domain)
+TRANSACTION_TEST_DISABLED_ENDPOINTS=
 ```
 
 **Important Configuration Notes**:
@@ -806,7 +813,8 @@ chmod +x run.sh
 - **Block Comparison**: `/api/monitoring/block-comparison` - Comparison of block heights across RPCs
 - **RPC Status**: `/api/monitoring/rpc-status` - Status of all RPC endpoints
 - **WebSocket Status**: `/api/monitoring/websocket-status` - Status of WebSocket connections
-- **Transaction Status**: `/api/monitoring/transaction-status` - Status of transaction monitoring
+- **Transaction Status**: `/api/monitoring/transaction-status` - Status of transaction monitoring including disabled endpoints
+- **Disabled Endpoints**: `/api/monitoring/disabled-endpoints` - List of endpoints disabled for transaction testing
 - **Overall Status**: `/api/monitoring/status` - Combined status of all monitoring systems
 - **Notifications Test**: `/api/notifications/test` - Test the notification system
 - **Telegram Webhook**: `/api/notifications/telegram` - Endpoint for Grafana to send alerts
@@ -889,26 +897,84 @@ The system includes comprehensive transaction monitoring capabilities:
 - **Per-Network Tracking**: Monitors transaction types separately for each network with individual failure rate calculations
 - **Multi-Endpoint Validation**: Tests transaction functionality across all available RPC endpoints on each network
 - **Intelligent Confirmation Monitoring**: 10 attempts with 2-second intervals (20 seconds total timeout)
+- **Flexible Endpoint Management**: Ability to temporarily disable specific endpoints from transaction testing via environment configuration
 
-### Failure Rate Detection
+### Endpoint Disable/Enable Feature
 
-The transaction monitor includes advanced failure rate detection:
+The transaction monitoring system includes a flexible mechanism to temporarily disable specific endpoints from transaction testing without code changes:
 
-- **50% Threshold Alerting**: Automatically generates error alerts when 50% or more RPC endpoints fail transaction tests
-- **Transaction Type Separation**: Monitors normal transactions and contract deployments separately
-- **Network-Specific Tracking**: Maintains separate failure rates for Mainnet (chainId 50) and Testnet (chainId 51)
-- **Detailed Endpoint Information**: Alert messages include complete lists of failing RPC endpoints for rapid issue resolution
-- **Real-Time Monitoring**: Failure rates are calculated in real-time during each 5-minute test cycle
+#### Configuration
 
-### Requirements
+Add disabled endpoints to your `.env` file:
 
-To use transaction monitoring, you need:
+```bash
+# Temporarily disable transaction tests for specific endpoints (comma-separated)
+# Use precise patterns for better control:
 
-1. **Test wallets** with private keys specified in the configuration
-2. **Sufficient balance** in each test wallet (minimum 0.01 XDC)
-3. **Receiver addresses** for test transactions
+# Option 1: Exact URL match (most precise)
+TRANSACTION_TEST_DISABLED_ENDPOINTS=http://testnet.xdcrpc.com:8555,ws://testnet.xdcrpc.com:8556
 
-Test transactions are executed every 5 minutes by default, with metrics being recorded in InfluxDB and visualized in Grafana.
+# Option 2: Domain with port (protocol-agnostic)
+TRANSACTION_TEST_DISABLED_ENDPOINTS=testnet.xdcrpc.com:8555,testnet.xdcrpc.com:8556
+
+# Option 3: Domain only (matches all ports for that domain)
+TRANSACTION_TEST_DISABLED_ENDPOINTS=testnet.xdcrpc.com
+```
+
+#### Matching Logic (in order of priority)
+
+The system uses precise matching logic to avoid unintended endpoint exclusions:
+
+1. **Exact URL Match** (Highest Priority):
+
+   - `http://testnet.xdcrpc.com:8555` → Only disables the HTTP endpoint on port 8555
+   - `ws://testnet.xdcrpc.com:8556` → Only disables the WebSocket endpoint on port 8556
+
+2. **Domain + Port Match** (Protocol-agnostic):
+
+   - `testnet.xdcrpc.com:8555` → Disables both `http://` and `https://` on port 8555
+   - `testnet.xdcrpc.com:8556` → Disables both `ws://` and `wss://` on port 8556
+
+3. **Domain Only Match** (Broadest):
+   - `testnet.xdcrpc.com` → Disables ALL endpoints for this domain/IP (all ports and protocols)
+
+#### Recommended Usage
+
+For precise control when you need the node to sync:
+
+```bash
+# To disable only HTTP RPC endpoint:
+TRANSACTION_TEST_DISABLED_ENDPOINTS=http://testnet.xdcrpc.com:8555
+
+# To disable only WebSocket endpoint:
+TRANSACTION_TEST_DISABLED_ENDPOINTS=ws://testnet.xdcrpc.com:8556
+
+# To disable both HTTP and WebSocket:
+TRANSACTION_TEST_DISABLED_ENDPOINTS=http://testnet.xdcrpc.com:8555,ws://testnet.xdcrpc.com:8556
+
+# To disable all endpoints for a domain (use with caution):
+TRANSACTION_TEST_DISABLED_ENDPOINTS=testnet.xdcrpc.com
+```
+
+#### API Endpoints
+
+Monitor disabled endpoints status:
+
+```bash
+# Get transaction monitoring status including disabled endpoints
+curl http://your-server:3000/api/monitoring/transaction-status
+
+# Get only the list of disabled endpoints
+curl http://your-server:3000/api/monitoring/disabled-endpoints
+```
+
+#### Use Cases
+
+- **Node Synchronization**: Temporarily disable endpoints while nodes sync data
+- **Maintenance Mode**: Exclude endpoints during maintenance or updates
+- **Performance Testing**: Focus testing on specific endpoint subsets
+- **Network Issues**: Quickly exclude problematic endpoints without deployment
+- **Development/Staging**: Easily switch between endpoint configurations
 
 ## Alert System and Reporting
 
@@ -1220,6 +1286,7 @@ The application includes several powerful utilities:
 7. **Code Architecture**: Optimized code structure with generic helpers and consolidated functionality
 8. **Alert System Enhancement**: Fixed notification channel routing bug and improved chainId handling for reliable topic selection
 9. **Debug Tracing**: Added comprehensive debug logging for alert flow investigation and troubleshooting
+10. **Transaction Test Endpoint Management**: Implemented flexible endpoint disable/enable system via environment configuration for precise testing control
 
 ### Performance Benefits
 

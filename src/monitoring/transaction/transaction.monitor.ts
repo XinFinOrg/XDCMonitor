@@ -31,6 +31,11 @@ export class TransactionMonitorService implements OnModuleInit {
     if (this.configService.enableTransactionMonitoring) {
       this.logger.log('Transaction monitor initialized');
       await this.initializeTestWallets();
+
+      const disabledEndpoints = this.configService.getTransactionTestDisabledEndpoints();
+      if (disabledEndpoints.length > 0) {
+        this.logger.log(`Transaction tests disabled for endpoints: ${disabledEndpoints.join(', ')}`);
+      }
     }
   }
 
@@ -171,6 +176,10 @@ export class TransactionMonitorService implements OnModuleInit {
           providerData.provider !== null,
       );
 
+    // Filter out disabled endpoints
+    const enabledMainnetProviders = this.filterEnabledProviders(mainnetProviders);
+    const enabledTestnetProviders = this.filterEnabledProviders(testnetProviders);
+
     // Track transaction success/failure rates for each network and transaction type
     const results = {
       50: {
@@ -187,7 +196,7 @@ export class TransactionMonitorService implements OnModuleInit {
 
     // Test each active mainnet RPC with both transaction types if wallet has enough balance
     if (this.testWallets[50].hasBalance) {
-      for (const providerData of mainnetProviders) {
+      for (const providerData of enabledMainnetProviders) {
         // Run normal transaction test
         const normalTxResult = await this.runTransactionTest(50, false, providerData.endpoint.url);
         results[50].normalTransaction.total++;
@@ -220,7 +229,7 @@ export class TransactionMonitorService implements OnModuleInit {
 
     // Test each active testnet RPC with both transaction types if wallet has enough balance
     if (this.testWallets[51].hasBalance) {
-      for (const providerData of testnetProviders) {
+      for (const providerData of enabledTestnetProviders) {
         // Run normal transaction test
         const normalTxResult = await this.runTransactionTest(51, false, providerData.endpoint.url);
         results[51].normalTransaction.total++;
@@ -453,5 +462,85 @@ export class TransactionMonitorService implements OnModuleInit {
         hasBalance: this.testWallets[51]?.hasBalance || false,
       },
     };
+  }
+
+  /**
+   * Public method to get the list of disabled endpoints for transaction testing
+   */
+  public getDisabledEndpoints(): string[] {
+    return this.configService.getTransactionTestDisabledEndpoints();
+  }
+
+  /**
+   * Public method to check if a specific endpoint is disabled for testing
+   * @param endpointUrl The URL to check
+   */
+  public isEndpointDisabled(endpointUrl: string): boolean {
+    return this.isEndpointDisabledForTesting(endpointUrl);
+  }
+
+  /**
+   * Check if an endpoint should be disabled for transaction testing
+   * @param endpointUrl The URL of the endpoint to check
+   * @returns true if the endpoint should be disabled
+   */
+  private isEndpointDisabledForTesting(endpointUrl: string): boolean {
+    const disabledEndpoints = this.configService.getTransactionTestDisabledEndpoints();
+
+    if (disabledEndpoints.length === 0) {
+      return false;
+    }
+
+    // Check if the endpoint URL matches any of the disabled patterns
+    return disabledEndpoints.some(disabledPattern => {
+      // Exact URL match (most precise)
+      if (endpointUrl === disabledPattern) {
+        return true;
+      }
+
+      // If pattern includes protocol, match exactly
+      if (disabledPattern.includes('://')) {
+        // For protocol-specific patterns, only exact matches
+        return endpointUrl === disabledPattern;
+      }
+
+      // If pattern is just domain/IP with port, match protocol-agnostically
+      // Example: "157.173.195.189:8555" matches both "http://157.173.195.189:8555" and "https://157.173.195.189:8555"
+      if (disabledPattern.includes(':') && !disabledPattern.includes('://')) {
+        const urlWithoutProtocol = endpointUrl.replace(/^https?:\/\/|^wss?:\/\//, '');
+        return urlWithoutProtocol === disabledPattern;
+      }
+
+      // If pattern is just domain/IP (no port), match any port for that domain
+      // Example: "157.173.195.189" matches "http://157.173.195.189:8555", "ws://157.173.195.189:8556", etc.
+      // But only if explicitly intended (this is a broader match)
+      const urlWithoutProtocol = endpointUrl.replace(/^https?:\/\/|^wss?:\/\//, '');
+      const domainFromUrl = urlWithoutProtocol.split(':')[0];
+
+      return domainFromUrl === disabledPattern;
+    });
+  }
+
+  /**
+   * Filter out disabled endpoints from the provider list
+   * @param providers Array of provider data to filter
+   * @returns Filtered array with disabled endpoints removed
+   */
+  private filterEnabledProviders(providers: any[]): any[] {
+    const originalCount = providers.length;
+    const filteredProviders = providers.filter(providerData => {
+      const isDisabled = this.isEndpointDisabledForTesting(providerData.endpoint.url);
+      if (isDisabled) {
+        this.logger.debug(`Skipping transaction test for disabled endpoint: ${providerData.endpoint.url}`);
+      }
+      return !isDisabled;
+    });
+
+    const disabledCount = originalCount - filteredProviders.length;
+    if (disabledCount > 0) {
+      this.logger.log(`Filtered out ${disabledCount} disabled endpoints from transaction testing`);
+    }
+
+    return filteredProviders;
   }
 }

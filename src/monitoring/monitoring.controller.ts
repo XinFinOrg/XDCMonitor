@@ -3,6 +3,7 @@ import { RpcMonitorService } from '@monitoring/rpc/rpc.monitor';
 import { BlocksMonitorService } from '@monitoring/blocks/blocks.monitor';
 import { ConsensusMonitor } from '@monitoring/consensus/consensus.monitor';
 import { MinerMonitor } from '@monitoring/consensus/miner/miner.monitor';
+import { TransactionMonitorService } from '@monitoring/transaction/transaction.monitor';
 
 @Controller('monitoring')
 export class MonitoringController {
@@ -11,6 +12,7 @@ export class MonitoringController {
     private readonly blocksMonitorService: BlocksMonitorService,
     private readonly consensusMonitorService: ConsensusMonitor,
     private readonly minerMonitor: MinerMonitor,
+    private readonly transactionMonitorService: TransactionMonitorService,
   ) {}
 
   @Get('websocket-status')
@@ -94,6 +96,24 @@ export class MonitoringController {
     return {
       maxDifference,
       differences: differences.sort((a, b) => b.difference - a.difference),
+    };
+  }
+
+  @Get('transaction-status')
+  getTransactionStatus() {
+    return {
+      timestamp: new Date().toISOString(),
+      walletStatus: this.transactionMonitorService.getTestWalletStatus(),
+      disabledEndpoints: this.transactionMonitorService.getDisabledEndpoints(),
+    };
+  }
+
+  @Get('disabled-endpoints')
+  getDisabledEndpoints() {
+    return {
+      timestamp: new Date().toISOString(),
+      disabledEndpoints: this.transactionMonitorService.getDisabledEndpoints(),
+      message: 'These endpoints are temporarily disabled for transaction testing',
     };
   }
 }
