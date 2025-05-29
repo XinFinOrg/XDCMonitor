@@ -4,8 +4,10 @@ apiVersion: 1
 deleteDatasources:
   - name: InfluxDB
     orgId: 1
+  - name: internal node InfluxDB
+    orgId: 1
 
-# Then add back the InfluxDB datasource with the correct configuration
+# Then add back the InfluxDB datasources with the correct configuration
 datasources:
   - name: InfluxDB
     uid: influxdb
@@ -20,4 +22,18 @@ datasources:
       defaultBucket: xdc_metrics
       tlsSkipVerify: true
     secureJsonData:
-      token: __INFLUXDB_TOKEN__
+      token: _INFLUXDB_TOKEN__
+  - name: internal node InfluxDB
+    uid: influxdb2
+    type: influxdb
+    access: proxy
+    url: ${INTERNAL_NODE_INFLUXDB_URL}
+    isDefault: false
+    version: 2
+    jsonData:
+      version: InfluxDB
+      organization: xdc
+      defaultBucket: xdc_internal
+      tlsSkipVerify: true
+    secureJsonData:
+      token: ${INTERNAL_NODE_INFLUXDB_TOKEN}

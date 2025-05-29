@@ -365,6 +365,15 @@ case "$1" in
               fi
             else
               echo "✓ Exported datasource: $(basename "$file")"
+              fi
+              
+              if [ ! -z "$INTERNAL_NODE_INFLUXDB_TOKEN" ]; then
+                # Use a more robust perl replace instead of sed
+                perl -i -pe 's|"'"$INTERNAL_NODE_INFLUXDB_TOKEN"'"|__INTERNAL_NODE_INFLUXDB_TOKEN__|g' "grafana_config/provisioning/datasources/$(basename "$file")"
+                echo "✓ Exported datasource: $(basename "$file") with internal node token placeholder"
+              fi
+            else
+              echo "✓ Exported datasource: $(basename "$file")"
             fi
           fi
         done
@@ -454,6 +463,17 @@ case "$1" in
                 echo "✓ Imported datasource: $filename with token from .env"
               else
                 echo "⚠️ Imported datasource: $filename - no token found in .env"
+              fi
+            else
+              echo "⚠️ Imported datasource: $filename - no token found in .env"
+              fi
+
+              if [ ! -z "$INTERNAL_NODE_INFLUXDB_TOKEN" ]; then
+                # Use perl for more robust replacement that handles special characters like =
+                perl -i -pe 's|__INTERNAL_NODE_INFLUXDB_TOKEN__|"'"$INTERNAL_NODE_INFLUXDB_TOKEN"'"|g' "grafana_data/provisioning/datasources/$filename"
+                echo "✓ Imported datasource: $filename with internal node token from .env"
+              else
+                echo "⚠️ Imported datasource: $filename - no internal node token found in .env"
               fi
             else
               echo "⚠️ Imported datasource: $filename - .env file not found"
