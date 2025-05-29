@@ -499,6 +499,29 @@ The system uses these environment variables to control alert behavior:
 - `TELEGRAM_BOT_TOKEN` & `TELEGRAM_CHAT_ID`: Required for Telegram notifications
 - `NOTIFICATION_WEBHOOK_URL`: URL to send webhook alerts (for Slack, Discord, etc.)
 
+### Network-Specific Alert Routing
+
+The alert system features sophisticated network-specific routing for Telegram notifications:
+
+- **Mainnet Alerts** (chainId=50): Automatically routed to the configured Mainnet topic
+- **Testnet Alerts** (chainId=51): Automatically routed to the configured Testnet topic
+- **General Alerts**: Sent to the main conversation thread when no specific network is identified
+
+#### Enhanced ChainId Handling
+
+The system includes robust chainId detection and routing:
+
+- **Direct Property Support**: ChainId is handled as a direct property on alerts for reliable routing
+- **Comprehensive Debug Logging**: Detailed logs trace the chainId flow from alert creation to topic selection
+- **Fallback Classification**: Content-based classification when chainId is not explicitly provided
+- **Chain-Specific Throttling**: Alert throttling considers chainId to prevent cross-network interference
+
+#### Recent Bug Fixes
+
+- **Fixed Notification Channel Routing**: Resolved issue where alerts were incorrectly routed to General topic instead of network-specific topics
+- **Improved ChainId Flow**: Enhanced how chainId is passed through the alert system for reliable topic selection
+- **Debug Tracing**: Added comprehensive debug logging to track chainId handling and topic selection process
+
 ### Comprehensive Testing Framework
 
 The XDC Monitor includes an extensive testing framework for validating alert functionality and simulating various network conditions:
@@ -900,6 +923,16 @@ The application features a comprehensive alert and reporting system for monitori
 - **Intelligent Throttling**: Prevents alert floods by limiting frequency of similar alerts
 - **Smart Alert Classification**: Automatically determines network association through chainId and content pattern matching
 
+### Advanced Alert Features
+
+The alert system includes sophisticated features for reliable and efficient notification delivery:
+
+- **Network-Specific Routing**: Alerts are automatically routed to appropriate Telegram topics based on chainId
+- **Chain-Specific Throttling**: Alert throttling operates independently for each network to prevent cross-chain interference
+- **Intelligent Topic Selection**: Robust logic handles both direct chainId properties and content-based classification
+- **Comprehensive Debug Tracing**: Detailed logging tracks alert flow from creation to notification delivery
+- **Fallback Classification**: Content pattern matching for alerts without explicit chainId assignment
+
 ### Telegram Integration
 
 - **Topic-based Routing**:
@@ -1185,6 +1218,8 @@ The application includes several powerful utilities:
 5. **Transaction Monitoring**: Dual-mode testing with advanced failure rate analysis and detailed endpoint reporting
 6. **Logging Optimization**: Reduced log volume by 90%+ while maintaining essential monitoring information
 7. **Code Architecture**: Optimized code structure with generic helpers and consolidated functionality
+8. **Alert System Enhancement**: Fixed notification channel routing bug and improved chainId handling for reliable topic selection
+9. **Debug Tracing**: Added comprehensive debug logging for alert flow investigation and troubleshooting
 
 ### Performance Benefits
 
