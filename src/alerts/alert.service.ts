@@ -684,6 +684,7 @@ export class AlertService implements OnModuleInit {
       component: alert.component || 'system',
       title: alert.title,
       message: alert.message,
+      chainId: chainId,
       shouldNotify: true,
       metadata: {
         chainId: chainId,
@@ -697,7 +698,7 @@ export class AlertService implements OnModuleInit {
    * Create an error-level alert
    */
   async error(alertType: string, component: string, message: string, chainId?: number): Promise<void> {
-    if (this.shouldThrottle(alertType, message)) {
+    if (this.shouldThrottle(alertType, message, chainId)) {
       this.logger.debug(`Throttling error alert: ${alertType}`);
       return;
     }
@@ -718,7 +719,7 @@ export class AlertService implements OnModuleInit {
    * Warnings are saved to the database but not sent as notifications
    */
   async warning(alertType: string, component: string, message: string, chainId?: number): Promise<void> {
-    if (this.shouldThrottle(alertType, message)) {
+    if (this.shouldThrottle(alertType, message, chainId)) {
       this.logger.debug(`Throttling warning alert: ${alertType}`);
       return;
     }
@@ -753,6 +754,7 @@ export class AlertService implements OnModuleInit {
       component: component || 'system',
       title: this.formatAlertTitle(alertType),
       message,
+      chainId: chainId,
       shouldNotify: false,
       metadata: {
         chainId,
@@ -767,7 +769,7 @@ export class AlertService implements OnModuleInit {
    * Create an info-level alert
    */
   async info(alertType: string, component: string, message: string, chainId?: number): Promise<void> {
-    if (this.shouldThrottle(alertType, message)) {
+    if (this.shouldThrottle(alertType, message, chainId)) {
       this.logger.debug(`Throttling info alert: ${alertType}`);
       return;
     }
@@ -791,9 +793,12 @@ export class AlertService implements OnModuleInit {
    * which prevents alerts from even reaching this method during the throttle period.
    * Both use the same config value: ALERTS.NOTIFICATIONS.THROTTLE_SECONDS.SYNC_BLOCKS_LAG
    */
-  private shouldThrottle(alertType: string, message?: string): boolean {
+  private shouldThrottle(alertType: string, message?: string, chainId?: number): boolean {
     const now = Date.now();
-    const lastTime = this.alertThrottling[alertType] || 0;
+
+    // Create a throttling key that includes chainId to throttle alerts per chain
+    const throttleKey = chainId ? `${alertType}_chain_${chainId}` : alertType;
+    const lastTime = this.alertThrottling[throttleKey] || 0;
 
     // Get throttle time for this alert type or use default
     let throttleSeconds =
@@ -820,8 +825,8 @@ export class AlertService implements OnModuleInit {
       return true;
     }
 
-    // Update last alert time
-    this.alertThrottling[alertType] = now;
+    // Update last alert time using the chain-specific key
+    this.alertThrottling[throttleKey] = now;
     return false;
   }
 

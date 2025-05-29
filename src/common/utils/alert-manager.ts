@@ -267,6 +267,14 @@ export class AlertManager {
       throw new Error('Telegram bot token or chat ID is not configured');
     }
 
+    // DEBUG: Log all relevant information for investigation
+    this.logger.debug(`=== TELEGRAM SEND DEBUG ===`);
+    this.logger.debug(`Alert title: ${alert.title}`);
+    this.logger.debug(`Alert metadata: ${JSON.stringify(alert.metadata)}`);
+    this.logger.debug(`Raw chainId from alert: ${alert.chainId}`);
+    this.logger.debug(`Channel config mainnetTopicId: ${mainnetTopicId}`);
+    this.logger.debug(`Channel config testnetTopicId: ${testnetTopicId}`);
+
     // Format message for Telegram
     const severityEmoji =
       alert.severity === AlertSeverity.CRITICAL ? '🔴' : alert.severity === AlertSeverity.WARNING ? '⚠️' : '🔵';
@@ -303,17 +311,39 @@ export class AlertManager {
         } as any, // Use type assertion to bypass type checking issues
       });
 
-      // Extract chainId from metadata if available
-      const chainId = alert.metadata?.chainId as number | undefined;
+      // Extract chainId from multiple possible sources
+      const chainIdFromMetadata = alert.metadata?.chainId as number | undefined;
+      const chainIdFromAlert = alert.chainId;
+
+      // DEBUG: Log both sources
+      this.logger.debug(`ChainId from alert.metadata?.chainId: ${chainIdFromMetadata}`);
+      this.logger.debug(`ChainId from alert.chainId: ${chainIdFromAlert}`);
+
+      // Use the primary chainId source - prefer direct property over metadata
+      const chainId = chainIdFromAlert !== undefined ? chainIdFromAlert : chainIdFromMetadata;
+
+      this.logger.debug(`Final chainId used for topic selection: ${chainId}`);
 
       // Determine message thread ID based on chainId
       let messageThreadId: string | undefined;
+
+      this.logger.debug(`Checking topic selection logic:`);
+      this.logger.debug(`- chainId === 50? ${chainId === 50}`);
+      this.logger.debug(`- mainnetTopicId exists? ${!!mainnetTopicId}`);
+      this.logger.debug(`- chainId === 51? ${chainId === 51}`);
+      this.logger.debug(`- testnetTopicId exists? ${!!testnetTopicId}`);
+
       if (chainId === 50 && mainnetTopicId) {
         messageThreadId = mainnetTopicId;
-        this.logger.debug(`Using Mainnet topic ID: ${messageThreadId}`);
+        this.logger.debug(`✅ Using Mainnet topic ID: ${messageThreadId}`);
       } else if (chainId === 51 && testnetTopicId) {
         messageThreadId = testnetTopicId;
-        this.logger.debug(`Using Testnet topic ID: ${messageThreadId}`);
+        this.logger.debug(`✅ Using Testnet topic ID: ${messageThreadId}`);
+      } else {
+        this.logger.debug(`❌ No topic selected - will send to General channel`);
+        this.logger.debug(
+          `Reason: chainId=${chainId}, mainnetTopicId=${mainnetTopicId}, testnetTopicId=${testnetTopicId}`,
+        );
       }
 
       // Check if the message contains HTML tags
@@ -330,6 +360,9 @@ export class AlertManager {
 
       if (messageThreadId) {
         options.message_thread_id = parseInt(messageThreadId, 10);
+        this.logger.debug(`Final Telegram options: ${JSON.stringify(options)}`);
+      } else {
+        this.logger.debug(`No message_thread_id set - sending to General channel`);
       }
 
       // Send the message with retry logic
