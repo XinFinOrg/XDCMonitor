@@ -21,7 +21,6 @@ const DEFAULT_CONFIG: RpcMonitorConfig = {
   serviceInterval: 60000,
   wsInterval: 30000,
   syncInterval: 60000,
-  visibilityInterval: 300000, // 5 minutes
   rpcBatchSize: 3,
   wsBatchSize: 2,
   batchDelay: 500,
@@ -98,7 +97,6 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
     this.scheduleMonitor('port', 5000, () => this.monitorAllRpcPorts());
     this.scheduleMonitor('service', 10000, () => this.monitorAllServices());
     this.scheduleMonitor('sync', 20000, () => this.syncWithBlockchainService());
-    this.scheduleMonitor('visibility', 30000, () => this.ensureAllEndpointVisibility());
   }
 
   /**
@@ -129,7 +127,6 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
       serviceInterval: parseInt(this.configService.get('SERVICE_CHECK_INTERVAL_MS', '60000')),
       wsInterval: parseInt(this.configService.get('WS_CHECK_INTERVAL_MS', '30000')),
       syncInterval: parseInt(this.configService.get('SYNC_INTERVAL_MS', '60000')),
-      visibilityInterval: parseInt(this.configService.get('VISIBILITY_CHECK_INTERVAL_MS', '300000')),
       rpcBatchSize: parseInt(this.configService.get('RPC_CHECK_BATCH_SIZE', '3')),
       wsBatchSize: parseInt(this.configService.get('WS_CHECK_BATCH_SIZE', '2')),
       batchDelay: parseInt(this.configService.get('BATCH_DELAY_MS', '500')),
@@ -309,11 +306,21 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
     }
 
     this.logger.debug('Checking RPC endpoints...');
+
+    // Get all configured RPC endpoints
+    const allRpcEndpoints = this.configService.getRpcEndpoints();
+
+    // Track which endpoints were successfully monitored
+    const monitoredEndpoints = new Set<string>();
+
     await this.monitorEndpoints(
-      this.configService.getRpcEndpoints(),
+      allRpcEndpoints,
       this.rpcStatuses,
       this.config.rpcBatchSize,
-      this.monitorRpcEndpoint.bind(this),
+      async endpoint => {
+        monitoredEndpoints.add(endpoint.url);
+        return await this.monitorRpcEndpoint(endpoint);
+      },
       (endpoint, isUp) =>
         !isUp &&
         this.checkDowntimeNotification(
@@ -323,6 +330,18 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
           ALERTS.COMPONENTS.RPC,
         ),
     );
+
+    // Ensure sentinel values are written for any endpoints that weren't monitored this cycle
+    for (const endpoint of allRpcEndpoints) {
+      if (!monitoredEndpoints.has(endpoint.url)) {
+        this.logger.debug(`Writing sentinel values for unmonitored RPC endpoint: ${endpoint.url}`);
+        // Write sentinel values to maintain dashboard visibility
+        this.metricsService.setRpcStatusWithSentinel(endpoint.url, null, endpoint.chainId, true);
+        this.metricsService.recordRpcLatencyWithSentinel(endpoint.url, null, endpoint.chainId, true);
+        // Also ensure peer count sentinel value
+        this.monitorRpcPeerCount(endpoint);
+      }
+    }
   }
 
   /**
@@ -334,11 +353,21 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
     }
 
     this.logger.debug('Checking WebSocket endpoints...');
+
+    // Get all configured WebSocket endpoints
+    const allWsEndpoints = this.configService.getWsEndpoints();
+
+    // Track which endpoints were successfully monitored
+    const monitoredEndpoints = new Set<string>();
+
     await this.monitorEndpoints(
-      this.configService.getWsEndpoints(),
+      allWsEndpoints,
       this.wsStatuses,
       this.config.wsBatchSize,
-      this.monitorWsEndpoint.bind(this),
+      async endpoint => {
+        monitoredEndpoints.add(endpoint.url);
+        return await this.monitorWsEndpoint(endpoint);
+      },
       (endpoint, isUp) => {
         if (!isUp) {
           // Ensure downtime is properly tracked before attempting notification
@@ -356,6 +385,17 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
         return false;
       },
     );
+
+    // Ensure sentinel values are written for any endpoints that weren't monitored this cycle
+    for (const endpoint of allWsEndpoints) {
+      if (!monitoredEndpoints.has(endpoint.url)) {
+        this.logger.debug(`Writing sentinel values for unmonitored WebSocket endpoint: ${endpoint.url}`);
+        // Write sentinel values to maintain dashboard visibility
+        this.metricsService.setWebsocketStatusWithSentinel(endpoint.url, null, endpoint.chainId, true);
+        // Also ensure peer count sentinel value
+        this.monitorWsPeerCount(endpoint);
+      }
+    }
   }
 
   /**
@@ -487,6 +527,9 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
             endpoint.chainId,
           );
         }
+      } else {
+        this.logger.debug(`RPC endpoint ( ${endpoint.url} ) for chain ${endpoint.chainId} is down`);
+        this.updateRpcEndpointStatus(endpoint, false, 0);
       }
 
       return isUp;
@@ -535,7 +578,6 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
   private async updateRpcEndpointStatus(endpoint: RpcEndpoint, isUp: boolean, latency: number): Promise<void> {
     this.updateStatus(endpoint, this.rpcStatuses, isUp, { latency });
 
-    // Use sentinel-enabled methods to maintain endpoint visibility in Grafana
     this.metricsService.setRpcStatusWithSentinel(endpoint.url, isUp, endpoint.chainId, !isUp);
     this.metricsService.recordRpcLatencyWithSentinel(endpoint.url, latency, endpoint.chainId, !isUp);
 
@@ -606,10 +648,14 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
       const wsProvider = this.blockchainService.getWsProviderByUrl(endpoint.url);
       if (wsProvider) {
         isUp = true;
+        // Update status for already active provider
+        this.updateStatus(endpoint, this.wsStatuses, true);
+        this.metricsService.setWebsocketStatusWithSentinel(endpoint.url, true, endpoint.chainId, false);
+        this.blockchainService.updateWsProviderStatus(endpoint.url, true);
       } else {
         // Attempt direct WebSocket connection
         isUp = await this.testWebSocketConnection(endpoint);
-        // BlockchainService status is already updated within testWebSocketConnection
+        // Status is already updated within testWebSocketConnection
       }
 
       // Always check peer count to ensure sentinel values are written for failed endpoints
@@ -629,9 +675,9 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
     } catch (error) {
       this.logger.error(`Error monitoring WebSocket endpoint ${endpoint.name}: ${error.message}`);
 
-      // Update status to down
+      // Update status to down (single status write)
       this.updateStatus(endpoint, this.wsStatuses, false);
-      this.metricsService.setWebsocketStatusWithSentinel(endpoint.url, false, endpoint.chainId, false);
+      this.metricsService.setWebsocketStatusWithSentinel(endpoint.url, false, endpoint.chainId, true);
       this.blockchainService.updateWsProviderStatus(endpoint.url, false);
 
       this.monitorWsPeerCount(endpoint);
@@ -678,7 +724,7 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
 
           resolved = true;
 
-          // Update statuses based on connection result
+          // Update statuses based on connection result (single status write per outcome)
           if (success) {
             this.updateStatus(endpoint, this.wsStatuses, true);
             this.metricsService.setWebsocketStatusWithSentinel(endpoint.url, true, endpoint.chainId, false);
@@ -739,7 +785,7 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
    */
   private handleWsConnectionFailure(endpoint: RpcEndpoint, socket: WebSocket | null, reason: string) {
     this.updateStatus(endpoint, this.wsStatuses, false);
-    this.metricsService.setWebsocketStatusWithSentinel(endpoint.url, false, endpoint.chainId, false);
+    this.metricsService.setWebsocketStatusWithSentinel(endpoint.url, false, endpoint.chainId, true);
     this.blockchainService.updateWsProviderStatus(endpoint.url, false);
 
     if (socket) {
@@ -832,22 +878,48 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
 
     this.logger.debug('Checking services...');
 
-    // Monitor explorers
+    // Monitor explorers with comprehensive coverage
     if (this.configService.explorerEndpoints?.length) {
-      await this.monitorServiceGroup(this.configService.explorerEndpoints, 'explorer');
+      const monitoredExplorers = new Set<string>();
+      await this.monitorServiceGroup(this.configService.explorerEndpoints, 'explorer', monitoredExplorers);
+
+      // Ensure sentinel values for any unmonitored explorers
+      for (const endpoint of this.configService.explorerEndpoints) {
+        if (!monitoredExplorers.has(endpoint.url)) {
+          this.logger.debug(`Writing sentinel values for unmonitored explorer: ${endpoint.url}`);
+          this.metricsService.setExplorerStatusWithSentinel(endpoint.url, null, endpoint.chainId, true);
+        }
+      }
     }
 
-    // Monitor faucets
+    // Monitor faucets with comprehensive coverage
     if (this.configService.faucetEndpoints?.length) {
-      await this.monitorServiceGroup(this.configService.faucetEndpoints, 'faucet');
+      const monitoredFaucets = new Set<string>();
+      await this.monitorServiceGroup(this.configService.faucetEndpoints, 'faucet', monitoredFaucets);
+
+      // Ensure sentinel values for any unmonitored faucets
+      for (const endpoint of this.configService.faucetEndpoints) {
+        if (!monitoredFaucets.has(endpoint.url)) {
+          this.logger.debug(`Writing sentinel values for unmonitored faucet: ${endpoint.url}`);
+          this.metricsService.setFaucetStatusWithSentinel(endpoint.url, null, endpoint.chainId, true);
+        }
+      }
     }
   }
 
   /**
    * Monitor a group of services
    */
-  private async monitorServiceGroup(endpoints: RpcEndpoint[], serviceType: string) {
-    const results = await Promise.all(endpoints.map(endpoint => this.monitorService(endpoint)));
+  private async monitorServiceGroup(endpoints: RpcEndpoint[], serviceType: string, monitoredEndpoints?: Set<string>) {
+    const results = await Promise.all(
+      endpoints.map(async endpoint => {
+        const isUp = await this.monitorService(endpoint);
+        if (monitoredEndpoints) {
+          monitoredEndpoints.add(endpoint.url);
+        }
+        return isUp;
+      }),
+    );
     const upCount = results.filter(Boolean).length;
     this.logger.debug(`${serviceType} check: ${upCount}/${results.length} ${serviceType}s available`);
   }
@@ -890,75 +962,81 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Sync with BlockchainService to check for endpoints behind in block height
+   * Sync provider statuses from BlockchainService
    */
   private syncWithBlockchainService(): void {
     this.logger.debug('Syncing provider status with BlockchainService');
 
-    // We'll need to manually get block heights for each provider
-    this.checkProviderBlockHeights();
+    // Get providers directly from BlockchainService (they return arrays, not Maps)
+    const rpcProviders = this.blockchainService.getAllProviders();
+    const wsProviders = this.blockchainService.getAllWsProviders();
 
-    // First pass: sync HTTP RPC providers
-    for (const providerData of this.blockchainService.getAllProviders()) {
+    // Process RPC provider statuses
+    for (const providerData of rpcProviders) {
       const { url, status, chainId } = providerData.endpoint;
-      const currentStatus = this.rpcStatuses.get(url);
-
-      if (currentStatus) {
-        currentStatus.status = status === 'up' ? 'up' : 'down';
-      } else {
-        this.rpcStatuses.set(url, {
-          status: status === 'up' ? 'up' : 'down',
-          latency: 0,
-          alerted: false,
-        });
-      }
-    }
-
-    // Sync WebSocket providers
-    for (const { endpoint } of this.blockchainService.getAllWsProviders()) {
-      const { url, status, chainId } = endpoint;
-
-      // Find matching WebSocket endpoint - doing a normalized URL comparison
-      // to handle slight URL format differences (trailing slashes, etc.)
-      const normalizedWsUrl = this.normalizeWsUrl(url);
-      const wsEndpoint = this.configService.getWsEndpoints().find(e => this.normalizeWsUrl(e.url) === normalizedWsUrl);
-
-      if (wsEndpoint) {
-        const isUp = status === 'up';
-        this.updateStatus(wsEndpoint, this.wsStatuses, isUp);
-
-        // Check for downtime notifications for WebSocket endpoints
-        if (!isUp) {
-          this.checkDowntimeNotification(
-            wsEndpoint,
-            this.wsStatuses,
-            ALERTS.TYPES.RPC_ENDPOINT_DOWN,
-            ALERTS.COMPONENTS.WEBSOCKET,
-          );
-        }
-      } else {
-        // Handle WebSocket endpoints not found in configuration
-        const currentStatus = this.wsStatuses.get(url);
+      const configEndpoint = this.configService.getRpcEndpoints().find(ep => ep.url === url);
+      if (configEndpoint) {
+        // Only update if we have configuration for this endpoint
+        const currentStatus = this.rpcStatuses.get(url);
         const isUp = status === 'up';
 
         if (currentStatus) {
-          // Properly handle status transitions for better downtime tracking
           if (!isUp && currentStatus.status === 'up') {
-            // Status changed to down - record when it happened
             currentStatus.status = 'down';
             currentStatus.downSince = Date.now();
             currentStatus.alerted = false;
           } else if (isUp && currentStatus.status === 'down') {
-            // Status changed to up - clear downtime tracking
             currentStatus.status = 'up';
             currentStatus.downSince = undefined;
             currentStatus.alerted = false;
           } else {
-            // No status change, just update the current status
             currentStatus.status = isUp ? 'up' : 'down';
           }
         } else {
-          // New status entry - set downSince if it's down
+          this.rpcStatuses.set(url, {
+            status: isUp ? 'up' : 'down',
+            latency: 0,
+            downSince: isUp ? undefined : Date.now(),
+            alerted: false,
+          });
+        }
+
+        // Write metrics only once per sync cycle per endpoint
+        this.metricsService.setRpcStatusWithSentinel(url, isUp, chainId, !isUp);
+
+        if (!isUp && this.rpcStatuses.get(url)?.downSince) {
+          this.checkDowntimeNotification(
+            configEndpoint,
+            this.rpcStatuses,
+            ALERTS.TYPES.RPC_ENDPOINT_DOWN,
+            ALERTS.COMPONENTS.RPC,
+          );
+        }
+      }
+    }
+
+    // Process WebSocket provider statuses
+    for (const providerData of wsProviders) {
+      const { url, status, chainId } = providerData.endpoint;
+      const configEndpoint = this.configService.getWsEndpoints().find(ep => ep.url === url);
+      if (configEndpoint) {
+        // Only update if we have configuration for this endpoint
+        const currentStatus = this.wsStatuses.get(url);
+        const isUp = status === 'up';
+
+        if (currentStatus) {
+          if (!isUp && currentStatus.status === 'up') {
+            currentStatus.status = 'down';
+            currentStatus.downSince = Date.now();
+            currentStatus.alerted = false;
+          } else if (isUp && currentStatus.status === 'down') {
+            currentStatus.status = 'up';
+            currentStatus.downSince = undefined;
+            currentStatus.alerted = false;
+          } else {
+            currentStatus.status = isUp ? 'up' : 'down';
+          }
+        } else {
           this.wsStatuses.set(url, {
             status: isUp ? 'up' : 'down',
             downSince: isUp ? undefined : Date.now(),
@@ -966,93 +1044,19 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
           });
         }
 
-        // If it's not in the config but we have status information and it's down,
-        // create a temporary endpoint object to check for downtime notification
+        // Write metrics only once per sync cycle per endpoint
+        this.metricsService.setWebsocketStatusWithSentinel(url, isUp, chainId, !isUp);
+
         if (!isUp && this.wsStatuses.get(url)?.downSince) {
-          const tempEndpoint = {
-            url,
-            name: url.split('/').pop() || 'Unknown WebSocket',
-            type: 'websocket' as const,
-            chainId,
-          };
           this.checkDowntimeNotification(
-            tempEndpoint,
+            configEndpoint,
             this.wsStatuses,
             ALERTS.TYPES.RPC_ENDPOINT_DOWN,
             ALERTS.COMPONENTS.WEBSOCKET,
           );
         }
       }
-
-      this.metricsService.setWebsocketStatusWithSentinel(url, status === 'up', chainId, false);
     }
-  }
-
-  /**
-   * Check and update block heights for all RPC providers
-   * Detect if endpoints are falling behind in sync
-   */
-  private async checkProviderBlockHeights(): Promise<void> {
-    // Get all online RPC endpoints
-    const rpcEndpoints = this.configService.getRpcEndpoints();
-    const blockHeights = new Map<string, number>();
-
-    // Collect block heights for all endpoints
-    for (const endpoint of rpcEndpoints) {
-      const { url, chainId } = endpoint;
-      const status = this.rpcStatuses.get(url);
-
-      // Only check endpoints that are up
-      if (status?.status === 'up') {
-        try {
-          // Get block height from provider
-          const blockHeight = await this.blockchainService.getLatestBlockNumber(chainId, url);
-          blockHeights.set(url, blockHeight);
-        } catch (error) {
-          this.logger.debug(`Failed to get block height for ${url}: ${error.message}`);
-        }
-      }
-    }
-
-    // Update RPC selector with sync status for each endpoint
-    for (const endpoint of rpcEndpoints) {
-      const { url, chainId } = endpoint;
-      const blockHeight = blockHeights.get(url);
-
-      // Skip endpoints we couldn't get heights for
-      if (blockHeight === undefined) continue;
-
-      // Get all heights for this chain to determine highest block
-      const chainEndpoints = rpcEndpoints.filter(e => e.chainId === chainId);
-      const chainHeights = chainEndpoints.map(e => blockHeights.get(e.url)).filter(h => h !== undefined);
-
-      if (chainHeights.length === 0) continue;
-
-      const highestBlock = Math.max(...chainHeights);
-      const blocksBehind = Math.max(0, highestBlock - blockHeight);
-
-      // Determine if the endpoint is synced with the network
-      const syncedWithNetwork = blocksBehind <= this.configService.getMonitoringConfig().blockDiscrepancySyncThreshold;
-
-      // Update RPC selector with sync status
-      this.rpcSelectorService.updateEndpointSyncStatus(endpoint, syncedWithNetwork, blocksBehind);
-    }
-
-    // Note: Block height lag alerting is handled by the BlocksMonitorService.checkForBlockHeightLag method
-    // which provides more comprehensive alerting with proper throttling and aggregation
-  }
-
-  /**
-   * Normalize WebSocket URL to handle slight format differences
-   */
-  private normalizeWsUrl(url: string): string {
-    // Remove trailing slashes
-    let normalized = url.replace(/\/+$/, '');
-
-    // Remove /ws suffix if present (we'll ignore this distinction for matching)
-    normalized = normalized.replace(/\/ws$/, '');
-
-    return normalized.toLowerCase();
   }
 
   /**
@@ -1199,60 +1203,5 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
    */
   getAnyWsStatus(): 'up' | 'down' {
     return [...this.wsStatuses.values()].some(status => status.status === 'up') ? 'up' : 'down';
-  }
-
-  /**
-   * Ensure all endpoints have recent data points to maintain visibility in Grafana
-   * This method writes sentinel values for offline endpoints
-   */
-  private async ensureAllEndpointVisibility(): Promise<void> {
-    try {
-      // Get all configured endpoints
-      const allEndpoints: Array<{ url: string; chainId: number; type: 'rpc' | 'websocket' }> = [];
-
-      // Add RPC endpoints
-      for (const endpoint of this.configService.getRpcEndpoints()) {
-        allEndpoints.push({
-          url: endpoint.url,
-          chainId: endpoint.chainId,
-          type: 'rpc',
-        });
-      }
-
-      // Add WebSocket endpoints
-      for (const endpoint of this.configService.getWsEndpoints()) {
-        allEndpoints.push({
-          url: endpoint.url,
-          chainId: endpoint.chainId,
-          type: 'websocket',
-        });
-      }
-
-      // Determine which endpoints are currently active
-      const activeEndpoints = new Set<string>();
-
-      // Add active RPC endpoints
-      for (const [url, status] of this.rpcStatuses.entries()) {
-        if (status.status === 'up') {
-          activeEndpoints.add(url);
-        }
-      }
-
-      // Add active WebSocket endpoints
-      for (const [url, status] of this.wsStatuses.entries()) {
-        if (status.status === 'up') {
-          activeEndpoints.add(url);
-        }
-      }
-
-      // Call the MetricsService method to ensure visibility
-      await this.metricsService.ensureEndpointVisibility(allEndpoints, activeEndpoints);
-
-      this.logger.debug(
-        `Ensured visibility for ${allEndpoints.length} endpoints (${activeEndpoints.size} active, ${allEndpoints.length - activeEndpoints.size} inactive)`,
-      );
-    } catch (error) {
-      this.logger.error(`Error ensuring endpoint visibility: ${error.message}`);
-    }
   }
 }

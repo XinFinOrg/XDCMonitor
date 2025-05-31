@@ -200,6 +200,7 @@ export class ConfigService {
 
       const sentinelValues = {
         enabled: this.getBoolean(ENV_VARS.ENABLE_SENTINEL_VALUES, true),
+        blockHeight: this.getNumber(ENV_VARS.SENTINEL_BLOCK_HEIGHT, DEFAULTS.SENTINEL_BLOCK_HEIGHT),
         peerCount: this.getNumber(ENV_VARS.SENTINEL_PEER_COUNT, DEFAULTS.SENTINEL_PEER_COUNT),
         latency: this.getNumber(ENV_VARS.SENTINEL_LATENCY, DEFAULTS.SENTINEL_LATENCY),
         status: this.getNumber(ENV_VARS.SENTINEL_STATUS_DOWN, DEFAULTS.SENTINEL_STATUS_DOWN),
