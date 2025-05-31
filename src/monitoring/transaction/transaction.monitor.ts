@@ -397,18 +397,34 @@ export class TransactionMonitorService implements OnModuleInit {
         txHash = result.transactionHash;
       }
 
-      // Wait for transaction confirmation
+      // ✅ Optimized transaction confirmation with exponential backoff
       let txConfirmed = false;
       let attempts = 0;
-      const maxAttempts = 10;
+      const maxAttempts = 8; // Reduced from 10
+      let backoffMs = 1000; // Start with 1 second
 
       while (!txConfirmed && attempts < maxAttempts) {
-        const tx = await this.blockchainService.getTransaction(txHash, chainId, attempts);
-        if (tx && tx.status === TransactionStatus.CONFIRMED) {
-          txConfirmed = true;
-        } else {
-          await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
-          attempts++;
+        try {
+          const tx = await this.blockchainService.getTransaction(txHash, chainId, attempts);
+          if (tx && tx.status === TransactionStatus.CONFIRMED) {
+            txConfirmed = true;
+            break;
+          } else if (tx && tx.status === TransactionStatus.FAILED) {
+            // Transaction failed, no need to keep checking
+            this.logger.warn(`Transaction ${txHash} failed on ${chainName}`);
+            break;
+          }
+        } catch (error) {
+          // If we can't get transaction info, log and continue
+          this.logger.debug(`Attempt ${attempts + 1}: Could not get transaction ${txHash}: ${error.message}`);
+        }
+
+        attempts++;
+
+        // ✅ Exponential backoff to reduce API calls and async hooks
+        if (attempts < maxAttempts) {
+          await new Promise(resolve => setTimeout(resolve, backoffMs));
+          backoffMs = Math.min(backoffMs * 1.5, 10000); // Cap at 10 seconds
         }
       }
 

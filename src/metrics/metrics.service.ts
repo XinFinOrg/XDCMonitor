@@ -25,9 +25,6 @@ export class MetricsService implements OnModuleInit {
   private readonly FLUSH_INTERVAL = 5000; // Flush every 5 seconds
   private readonly MAX_QUEUE_SIZE = 1000; // Maximum queue size to prevent memory issues
 
-  // Last known good block heights per endpoint (endpoint -> chainId -> blockHeight)
-  private lastKnownBlockHeights = new Map<string, Map<string, number>>();
-
   constructor(private readonly configService: ConfigService) {
     // Add a small delay to ensure InfluxDB is ready
     // This helps especially when running outside Docker
@@ -42,13 +39,6 @@ export class MetricsService implements OnModuleInit {
   }
 
   /**
-   * Check if sentinel values are enabled
-   */
-  private isSentinelEnabled(): boolean {
-    return this.getSentinelConfig().enabled;
-  }
-
-  /**
    * Get appropriate value with sentinel fallback logic
    */
   private getValueWithSentinel<T>(value: T | null, sentinelValue: T, endpointFailed: boolean, fallbackValue: T): T {
@@ -57,67 +47,6 @@ export class MetricsService implements OnModuleInit {
     if (endpointFailed && sentinelConfig.enabled) return sentinelValue;
     if (value === null) return sentinelConfig.enabled ? sentinelValue : fallbackValue;
     return value;
-  }
-
-  /**
-   * Store the last known good block height for an endpoint
-   */
-  private setLastKnownBlockHeight(endpoint: string, chainId: string, blockHeight: number): void {
-    if (!this.lastKnownBlockHeights.has(endpoint)) {
-      this.lastKnownBlockHeights.set(endpoint, new Map());
-    }
-    this.lastKnownBlockHeights.get(endpoint)!.set(chainId, blockHeight);
-  }
-
-  /**
-   * Get the last known good block height for an endpoint
-   */
-  private getLastKnownBlockHeight(endpoint: string, chainId: string): number | null {
-    const endpointMap = this.lastKnownBlockHeights.get(endpoint);
-    if (!endpointMap) return null;
-    return endpointMap.get(chainId) || null;
-  }
-
-  /**
-   * Query InfluxDB for the last known good block height for an endpoint
-   */
-  private async queryLastKnownBlockHeight(endpoint: string, chainId: string): Promise<number | null> {
-    if (!this.connected || !this.influxClient) {
-      return null;
-    }
-
-    try {
-      const config = this.configService.getInfluxDbConfig();
-      const queryApi = this.influxClient.getQueryApi(config.org);
-
-      // Query for the last successful block height for this endpoint
-      const query = `
-        from(bucket: "${config.bucket}")
-          |> range(start: -7d)
-          |> filter(fn: (r) => r._measurement == "block_height")
-          |> filter(fn: (r) => r.endpoint == "${endpoint}")
-          |> filter(fn: (r) => r.chainId == "${chainId}")
-          |> filter(fn: (r) => r.endpoint_status == "active" or not exists r.endpoint_status)
-          |> filter(fn: (r) => r._field == "height")
-          |> filter(fn: (r) => r._value > 0)
-          |> last()
-      `;
-
-      const records = await queryApi.collectRows(query);
-      if (records.length > 0) {
-        const lastRecord = records[0] as any;
-        const blockHeight = parseInt(String(lastRecord._value));
-        if (!isNaN(blockHeight) && blockHeight > 0) {
-          // Cache this value for future use
-          this.setLastKnownBlockHeight(endpoint, chainId, blockHeight);
-          return blockHeight;
-        }
-      }
-    } catch (error) {
-      this.logger.debug(`Failed to query last known block height for ${endpoint}: ${error.message}`);
-    }
-
-    return null;
   }
 
   /**
@@ -130,55 +59,6 @@ export class MetricsService implements OnModuleInit {
     this.logger.log(
       `Metrics will be batched (size: ${this.BATCH_SIZE}) and flushed every ${this.FLUSH_INTERVAL / 1000} seconds`,
     );
-
-    // Initialize block height cache after a delay to ensure InfluxDB is connected
-    setTimeout(() => this.initializeBlockHeightCache(), 10000);
-  }
-
-  /**
-   * Initialize the block height cache by loading recent data from InfluxDB
-   */
-  private async initializeBlockHeightCache(): Promise<void> {
-    if (!this.connected || !this.influxClient) {
-      this.logger.debug('Skipping block height cache initialization - InfluxDB not connected');
-      return;
-    }
-
-    try {
-      const config = this.configService.getInfluxDbConfig();
-      const queryApi = this.influxClient.getQueryApi(config.org);
-
-      // Query for the most recent block heights for all endpoints
-      const query = `
-        from(bucket: "${config.bucket}")
-          |> range(start: -24h)
-          |> filter(fn: (r) => r._measurement == "block_height")
-          |> filter(fn: (r) => r.endpoint_status == "active" or not exists r.endpoint_status)
-          |> filter(fn: (r) => r._field == "height")
-          |> filter(fn: (r) => r._value > 0)
-          |> group(columns: ["endpoint", "chainId"])
-          |> last()
-      `;
-
-      const records = await queryApi.collectRows(query);
-      let cacheCount = 0;
-
-      for (const record of records) {
-        const data = record as any;
-        const endpoint = data.endpoint;
-        const chainId = data.chainId;
-        const blockHeight = parseInt(String(data._value));
-
-        if (endpoint && chainId && !isNaN(blockHeight) && blockHeight > 0) {
-          this.setLastKnownBlockHeight(endpoint, chainId, blockHeight);
-          cacheCount++;
-        }
-      }
-
-      this.logger.log(`Initialized block height cache with ${cacheCount} endpoint entries`);
-    } catch (error) {
-      this.logger.warn(`Failed to initialize block height cache: ${error.message}`);
-    }
   }
 
   /**
@@ -352,70 +232,20 @@ export class MetricsService implements OnModuleInit {
   /**
    * Record blockchain block height with sentinel value support for failed endpoints
    */
-  async setBlockHeightWithSentinel(
+  setBlockHeightWithSentinel(
     height: number | null,
     endpoint: string,
     chainId: string,
     endpointFailed: boolean = false,
-  ): Promise<void> {
-    let actualHeight: number;
-
-    if (endpointFailed && this.isSentinelEnabled()) {
-      // For failed endpoints, try to use last known good block height
-      let lastKnownHeight = this.getLastKnownBlockHeight(endpoint, chainId);
-
-      // If we don't have a cached value, try to query InfluxDB
-      if (lastKnownHeight === null) {
-        lastKnownHeight = await this.queryLastKnownBlockHeight(endpoint, chainId);
-      }
-
-      // Use last known height if available, otherwise fall back to -1 as final fallback
-      actualHeight = lastKnownHeight ?? -1;
-
-      // Only log when using last known height, not for every sentinel value
-      if (lastKnownHeight !== null) {
-        this.logger.debug(`Using last known block height ${actualHeight} for failed endpoint ${endpoint}`);
-      }
-    } else if (height !== null) {
-      // For successful endpoints, store the height and use it
-      actualHeight = height;
-      this.setLastKnownBlockHeight(endpoint, chainId, height);
-    } else {
-      // Fallback case - use -1 as final fallback when no data is available
-      actualHeight = -1;
-    }
+  ): void {
+    const sentinelConfig = this.getSentinelConfig();
+    const actualHeight = this.getValueWithSentinel(height, sentinelConfig.blockHeight, endpointFailed, -1);
 
     const point = new Point('block_height')
       .tag('chainId', chainId)
       .tag('endpoint', endpoint)
       .tag('endpoint_status', endpointFailed ? 'failed' : 'active')
       .intField('height', actualHeight);
-
-    this.writePoint(point);
-  }
-
-  /**
-   * Record block height variance between RPC endpoints for a network
-   * @param network Network identifier (mainnet/testnet)
-   * @param variance The block height variance in number of blocks
-   */
-  setBlockHeightVariance(network: string, variance: number): void {
-    const point = new Point('block_height_variance').tag('network', network).intField('variance', variance);
-
-    this.writePoint(point);
-  }
-
-  /**
-   * Record block response time for an endpoint
-   * @param endpoint RPC endpoint
-   * @param responseTimeMs Response time in milliseconds
-   * @param chainId Chain ID
-   */
-  setBlockResponseTime(endpoint: string, responseTimeMs: number, chainId: number): void {
-    const point = new Point('block_response_time')
-      .tag('endpoint', endpoint)
-      .tag('chainId', chainId.toString())
-      .intField('ms', responseTimeMs);
 
     this.writePoint(point);
   }
@@ -442,43 +272,32 @@ export class MetricsService implements OnModuleInit {
     chainId: number = 50,
   ): void {
     const blockNumberStr = blockNumber.toString();
+    const chainIdStr = chainId.toString();
 
     // Only log blocks with significant activity (>10 transactions) or failures to reduce log volume
     if (totalTxs > 10 || failed > 0) {
       this.logger.debug(
-        `Writing transaction metrics for block #${blockNumber} (chain ${chainId}): ` +
+        `Recording transaction metrics for block #${blockNumber} (chain ${chainId}): ` +
           `${totalTxs} total, ${success} success, ${failed} failed`,
       );
     }
 
-    this.writePoint(
-      new Point('transactions_per_block')
-        .tag('block_number', blockNumberStr)
-        .tag('status', 'success')
-        .tag('chainId', chainId.toString())
-        .intField('value', success),
-    );
-    this.writePoint(
-      new Point('transactions_per_block')
-        .tag('block_number', blockNumberStr)
-        .tag('status', 'failed')
-        .tag('chainId', chainId.toString())
-        .intField('value', failed),
-    );
-    this.writePoint(
-      new Point('transactions_per_block')
-        .tag('block_number', blockNumberStr)
-        .tag('status', 'total')
-        .tag('chainId', chainId.toString())
-        .intField('value', totalTxs),
-    );
+    // Write all three transaction status points
+    const statuses = [
+      { status: 'success', value: success },
+      { status: 'failed', value: failed },
+      { status: 'total', value: totalTxs },
+    ];
 
-    // Only log blocks with significant activity or failures
-    if (totalTxs > 10 || failed > 0) {
-      this.logger.debug(
-        `Set transactions per block for block #${blockNumber}: ${totalTxs} total, ${success} confirmed, ${failed} failed`,
+    statuses.forEach(({ status, value }) => {
+      this.writePoint(
+        new Point('transactions_per_block')
+          .tag('block_number', blockNumberStr)
+          .tag('status', status)
+          .tag('chainId', chainIdStr)
+          .intField('value', value),
       );
-    }
+    });
   }
 
   /**
@@ -490,22 +309,21 @@ export class MetricsService implements OnModuleInit {
     chainId: number = 50,
     endpointFailed: boolean = false,
   ): void {
-    const sentinelConfig = this.getSentinelConfig();
-    const actualLatency = this.getValueWithSentinel(latencyMs, sentinelConfig.latency, endpointFailed, 0);
+    const actualLatency = this.getValueWithSentinel(latencyMs, this.getSentinelConfig().latency, endpointFailed, 0);
 
-    // Fix negative latency if it occurs
-    const validLatency = actualLatency < 0 ? 0 : actualLatency;
+    // Ensure latency is non-negative
+    const validLatency = Math.max(0, actualLatency);
     if (actualLatency < 0) {
-      this.logger.warn(`Attempted to record negative latency (${actualLatency}ms) for ${endpoint}. Using 0ms instead.`);
+      this.logger.warn(`Negative latency (${actualLatency}ms) for ${endpoint}. Using 0ms instead.`);
     }
 
-    const point = new Point('rpc_latency')
-      .tag('endpoint', endpoint)
-      .tag('chainId', chainId.toString())
-      .tag('endpoint_status', endpointFailed ? 'failed' : 'active')
-      .floatField('value', validLatency);
-
-    this.writePoint(point);
+    this.writePoint(
+      new Point('rpc_latency')
+        .tag('endpoint', endpoint)
+        .tag('chainId', chainId.toString())
+        .tag('endpoint_status', endpointFailed ? 'failed' : 'active')
+        .floatField('value', validLatency),
+    );
   }
 
   /**
@@ -518,21 +336,20 @@ export class MetricsService implements OnModuleInit {
     chainId: number = 50,
     endpointFailed: boolean = false,
   ): void {
-    const sentinelConfig = this.getSentinelConfig();
     const statusValue = this.getValueWithSentinel(
       isUp === null ? null : isUp ? 1 : 0,
-      sentinelConfig.status,
+      this.getSentinelConfig().status,
       endpointFailed,
       0,
     );
 
-    const point = new Point(`${type}_status`)
-      .tag('endpoint', endpoint)
-      .tag('chainId', chainId.toString())
-      .tag('endpoint_status', endpointFailed ? 'failed' : 'active')
-      .intField('value', statusValue);
-
-    this.writePoint(point);
+    this.writePoint(
+      new Point(`${type}_status`)
+        .tag('endpoint', endpoint)
+        .tag('chainId', chainId.toString())
+        .tag('endpoint_status', endpointFailed ? 'failed' : 'active')
+        .intField('value', statusValue),
+    );
   }
 
   // Convenience methods that use setServiceStatusWithSentinel internally
@@ -564,17 +381,16 @@ export class MetricsService implements OnModuleInit {
     chainId: number = 50,
     endpointFailed: boolean = false,
   ): void {
-    const sentinelConfig = this.getSentinelConfig();
-    const actualPeerCount = this.getValueWithSentinel(peerCount, sentinelConfig.peerCount, endpointFailed, 0);
+    const actualPeerCount = this.getValueWithSentinel(peerCount, this.getSentinelConfig().peerCount, endpointFailed, 0);
 
-    const point = new Point('peer_count')
-      .tag('endpoint', endpoint)
-      .tag('type', endpointType)
-      .tag('chainId', chainId.toString())
-      .tag('endpoint_status', endpointFailed ? 'failed' : 'active')
-      .intField('value', actualPeerCount);
-
-    this.writePoint(point);
+    this.writePoint(
+      new Point('peer_count')
+        .tag('endpoint', endpoint)
+        .tag('type', endpointType)
+        .tag('chainId', chainId.toString())
+        .tag('endpoint_status', endpointFailed ? 'failed' : 'active')
+        .intField('value', actualPeerCount),
+    );
 
     // Only log when there are issues (failures or zero peers) to reduce log volume
     if (endpointFailed || actualPeerCount === 0) {
@@ -749,44 +565,6 @@ export class MetricsService implements OnModuleInit {
   }
 
   /**
-   * Ensure all known endpoints have recent data points to maintain visibility in Grafana
-   * This method should be called periodically to write sentinel values for offline endpoints
-   */
-  async ensureEndpointVisibility(
-    allEndpoints: Array<{ url: string; chainId: number; type: 'rpc' | 'websocket' }>,
-    activeEndpoints: Set<string>,
-  ): Promise<void> {
-    if (!this.isSentinelEnabled()) return;
-
-    const inactiveEndpoints = allEndpoints.filter(endpoint => !activeEndpoints.has(endpoint.url));
-
-    for (const endpoint of inactiveEndpoints) {
-      if (endpoint.type === 'rpc') {
-        await this.setBlockHeightWithSentinel(null, endpoint.url, endpoint.chainId.toString(), true);
-      }
-
-      // Write other sentinel values for all inactive endpoints
-      this.setPeerCountWithSentinel(endpoint.url, null, endpoint.type, endpoint.chainId, true);
-      this.recordRpcLatencyWithSentinel(endpoint.url, null, endpoint.chainId, true);
-
-      const statusMethod =
-        endpoint.type === 'rpc' ? this.setRpcStatusWithSentinel : this.setWebsocketStatusWithSentinel;
-      statusMethod(endpoint.url, null, endpoint.chainId, true);
-    }
-
-    // Use summary logging instead of per-endpoint logging to reduce log volume
-    if (inactiveEndpoints.length > 0) {
-      const rpcEndpoints = inactiveEndpoints.filter(e => e.type === 'rpc');
-      const wsEndpoints = inactiveEndpoints.filter(e => e.type === 'websocket');
-
-      this.logger.debug(
-        `Wrote sentinel values for ${inactiveEndpoints.length} inactive endpoints: ` +
-          `${rpcEndpoints.length} RPC (with block heights), ${wsEndpoints.length} WebSocket (status only)`,
-      );
-    }
-  }
-
-  /**
    * Get the InfluxDB client instance for other services to use
    * NOTE: This should be used carefully to prevent bypassing error handling and queue mechanisms
    */
@@ -943,17 +721,14 @@ export class MetricsService implements OnModuleInit {
     );
 
     this.logger.debug(
-      `Updated miner performance: chainId=${chainId}, miner=${minerAddress}, ` +
-        `totalMined=${totalBlocksMined}, missed=${missedBlocks}, successRate=${successRate.toFixed(2)}%`,
+      `Recorded miner performance: chainId=${chainId}, miner=${minerAddress}, ` +
+        `totalBlocksMined=${totalBlocksMined}, missedBlocks=${missedBlocks}, ` +
+        `successRate=${successRate.toFixed(2)}%, lastBlock=${blockNumber}`,
     );
   }
 
   /**
    * Retrieve historical miner performance data from InfluxDB
-   *
-   * @param chainId The chain ID
-   * @param minerAddresses Array of miner addresses to fetch data for
-   * @returns Object mapping miner addresses to their performance data
    */
   async getMinerPerformanceData(
     chainId: number,
@@ -977,11 +752,8 @@ export class MetricsService implements OnModuleInit {
     try {
       const config = this.configService.getInfluxDbConfig();
       const queryApi = this.influxClient.getQueryApi(config.org);
-
-      // Prepare address list for the query
       const addressList = minerAddresses.map(addr => `"${addr.toLowerCase()}"`).join(', ');
 
-      // Query to get the latest performance data for each miner
       const query = `
         from(bucket: "${config.bucket}")
           |> range(start: -30d)
@@ -1007,9 +779,7 @@ export class MetricsService implements OnModuleInit {
       const records = await queryApi.collectRows(query);
       this.logger.debug(`Retrieved ${records.length} miner performance records from InfluxDB`);
 
-      // Process each record
       for (const record of records) {
-        // Type cast the record to our expected structure
         const minerRecord = record as MinerRecord;
         const minerAddress = minerRecord.miner?.toLowerCase();
         if (!minerAddress) continue;

@@ -26,21 +26,25 @@ The `RpcMonitorService` handles both HTTP/HTTPS RPC endpoints and WebSocket endp
 - **Unified Peer Count Integration**: Implements centralized peer count monitoring through the `monitorPeerCount` utility
 - **RPC Selector Integration**: Provides real-time health data to RpcSelectorService for dynamic endpoint selection
 - **Advanced Sync Monitoring**: Enhanced block height comparison and lag detection across all endpoints with cross-endpoint analysis
-- **Staggered Initialization**: Prevents resource spikes by spacing out initial endpoint checks with configurable delays
+- **Staggered Initialization**: Prevents resource spikes by spacing out initial endpoint checks with configurable delays (0-20 seconds)
 - **Batch Processing with Prioritization**: Processes endpoints in configurable parallel batches with down endpoints prioritized for faster recovery detection
+- **Comprehensive Status Tracking**: Maintains detailed endpoint status maps with downtime tracking and alert state management
+- **Dual Verification Strategy**: HTTP endpoints use BlockchainService providers first, then fallback to direct RPC calls via RpcRetryClient
 
 ### Peer Count Monitor Service
 
 The `PeerCountMonitor` provides sophisticated peer count monitoring with adaptive baselines and intelligent alerting:
 
-- **Adaptive Baseline Calculation**: Dynamically calculates peer count baselines based on historical data with exponential decay
+- **Adaptive Baseline Calculation**: Dynamically calculates peer count baselines based on historical data with exponential decay (10% weight to new samples)
 - **Multi-Threshold Alert System**: Uses both relative (40%/70% drops) and absolute thresholds for different severity levels
-- **Consecutive Zero Detection**: Identifies and alerts on consecutive zero-peer readings with configurable thresholds
-- **Exponential Backoff Alerting**: Implements intelligent alert throttling to prevent notification storms
+- **Consecutive Zero Detection**: Identifies and alerts on consecutive zero-peer readings with configurable thresholds (3 consecutive zeros)
+- **Exponential Backoff Alerting**: Implements intelligent alert throttling to prevent notification storms (starting at 30 minutes, doubling each alert)
 - **Network Classification**: Differentiates between high-peer and low-peer endpoints for appropriate threshold scaling
 - **Statistical Anomaly Detection**: Identifies significant deviations from established baselines using proportional thresholds
 - **Historical High Tracking**: Maintains records of highest observed peer counts for context in alerts
 - **Endpoint Type Support**: Handles both HTTP RPC and WebSocket endpoints with unified monitoring logic
+- **Critical Baseline Management**: Special handling for endpoints with baseline > 5 peers where low peer counts are considered critical
+- **Cached Client Management**: Maintains RPC client cache to avoid recreating connections for efficiency
 
 ## Core Workflows
 
@@ -60,33 +64,36 @@ Advanced HTTP/HTTPS JSON-RPC endpoint testing with multiple verification strateg
 
 - **Dual Verification Methods**:
   - Primary: BlockchainService providers for efficient validation with existing connections
-  - Fallback: Direct RPC calls through RpcRetryClient with configurable retry mechanisms and timeouts
-- **Performance Metrics**: Latency measurement with threshold-based alerting (warning and error levels)
+  - Fallback: Direct RPC calls through RpcRetryClient with configurable retry mechanisms and timeouts (5 seconds)
+- **Performance Metrics**: Latency measurement with threshold-based alerting (15s warning, 30s error)
 - **Health Data Integration**: Results automatically fed to RpcSelectorService for intelligent endpoint selection
-- **Batch Processing**: Configurable parallel processing with individual error handling per endpoint
+- **Batch Processing**: Configurable parallel processing (batch size 3) with individual error handling per endpoint
 - **Priority-Based Checking**: Down endpoints checked first to detect recovery faster
 - **Sentinel Value Management**: Maintains endpoint visibility in Grafana through sentinel values for failed endpoints
+- **Block Number Validation**: Uses `eth_blockNumber` RPC method to verify endpoint functionality
 
 ### 3. Enhanced WebSocket Monitoring
 
 Optimized WebSocket connection handling with comprehensive error management:
 
-- **SafeResolve Pattern**: Prevents memory leaks and duplicate state transitions with proper cleanup
-- **Timeout Management**: Configurable timeouts (5 seconds) to prevent hanging connections
+- **SafeResolve Pattern**: Prevents memory leaks and duplicate state transitions with proper cleanup using resolved flags
+- **Timeout Management**: Configurable timeouts (5 seconds) to prevent hanging connections with automatic cleanup
 - **Multiple Verification Strategies**:
   - Active connection testing with real WebSocket handshakes
   - BlockchainService integration for existing provider status
-- **Resource Cleanup**: Proper WebSocket termination and resource management
+- **Resource Cleanup**: Proper WebSocket termination and resource management with try/catch error handling
 - **Error Context Tracking**: Detailed error logging for troubleshooting connection issues
+- **Connection State Management**: Comprehensive handling of WebSocket lifecycle events (open, close, error)
 
 ### 4. Intelligent Port Monitoring
 
 Unified port availability checking with optimized URL parsing:
 
-- **Universal URL Parsing**: Handles both HTTP and WebSocket URLs with automatic port detection
+- **Universal URL Parsing**: Handles both HTTP and WebSocket URLs with automatic port detection (80/443 defaults)
 - **Protocol-Aware Testing**: Different strategies for HTTP vs WebSocket port testing
 - **Connection Validation**: TCP-level connectivity verification independent of service availability
 - **Timeout Controls**: Configurable timeouts (5 seconds) for port availability checks
+- **Error Classification**: Distinguishes between ECONNREFUSED and other connection errors
 
 ### 5. Service Infrastructure Monitoring
 
@@ -96,6 +103,7 @@ Comprehensive monitoring of related blockchain infrastructure services:
 - **Faucet Service Monitoring**: Availability testing for testnet faucet services
 - **Service Group Processing**: Parallel processing of service groups with aggregate reporting
 - **Status Code Validation**: Accepts 2xx-4xx status codes as "up" to handle various service response patterns
+- **Comprehensive Coverage**: Ensures sentinel values for unmonitored services to maintain dashboard visibility
 
 ### 6. Advanced Block Height Sync Monitoring
 
@@ -106,6 +114,7 @@ Enhanced synchronization monitoring with cross-endpoint analysis:
 - **Sync Status Updates**: Feeds synchronization information to RpcSelectorService for intelligent selection
 - **Threshold-Based Classification**: Uses configurable thresholds to determine sync status (default: 50 blocks)
 - **Chain-Specific Analysis**: Separate analysis for Mainnet (chainId: 50) and Testnet (chainId: 51)
+- **Provider Integration**: Syncs with BlockchainService provider statuses for comprehensive endpoint management
 
 ### 7. Adaptive Monitoring System
 
@@ -115,16 +124,18 @@ Dynamic monitoring frequency adjustment based on endpoint health:
 - **Frequency Scaling**: Automatic adjustment between minimum (15s) and maximum (2m) intervals
 - **Endpoint-Specific Adaptation**: More frequent checks for problematic endpoints, less frequent for healthy ones
 - **Resource Optimization**: Prevents unnecessary resource usage while maintaining responsiveness
+- **Adaptive Scheduling**: Uses exponential backoff scheduling based on overall system health
 
 ### 8. Intelligent Batch Processing
 
 Optimized endpoint checking with prioritization and resource management:
 
 - **Configurable Batch Sizes**: Separate batch sizes for RPC (3) and WebSocket (2) endpoints
-- **Priority-Based Ordering**: Down endpoints checked first for faster recovery detection
+- **Priority-Based Ordering**: Down endpoints checked first for faster recovery detection, then conditional endpoints
 - **Parallel Processing**: Individual error handling within batches to prevent cascade failures
 - **Inter-Batch Delays**: Configurable delays (500ms) between batches to prevent resource spikes
 - **Progress Tracking**: Detailed logging of batch processing progress for monitoring
+- **Comprehensive Coverage**: Ensures all endpoints are monitored with sentinel value fallbacks
 
 ### 9. Comprehensive Peer Count Monitoring
 
@@ -137,8 +148,11 @@ Advanced peer count analysis with adaptive baselines and intelligent alerting:
   - **Relative Drops**: 40% drop (significant) and 70% drop (critical) from baseline
   - **Absolute Drops**: Minimum 4 peers or 20% of baseline for significance
   - **High-Peer Endpoints**: Special handling for endpoints with 2x baseline or 8+ peers
+  - **Critical Baseline Threshold**: Endpoints with baseline > 5 peers have stricter alerting for low peer counts
 - **Exponential Backoff**: Alert throttling starting at 30 minutes, doubling with each subsequent alert
 - **Alert History Management**: 24-hour retention of alert history for intelligent throttling
+- **WebSocket Support**: Comprehensive WebSocket peer count monitoring with 10-second timeouts
+- **Context-Aware Alerting**: Detailed alert messages with baseline, current, and historical context
 
 ## Configuration Options
 
@@ -154,7 +168,6 @@ Advanced peer count analysis with adaptive baselines and intelligent alerting:
 - `PORT_CHECK_INTERVAL_MS`: Port check interval (default: 30000ms)
 - `SERVICE_CHECK_INTERVAL_MS`: Service check interval (default: 60000ms)
 - `SYNC_INTERVAL_MS`: Blockchain service sync interval (default: 60000ms)
-- `VISIBILITY_CHECK_INTERVAL_MS`: Endpoint visibility check interval (default: 300000ms - 5 minutes)
 
 ### Batch Processing Configuration
 
@@ -170,9 +183,9 @@ Advanced peer count analysis with adaptive baselines and intelligent alerting:
 
 ### Alert and Performance Thresholds
 
-- `DOWNTIME_NOTIFICATION_THRESHOLD_MS`: Threshold for downtime alerts (60 minutes)
-- `ALERTS.THRESHOLDS.RPC_LATENCY_WARNING_MS`: Warning threshold for RPC latency
-- `ALERTS.THRESHOLDS.RPC_LATENCY_ERROR_MS`: Error threshold for RPC latency
+- `DOWNTIME_NOTIFICATION_THRESHOLD_MS`: Threshold for downtime alerts (default: 60 minutes)
+- `ALERTS.THRESHOLDS.RPC_LATENCY_WARNING_MS`: Warning threshold for RPC latency (default: 15000ms)
+- `ALERTS.THRESHOLDS.RPC_LATENCY_ERROR_MS`: Error threshold for RPC latency (default: 30000ms)
 - `blockDiscrepancySyncThreshold`: Maximum blocks behind to consider synced (default: 50)
 
 ### RPC Selector Configuration
@@ -197,11 +210,15 @@ Internal constants for adaptive peer count monitoring:
   - Critical relative drop: 70% below baseline
   - Minimum absolute drop: 4 peers or 20% of baseline
   - High-peer threshold: 2x baseline or minimum 8 peers
+  - Critical baseline threshold: 5 peers (baseline above which low peers are critical)
 - **Alert Management**:
   - Initial backoff: 30 minutes
   - Consecutive zeros threshold: 3 readings
   - Alert history retention: 24 hours
   - Exponential backoff multiplier: 2x per alert
+- **Timeout Settings**:
+  - RPC peer count timeout: 5 seconds
+  - WebSocket peer count timeout: 10 seconds
 
 ## Integration Points
 
@@ -303,7 +320,7 @@ Internal constants for adaptive peer count monitoring:
 - **Optimized WebSocket Testing**:
   - SafeResolve pattern preventing memory leaks
   - Proper resource cleanup and timeout management
-- **Staggered Service Initialization**: Prevents resource spikes with configurable startup delays
+- **Staggered Service Initialization**: Prevents resource spikes with configurable startup delays (0, 5, 10, 20 seconds)
 - **Parallel Batch Processing**: Configurable parallel processing with individual error handling
 - **WebSocket Subscription Testing**: Real connection verification with proper cleanup
 - **Port Availability Validation**: Network connectivity verification independent of service status
@@ -324,6 +341,7 @@ Internal constants for adaptive peer count monitoring:
 - **Statistical Anomaly Detection**: Proportional threshold scaling based on network characteristics
 - **Historical High Tracking**: Context-aware alerting with peak peer count references
 - **Endpoint Type Agnostic**: Unified monitoring for both HTTP RPC and WebSocket endpoints
+- **Critical Baseline Analysis**: Special handling for endpoints with baseline > 5 peers
 
 ### Sync Monitoring and Block Height Analysis
 
@@ -351,7 +369,8 @@ The peer count monitoring system uses sophisticated baseline calculation:
 - **Initial Baseline Building**: Requires minimum 5 samples using weighted average calculation
 - **Continuous Adaptation**: 10% weight to new samples for responsive but stable baselines
 - **Historical High Tracking**: Maintains peak peer count for context in drop calculations
-- **Endpoint Classification**: Automatically determines if endpoints typically have peers
+- **Endpoint Classification**: Automatically determines if endpoints typically have peers (baseline > 0.5)
+- **Sample Count Tracking**: Monitors number of samples used for baseline validation
 
 ### Multi-Threshold Alert Logic
 
@@ -364,7 +383,7 @@ The system uses multiple threshold types for comprehensive anomaly detection:
 3. **Absolute Drop Thresholds**:
    - Minimum 4 peers or 20% of baseline for significance
    - 2x threshold for high-peer endpoints (8+ peers or 2x baseline)
-4. **Critical Baseline Thresholds**: Special handling when baseline > 5 peers
+4. **Critical Baseline Thresholds**: Special handling when baseline > 5 peers (low peer counts become critical)
 
 ### Alert Management and Throttling
 
@@ -372,6 +391,7 @@ The system uses multiple threshold types for comprehensive anomaly detection:
 - **Alert History Retention**: 24-hour sliding window for intelligent throttling
 - **Context-Aware Messaging**: Detailed alert messages with baseline and current values
 - **Severity Classification**: Automatic severity assignment based on threshold type
+- **Component Type Mapping**: Proper alert routing based on endpoint type (RPC vs WebSocket)
 
 ### Integration with Main Monitoring
 
@@ -406,7 +426,7 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
 
 ### Lifecycle Management
 
-- **OnModuleInit**: Proper service initialization with provider setup
+- **OnModuleInit**: Proper service initialization with provider setup and staggered monitoring start
 - **OnModuleDestroy**: Clean shutdown with interval cleanup and resource management
 - **Staggered Startup**: Prevents resource spikes with configurable initialization delays
 - **Graceful Shutdown**: Proper cleanup of all intervals, timeouts, and connections
@@ -418,7 +438,7 @@ export class RpcMonitorService implements OnModuleInit, OnModuleDestroy {
 - **Connection Pooling**: Reuse of RPC clients across monitoring cycles
 - **Batch Processing**: Parallel processing with configurable batch sizes
 - **Memory Management**: Proper cleanup of WebSocket connections and timeouts
-- **Timeout Controls**: Short timeouts (3-5 seconds) for responsive monitoring
+- **Timeout Controls**: Short timeouts (5 seconds RPC, 10 seconds WebSocket) for responsive monitoring
 
 ### Monitoring Efficiency
 

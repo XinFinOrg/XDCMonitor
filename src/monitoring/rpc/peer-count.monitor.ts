@@ -69,32 +69,20 @@ export class PeerCountMonitor {
   ): Promise<boolean> {
     const peerCount = await fetchFn();
     if (peerCount === null) {
-      // Write sentinel value for failed endpoint to maintain visibility in Grafana
       this.metricsService.setPeerCountWithSentinel(endpoint.url, null, endpointType, endpoint.chainId, true);
       return false;
+    } else {
+      this.metricsService.setPeerCountWithSentinel(endpoint.url, peerCount, endpointType, endpoint.chainId, false);
+      const alertTriggered = this.processPeerCount(endpoint, peerCount, endpointType);
+
+      const logLevel = alertTriggered ? 'log' : 'debug';
+      const statusText = alertTriggered ? '(critical)' : '(normal)';
+      this.logger[logLevel](
+        `${endpointType === 'rpc' ? 'RPC' : 'WebSocket'} endpoint ${endpoint.url} has ${peerCount} peers ${statusText}`,
+      );
+
+      return alertTriggered;
     }
-
-    return this.processPeerCountWithMetrics(endpoint, peerCount, endpointType);
-  }
-
-  /**
-   * Process peer count with metrics recording and logging
-   */
-  private processPeerCountWithMetrics(
-    endpoint: RpcEndpoint,
-    peerCount: number,
-    endpointType: 'rpc' | 'websocket',
-  ): boolean {
-    this.metricsService.setPeerCountWithSentinel(endpoint.url, peerCount, endpointType, endpoint.chainId, false);
-    const alertTriggered = this.processPeerCount(endpoint, peerCount, endpointType);
-
-    const logLevel = alertTriggered ? 'log' : 'debug';
-    const statusText = alertTriggered ? '(critical)' : '(normal)';
-    this.logger[logLevel](
-      `${endpointType === 'rpc' ? 'RPC' : 'WebSocket'} endpoint ${endpoint.url} has ${peerCount} peers ${statusText}`,
-    );
-
-    return alertTriggered;
   }
 
   /**

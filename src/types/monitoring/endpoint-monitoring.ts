@@ -73,9 +73,6 @@ export interface RpcMonitorConfig {
   /** Interval for syncing with blockchain service (ms) */
   syncInterval: number;
 
-  /** Interval for ensuring endpoint visibility with sentinel values (ms) */
-  visibilityInterval: number;
-
   /** Number of RPC endpoints to check in parallel */
   rpcBatchSize: number;
 
@@ -115,4 +112,4 @@ export interface EndpointStatus {
 /**
  * Valid monitoring types
  */
-export type MonitorType = 'rpc' | 'ws' | 'port' | 'service' | 'sync' | 'visibility';
+export type MonitorType = 'rpc' | 'ws' | 'port' | 'service' | 'sync';

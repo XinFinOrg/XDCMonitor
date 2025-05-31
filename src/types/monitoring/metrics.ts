@@ -22,6 +22,7 @@ export interface InfluxDbConfig {
  */
 export interface SentinelValueConfig {
   enabled: boolean;
+  blockHeight: number;
   peerCount: number;
   latency: number;
   status: number; // 0 for down, 1 for up
