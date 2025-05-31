@@ -16,23 +16,28 @@ A comprehensive Node.js-based monitoring system for the XDC Network. This applic
   - 24-hour sliding windows for trend analysis with statistical metrics
   - Primary endpoint downtime tracking with 1-hour alert threshold
   - Dual-threshold sync lag detection (100 blocks warning, 1000 blocks critical)
+  - Enhanced documentation with sophisticated monitoring capabilities and advanced architectural patterns
 - **Sophisticated RPC Monitoring**: Comprehensive HTTP/HTTPS and WebSocket endpoint monitoring with advanced health assessment
   - Generic endpoint monitoring with unified logic for both RPC and WebSocket endpoints
   - SafeResolve pattern preventing memory leaks in WebSocket connections
   - Batch processing with prioritization (down endpoints checked first)
   - Staggered initialization preventing resource spikes (0-30 second delays)
   - Adaptive monitoring with dynamic frequency adjustment (15s-2m intervals)
+  - Updated documentation with detailed technical specifications and timeout configurations
 - **Advanced Peer Count Monitoring**: Sophisticated monitoring with adaptive baselines and intelligent alerting
   - Adaptive baseline calculation requiring minimum 5 samples with 10% weight to new data
   - Multi-threshold alert system for zero peers, relative drops (40%/70%), and absolute drops
   - Exponential backoff alerting starting at 30 minutes, doubling with each alert
   - 24-hour alert history retention for intelligent throttling
+  - Enhanced documentation with implementation details and adaptive baseline systems
 - **Comprehensive Transaction Monitoring**: Active transaction testing with real value transfers and smart contract deployments
   - Dual-mode testing (normal transactions and contract deployments)
   - Advanced wallet management with private key validation and balance tracking
   - 50% threshold alerting with detailed endpoint failure reporting
   - Multi-network support for parallel Mainnet and Testnet testing
-  - Intelligent confirmation monitoring (10 attempts, 2-second intervals)
+  - Optimized confirmation monitoring (exponential backoff: 1s to 10s cap, 1.5x multiplier, 8 attempts)
+  - Flexible endpoint management with environment-configurable disable/enable system
+  - Enhanced documentation with precise technical specifications and endpoint management features
 - **Multi-RPC Monitoring**: Monitor multiple endpoints simultaneously, compare response times, adaptive monitoring frequency
 - **Advanced Connection Point Checks**: HTTP/HTTPS port checks, WebSocket port checks, subscription testing, batch processing
 - **Intelligent Endpoint Management**:
@@ -47,6 +52,7 @@ A comprehensive Node.js-based monitoring system for the XDC Network. This applic
 - **Alert System**: Dashboard alerts, Telegram notifications, webhook notifications
   - Adaptive throttling to reduce noise during widespread issues
   - Alert aggregation for related problems
+  - Network-specific alert routing with Telegram topic support
 - **Metrics Collection**: InfluxDB time-series database, Grafana dashboards
 
 ## Dynamic RPC Selection System
@@ -1277,24 +1283,65 @@ The application includes several powerful utilities:
 
 ### Recent Improvements
 
-1. **Block Height Measurement Fix**: Resolved dashboard display issues by separating HTTP RPC and WebSocket endpoint measurements
-2. **Comprehensive Documentation**: Updated all monitoring service documentation to reflect current implementation
-3. **Advanced Monitoring Features**: Enhanced block monitoring with intelligent endpoint selection and comprehensive transaction analysis
-4. **Peer Count Monitoring**: Sophisticated adaptive baseline system with multi-threshold alerting
-5. **Transaction Monitoring**: Dual-mode testing with advanced failure rate analysis and detailed endpoint reporting
-6. **Logging Optimization**: Reduced log volume by 90%+ while maintaining essential monitoring information
-7. **Code Architecture**: Optimized code structure with generic helpers and consolidated functionality
-8. **Alert System Enhancement**: Fixed notification channel routing bug and improved chainId handling for reliable topic selection
-9. **Debug Tracing**: Added comprehensive debug logging for alert flow investigation and troubleshooting
-10. **Transaction Test Endpoint Management**: Implemented flexible endpoint disable/enable system via environment configuration for precise testing control
+1. **Comprehensive Documentation Updates**: Updated all monitoring service documentation (blocks, RPC, transaction) to reflect current implementation
+   - **Blocks Monitor**: Sophisticated sync lag detection, adaptive transaction processing, dual-threshold alerting
+   - **RPC Monitor**: Technical specifications with timeout configurations, SafeResolve patterns, adaptive baselines
+   - **Transaction Monitor**: Optimized confirmation strategies, endpoint management, precise technical specifications
+2. **Advanced Block Monitoring Features**: Enhanced with intelligent endpoint selection and comprehensive transaction analysis
+   - Dual-threshold sync lag detection (100 blocks warning, 1000 blocks critical)
+   - Adaptive batch processing (20-50 transactions per batch based on volume)
+   - Primary endpoint downtime tracking with 1-hour alert threshold
+3. **Sophisticated Transaction Monitoring**: Optimized confirmation monitoring and endpoint management
+   - Exponential backoff strategy (1s to 10s cap, 1.5x multiplier, 8 attempts maximum)
+   - Flexible endpoint disable/enable system via environment configuration
+   - Three-tier endpoint filtering with precise matching logic
+4. **Advanced Peer Count Monitoring**: Sophisticated adaptive baseline system with multi-threshold alerting
+   - Requires minimum 5 samples with 10% weight to new data for responsive baselines
+   - Multi-threshold alert system for zero peers, relative drops (40%/70%), and absolute drops
+   - Exponential backoff alerting (30 minutes initial, doubling with each alert)
+5. **Enhanced RPC Monitoring**: Comprehensive monitoring with advanced health assessment
+   - Generic endpoint monitoring with unified logic for both RPC and WebSocket endpoints
+   - SafeResolve pattern preventing memory leaks in WebSocket connections
+   - Batch processing with prioritization and staggered initialization
+6. **Alert System Enhancements**: Fixed notification channel routing and improved chainId handling
+   - Resolved critical Telegram topic routing bug for network-specific alerts
+   - Enhanced chainId flow for reliable Mainnet/Testnet topic selection
+   - Comprehensive debug tracing for alert flow investigation
+7. **Block Height Measurement Optimization**: Resolved dashboard display issues
+   - Separated HTTP RPC and WebSocket endpoint measurements for clean visualization
+   - Only writes block_height measurements for HTTP RPC endpoints
+8. **Transaction Test Endpoint Management**: Implemented flexible endpoint disable/enable system
+   - Configuration-driven endpoint management via environment variables
+   - Three-tier matching system (exact URL, domain+port, domain-only)
+   - Real-time filtering without requiring application restart
+9. **Code Architecture Optimization**: Optimized code structure with generic helpers and consolidated functionality
+   - Reduced code duplication while maintaining all business logic
+   - Improved performance through reusable components and unified patterns
+10. **Logging System Enhancement**: Reduced log volume by 90%+ while maintaining essential monitoring information
+    - Daily log organization for easy investigation and natural cleanup
+    - Specialized logging methods for different system components
+    - Performance monitoring with built-in latency tracking
 
 ### Performance Benefits
 
 - **90%+ Log Volume Reduction**: From 17MB to ~1.7MB per day through intelligent logging optimization
-- **Memory Efficiency**: Sliding window data structures with automatic cleanup
-- **Resource Optimization**: Staggered initialization and batch processing with prioritization
-- **Adaptive Monitoring**: Dynamic frequency adjustment based on component health
-- **Parallel Processing**: Concurrent operations with individual error handling
+- **Memory Efficiency**: Sliding window data structures with automatic cleanup for time-series monitoring
+- **Resource Optimization**: Staggered initialization and batch processing with prioritization to prevent resource spikes
+- **Adaptive Monitoring**: Dynamic frequency adjustment based on component health (15s-2m intervals)
+- **Parallel Processing**: Concurrent operations with individual error handling to prevent cascade failures
+- **Intelligent Alert Throttling**: Dual-layer throttling system preventing alert storms during prolonged issues
+- **Optimized Confirmation Strategies**: Exponential backoff patterns for efficient transaction monitoring
+- **Enhanced Endpoint Management**: Intelligent endpoint selection based on real-time health metrics
+
+### Documentation Quality Improvements
+
+- **Implementation Accuracy**: All documentation reflects current code implementation with specific technical details
+- **Configuration Coverage**: Complete documentation of environment variables, constants, and configuration options
+- **Workflow Documentation**: Detailed step-by-step workflows with implementation specifics and timing details
+- **Deep Dive Sections**: Technical deep dives for complex systems like peer count monitoring and adaptive baselines
+- **Architecture Documentation**: Module structure, dependencies, lifecycle management, and integration patterns
+- **Performance Documentation**: Detailed optimization strategies and implementation patterns for efficient monitoring
+- **User-Friendly Examples**: Clear examples and configuration guides for easy implementation and troubleshooting
 
 ## Contributing
 

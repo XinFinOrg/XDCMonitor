@@ -1,6 +1,6 @@
 import { ConfigService } from '@config/config.service';
 import { RpcSelectorService } from '@monitoring/rpc/rpc-selector.service';
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import {
   AccountBalance,
   BlockInfo,
@@ -13,7 +13,7 @@ import {
 import { ethers } from 'ethers';
 
 @Injectable()
-export class BlockchainService implements OnModuleInit {
+export class BlockchainService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(BlockchainService.name);
   private providers: Map<string, ProviderWithMetadata> = new Map();
   private wsProviders: Map<string, WsProviderWithMetadata> = new Map();
@@ -73,6 +73,63 @@ export class BlockchainService implements OnModuleInit {
   }
 
   /**
+   * ✅ Clean up all providers to prevent memory leaks
+   */
+  async onModuleDestroy() {
+    this.logger.log('Cleaning up blockchain providers...');
+
+    // Clean up HTTP providers
+    for (const [url, providerData] of this.providers.entries()) {
+      if (providerData.provider) {
+        try {
+          // Remove all listeners
+          providerData.provider.removeAllListeners();
+
+          // Destroy the provider
+          if (typeof providerData.provider.destroy === 'function') {
+            await providerData.provider.destroy();
+          }
+
+          this.logger.debug(`Cleaned up provider: ${url}`);
+        } catch (error) {
+          this.logger.error(`Error cleaning up provider ${url}: ${error.message}`);
+        }
+      }
+    }
+
+    // Clean up WebSocket providers
+    for (const [url, providerData] of this.wsProviders.entries()) {
+      if (providerData.provider) {
+        try {
+          // Remove all listeners
+          providerData.provider.removeAllListeners();
+
+          // Close WebSocket connection
+          const websocket = (providerData.provider as any).websocket || (providerData.provider as any)._websocket;
+          if (websocket && typeof websocket.close === 'function') {
+            websocket.close();
+          }
+
+          // Destroy the provider
+          if (typeof providerData.provider.destroy === 'function') {
+            await providerData.provider.destroy();
+          }
+
+          this.logger.debug(`Cleaned up WebSocket provider: ${url}`);
+        } catch (error) {
+          this.logger.error(`Error cleaning up WebSocket provider ${url}: ${error.message}`);
+        }
+      }
+    }
+
+    // Clear the maps
+    this.providers.clear();
+    this.wsProviders.clear();
+
+    this.logger.log('All providers cleaned up successfully');
+  }
+
+  /**
    * Initialize RPC and WebSocket providers for all endpoints
    * This method is called during initialization but can also be called
    * by monitoring services to refresh provider status
@@ -100,8 +157,14 @@ export class BlockchainService implements OnModuleInit {
         // Use a timeout for provider creation
         const provider = new ethers.JsonRpcProvider(endpoint.url, undefined, {
           staticNetwork: true,
-          polling: true,
-          cacheTimeout: 2000, // 2 seconds
+          polling: false,
+          cacheTimeout: 10000,
+        });
+
+        // ✅ Add error handling for provider to prevent memory leaks
+        provider.on('error', error => {
+          this.logger.error(`Provider error for ${endpoint.name}: ${error.message}`);
+          this.updateProviderStatus(endpoint.url, false);
         });
 
         // Test the provider with a basic call

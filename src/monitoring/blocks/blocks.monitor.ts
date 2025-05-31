@@ -395,7 +395,6 @@ export class BlocksMonitorService implements OnModuleInit {
 
   private async checkEndpointBlockHeight(endpoint: string, chainId: number, networkKey: string): Promise<void> {
     try {
-      // Create temporary client with short timeout
       const tempClient = new RpcRetryClient(endpoint, {
         maxRetries: 1,
         retryDelayMs: 500,
@@ -408,10 +407,8 @@ export class BlocksMonitorService implements OnModuleInit {
 
       const blockNumber = parseInt(blockNumberHex, 16);
       if (!isNaN(blockNumber)) {
-        // Store height and update metrics
         this.endpointBlockHeights[networkKey][endpoint] = blockNumber;
-        await this.metricsService.setBlockHeightWithSentinel(blockNumber, endpoint, chainId.toString(), false);
-        this.metricsService.setRpcStatusWithSentinel(endpoint, true, chainId, false);
+        this.metricsService.setBlockHeightWithSentinel(blockNumber, endpoint, chainId.toString(), false);
 
         // Update status for primary endpoint if this is it
         if (endpoint === this.primaryEndpointStatus[chainId]?.url) {
@@ -419,9 +416,8 @@ export class BlocksMonitorService implements OnModuleInit {
         }
       }
     } catch (error) {
-      // Use sentinel values for failed endpoints to maintain visibility in Grafana
-      this.metricsService.setRpcStatusWithSentinel(endpoint, false, chainId, false);
-      await this.metricsService.setBlockHeightWithSentinel(null, endpoint, chainId.toString(), true);
+      // Use sentinel values for failed endpoints to maintain visibility in Grafana (only block height, not RPC status)
+      this.metricsService.setBlockHeightWithSentinel(null, endpoint, chainId.toString(), true);
 
       // Handle primary endpoint error if this is it
       if (endpoint === this.primaryEndpointStatus[chainId]?.url) {
@@ -505,7 +501,7 @@ export class BlocksMonitorService implements OnModuleInit {
 
   private handlePrimaryEndpointError(chainId: number, primaryEndpoint: string, error: Error): void {
     this.logger.error(`Primary endpoint ${primaryEndpoint} error: ${error.message}`);
-    this.metricsService.setRpcStatusWithSentinel(primaryEndpoint, false, chainId, false);
+    this.metricsService.setBlockHeightWithSentinel(null, primaryEndpoint, chainId.toString(), true);
 
     const status = this.primaryEndpointStatus[chainId] || {
       url: primaryEndpoint,
@@ -558,7 +554,7 @@ export class BlocksMonitorService implements OnModuleInit {
     try {
       // Update metrics
       if (endpoint) {
-        await this.metricsService.setBlockHeightWithSentinel(block.number, endpoint, chainId.toString(), false);
+        this.metricsService.setBlockHeightWithSentinel(block.number, endpoint, chainId.toString(), false);
       }
 
       // Process transactions and update metrics
@@ -804,8 +800,22 @@ export class BlocksMonitorService implements OnModuleInit {
       const criticalLaggingEndpoints = [];
       const warningLaggingEndpoints = [];
 
-      // Check each endpoint against the highest block
-      for (const [endpoint, blockHeight] of Object.entries(heights)) {
+      // Get ALL configured RPC endpoints for this chain to ensure we write sentinel values for missing ones
+      const allConfiguredEndpoints = this.configService
+        .getRpcEndpoints()
+        .filter(endpoint => endpoint.chainId === chainId)
+        .map(endpoint => endpoint.url);
+
+      // Check each configured endpoint against the heights we collected
+      for (const endpoint of allConfiguredEndpoints) {
+        const blockHeight = heights[endpoint];
+
+        if (blockHeight === undefined) {
+          // This endpoint had no data collected - write sentinel value to maintain visibility
+          this.metricsService.setBlockHeightWithSentinel(null, endpoint, chainId.toString(), true);
+          continue;
+        }
+
         const blocksBehind = highestBlock - blockHeight;
 
         // Log block height for debugging

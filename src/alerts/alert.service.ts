@@ -662,6 +662,10 @@ export class AlertService implements OnModuleInit {
    * Add a new alert and potentially send notifications
    */
   async addAlert(alert: Omit<Alert, 'timestamp'>, chainId?: number): Promise<void> {
+    this.logger.log(
+      `AlertService.addAlert called with chainId: ${chainId}, alert type: ${alert.type}, title: ${alert.title}`,
+    );
+
     const fullAlert: Alert = {
       ...alert,
       timestamp: new Date(),
@@ -677,6 +681,7 @@ export class AlertService implements OnModuleInit {
       this.alerts.shift();
     }
 
+    this.logger.log(`AlertService.addAlert calling AlertManager.addAlert with chainId: ${chainId}`);
     // Use the AlertManager for new alerts
     this.alertManager.addAlert({
       severity: this.mapTypeToSeverity(alert.type),
@@ -698,11 +703,16 @@ export class AlertService implements OnModuleInit {
    * Create an error-level alert
    */
   async error(alertType: string, component: string, message: string, chainId?: number): Promise<void> {
+    this.logger.log(
+      `AlertService.error called - alertType: ${alertType}, component: ${component}, chainId: ${chainId}`,
+    );
+
     if (this.shouldThrottle(alertType, message, chainId)) {
       this.logger.debug(`Throttling error alert: ${alertType}`);
       return;
     }
 
+    this.logger.log(`AlertService.error calling addAlert with chainId: ${chainId}`);
     await this.addAlert(
       {
         type: 'error',
